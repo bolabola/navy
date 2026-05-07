@@ -1,0 +1,12 @@
+name = "board-trello"
+main = "worker/src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Static frontend assets — Workers Static Assets 自动响应非 /api/* 请求
+[assets]
+directory = "./src"
+
+# KV namespace for board state. id 在首次部署前用 `npx wrangler kv namespace create BOARD_KV` 创建后填入
+[[kv_namespaces]]
+binding = "BOARD_KV"
+id = "REPLACE_WITH_KV_ID"

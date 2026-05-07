@@ -1,0 +1,16 @@
+{
+  "name": "board-trello",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --outDir .tmp-test --rootDir worker --module commonjs --moduleResolution node --target ES2022 --lib ES2022 --types @cloudflare/workers-types --skipLibCheck --noEmit false worker/src/index.ts worker/src/validation.ts worker/src/urlSafety.ts && node --test worker/test/*.test.js"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250419.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.89.0"
+  }
+}
