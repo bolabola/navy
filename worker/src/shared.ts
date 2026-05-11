@@ -3,6 +3,10 @@ export interface Env {
   ADMIN_PASSWORD: string;
   SESSION_SECRET: string;
   ASSETS: Fetcher;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_DRIVE_FOLDER_ID?: string;
 }
 
 export interface BoardStateEnvelope {

@@ -14,7 +14,7 @@ import { handleFavicon, handleUrlTitles } from "./miscRoutes";
 import { isSameOriginWrite, methodNotAllowed, withSecurityHeaders, type Env } from "./shared";
 
 const worker = {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/api/")) {
       return withSecurityHeaders(await env.ASSETS.fetch(request));
@@ -25,21 +25,21 @@ const worker = {
       return withSecurityHeaders(new Response(configError, { status: 500 }));
     }
 
-    return withSecurityHeaders(await routeApi(request, env, url));
+    return withSecurityHeaders(await routeApi(request, env, url, ctx));
   }
 };
 
 export { routeApi };
 export default worker;
 
-async function routeApi(request: Request, env: Env, url: URL): Promise<Response> {
+async function routeApi(request: Request, env: Env, url: URL, ctx?: ExecutionContext): Promise<Response> {
   if (!isSameOriginWrite(request)) {
     return new Response("Cross-origin writes are not allowed", { status: 403 });
   }
 
   if (url.pathname === "/api/board") {
     if (request.method === "GET") return handleGetBoard(env);
-    if (request.method === "PUT") return handlePutBoard(request, env);
+    if (request.method === "PUT") return handlePutBoard(request, env, ctx);
     return methodNotAllowed("GET, PUT");
   }
 
@@ -49,7 +49,7 @@ async function routeApi(request: Request, env: Env, url: URL): Promise<Response>
   }
 
   if (url.pathname === "/api/backups/restore") {
-    if (request.method === "POST") return handleRestoreBackup(request, env);
+    if (request.method === "POST") return handleRestoreBackup(request, env, ctx);
     return methodNotAllowed("POST");
   }
 

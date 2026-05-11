@@ -1,4 +1,5 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
+import { scheduleGoogleDriveBackup } from "./googleDriveBackup";
 import { jsonResponse, isPlainObject, type BoardPutPayload, type BoardStateEnvelope, type Env } from "./shared";
 import { validateBoardState } from "./validation";
 
@@ -17,7 +18,7 @@ export async function handleGetBoard(env: Env): Promise<Response> {
   return jsonResponse(JSON.stringify(state), 200, { "Cache-Control": "no-store" });
 }
 
-export async function handlePutBoard(request: Request, env: Env): Promise<Response> {
+export async function handlePutBoard(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
     return new Response("Unauthorized", { status: 401 });
   }
@@ -61,7 +62,7 @@ export async function handlePutBoard(request: Request, env: Env): Promise<Respon
   }
 
   if (existingRaw) {
-    await writeBoardBackup(env, existingRaw);
+    await writeBoardBackup(env, existingRaw, ctx);
   }
 
   const nextState: BoardStateEnvelope = {
@@ -96,7 +97,7 @@ export async function handleListBackups(request: Request, env: Env): Promise<Res
   return jsonResponse(JSON.stringify({ backups }), 200, { "Cache-Control": "no-store" });
 }
 
-export async function handleRestoreBackup(request: Request, env: Env): Promise<Response> {
+export async function handleRestoreBackup(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
     return new Response("Unauthorized", { status: 401 });
   }
@@ -125,7 +126,7 @@ export async function handleRestoreBackup(request: Request, env: Env): Promise<R
   if (existingRaw && !existing) return new Response("Stored board state is invalid", { status: 500 });
 
   if (existingRaw) {
-    await writeBoardBackup(env, existingRaw);
+    await writeBoardBackup(env, existingRaw, ctx);
   }
 
   const nextVersion = existing ? existing.version + 1 : 1;
@@ -144,9 +145,11 @@ export async function handleRestoreBackup(request: Request, env: Env): Promise<R
   }), 200, { "Cache-Control": "no-store" });
 }
 
-async function writeBoardBackup(env: Env, existingRaw: string): Promise<void> {
+async function writeBoardBackup(env: Env, existingRaw: string, ctx?: ExecutionContext): Promise<void> {
   const suffix = new Date().toISOString().replace(/[:.]/g, "-");
-  await env.BOARD_KV.put(BACKUP_PREFIX + suffix, existingRaw);
+  const key = BACKUP_PREFIX + suffix;
+  await env.BOARD_KV.put(key, existingRaw);
+  scheduleGoogleDriveBackup(env, key, existingRaw, ctx);
 }
 
 async function pruneBoardBackups(env: Env): Promise<void> {

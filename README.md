@@ -228,6 +228,25 @@ npx wrangler secret put ADMIN_PASSWORD
 
 ---
 
+## Google Drive 外部备份
+
+应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。如果配置了下面 4 个 Worker secrets，同一份备份也会异步上传到 Google Drive 指定文件夹；Google Drive 上传失败不会阻断正常保存。
+
+```bash
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put GOOGLE_REFRESH_TOKEN
+npx wrangler secret put GOOGLE_DRIVE_FOLDER_ID
+```
+
+推荐使用个人 Google 账号的 OAuth refresh token，并授权 Drive 文件创建权限。`GOOGLE_DRIVE_FOLDER_ID` 是 Drive 文件夹 URL 里的 id，例如 `https://drive.google.com/drive/folders/<这里就是 folder id>`。
+
+上传文件名格式类似：
+
+```text
+state_backup_2026-05-11T08-30-00-000Z.json
+```
+
 ## 故障排查
 
 **部署后访问 `/api/board` 返回 500**

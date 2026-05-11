@@ -132,6 +132,85 @@ test("PUT /api/board stores state and rejects stale versions", async () => {
   assert.equal(stale.status, 409);
 });
 
+test("PUT /api/board schedules Google Drive backup when configured", async () => {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    calls.push({ input: String(input), init });
+    if (String(input).includes("oauth2.googleapis.com/token")) {
+      return Response.json({ access_token: "access-token" });
+    }
+    return Response.json({ id: "drive-file-id" });
+  };
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({ state: initialState }, {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_REFRESH_TOKEN: "refresh-token",
+      GOOGLE_DRIVE_FOLDER_ID: "folder-id"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+    const res = await worker.fetch(new Request("https://example.com/api/board", {
+      method: "PUT",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ version: 1, boards: boardPayload.boards })
+    }), env, ctx);
+
+    assert.equal(res.status, 200);
+    assert.equal(waitUntilTasks.length, 1);
+    await Promise.all(waitUntilTasks);
+    assert.equal(calls.length, 2);
+    assert.match(calls[0].input, /oauth2\.googleapis\.com\/token/);
+    assert.match(calls[1].input, /googleapis\.com\/upload\/drive\/v3\/files/);
+    assert.match(String(calls[1].init.body), /state_backup_/);
+    assert.match(String(calls[1].init.body), /folder-id/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Google Drive backup failure does not block board save", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("bad gateway", { status: 502 });
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({ state: initialState }, {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_REFRESH_TOKEN: "refresh-token",
+      GOOGLE_DRIVE_FOLDER_ID: "folder-id"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+    const res = await worker.fetch(new Request("https://example.com/api/board", {
+      method: "PUT",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ version: 1, boards: boardPayload.boards })
+    }), env, ctx);
+
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).version, 2);
+    assert.equal(waitUntilTasks.length, 1);
+    await Promise.all(waitUntilTasks);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("authenticated write requests require CSRF token", async () => {
   const env = createEnv();
   const { cookie, csrfToken } = await login(env);

@@ -24,6 +24,7 @@
   const ICON_NAME_RE = /^[a-z0-9-]+$/;
   const ICON_PICKER_OVERFLOW_LIMIT = 200;
   const IMPORT_MAX_URLS = 30;
+  const FULL_BACKUP_SCHEMA = "board-trello-v1";
   const URL_EXTRACT_RE = /https?:\/\/[^\s<>"'`]+/gi;
   const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]"'`]+$/;
   const CURATED_LUCIDE_ICONS = [
@@ -461,7 +462,18 @@
         collapsed: Boolean(board.collapsed),
         column: Number.isInteger(board.column) ? board.column : null,
         displayMode: board.displayMode === "icons" ? "icons" : "list",
-        items: Array.isArray(board.items) ? board.items : []
+        items: normalizeBoardItems(board.items)
+      };
+    });
+  }
+
+  function normalizeBoardItems(sourceItems) {
+    if (!Array.isArray(sourceItems)) return [];
+    return sourceItems.map(function (item) {
+      return {
+        id: typeof item.id === "string" && item.id.trim() ? item.id : uid("item"),
+        name: typeof item.name === "string" ? item.name : "",
+        url: typeof item.url === "string" ? item.url : ""
       };
     });
   }
@@ -1301,6 +1313,24 @@
         (function () {
           const span = document.createElement("span");
           span.textContent = TEXT.backups;
+          return span;
+        })()
+      ]));
+      right.appendChild(actionButton("workspace__create-button", "export-full-backup", null, "Export JSON backup", [
+        staticIconNode("icon-download"),
+        " ",
+        (function () {
+          const span = document.createElement("span");
+          span.textContent = "JSON";
+          return span;
+        })()
+      ]));
+      right.appendChild(actionButton("workspace__create-button", "import-full-backup", null, "Import JSON backup", [
+        staticIconNode("icon-upload"),
+        " ",
+        (function () {
+          const span = document.createElement("span");
+          span.textContent = "Import";
           return span;
         })()
       ]));
@@ -2241,6 +2271,26 @@
       return;
     }
 
+    if (action === "export-full-backup") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      exportFullBackup();
+      render();
+      return;
+    }
+
+    if (action === "import-full-backup") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      pickFullBackupFile();
+      render();
+      return;
+    }
+
     if (action === "cancel-create-board") {
       if (button.classList.contains("modal-backdrop") && event.target.closest("[data-role='modal-panel']")) {
         return;
@@ -2529,6 +2579,103 @@
     document.body.appendChild(input);
     input.click();
     setTimeout(function () { input.remove(); }, 0);
+  }
+
+  function pickFullBackupFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.style.display = "none";
+    input.addEventListener("change", function () {
+      const file = input.files && input.files[0];
+      if (file) {
+        handleFullBackupImport(file);
+      }
+    });
+    document.body.appendChild(input);
+    input.click();
+    setTimeout(function () { input.remove(); }, 0);
+  }
+
+  function exportFullBackup() {
+    const payload = {
+      schema: FULL_BACKUP_SCHEMA,
+      exportedAt: new Date().toISOString(),
+      serverVersion: serverState.version,
+      serverUpdatedAt: serverState.updatedAt,
+      boards: boards
+    };
+    const text = JSON.stringify(payload, null, 2) + "\n";
+    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+    const objUrl = URL.createObjectURL(blob);
+    const stamp = payload.exportedAt.replace(/[:.]/g, "-");
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = "board-trello-backup-" + stamp + ".json";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    }, 0);
+  }
+
+  function handleFullBackupImport(file) {
+    const reader = new FileReader();
+    reader.onerror = function () {
+      window.alert("Import failed.");
+    };
+    reader.onload = function () {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        const parsed = JSON.parse(text);
+        const importedBoards = parseFullBackupBoards(parsed);
+        if (!window.confirm("Import this JSON backup? Current remote state will be backed up first.")) {
+          return;
+        }
+        const previousBoards = boards;
+        boards = importedBoards;
+        cacheBoardsLocally();
+        setSyncState("saving", TEXT.syncSaving);
+        apiSend("/board", "PUT", {
+          version: serverState.version,
+          boards: boards
+        }).then(function (result) {
+          if (result && Number.isInteger(result.version)) {
+            serverState.version = result.version;
+            serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
+          }
+          setSyncState("saved", TEXT.syncSaved);
+          render();
+        }).catch(function (error) {
+          if (error && error.status === 409) {
+            setSyncState("failed", TEXT.syncConflict);
+            handleSaveConflict();
+            return;
+          }
+          boards = previousBoards;
+          cacheBoardsLocally();
+          setSyncState("failed", TEXT.syncFailed);
+          window.alert("Import failed.");
+          render();
+        });
+        render();
+      } catch (error) {
+        window.alert("Invalid JSON backup.");
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  function parseFullBackupBoards(value) {
+    const source = Array.isArray(value)
+      ? value
+      : (value && typeof value === "object" && Array.isArray(value.boards) ? value.boards : null);
+    if (!source) {
+      throw new Error("Invalid backup");
+    }
+    return normalizeBoards(source);
   }
 
   function handleImportFile(boardId, file) {
