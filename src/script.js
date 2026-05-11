@@ -117,6 +117,10 @@
     loginOpen: false,
     loginError: null,
     importingBoardId: null,
+    dataMenuOpen: false,
+    backupMenuOpen: false,
+    backupStatus: null,
+    backupStatusLoading: false,
     backupsOpen: false,
     backupsLoading: false,
     backupsError: null,
@@ -254,6 +258,9 @@
         if (error && error.status === 401) {
           auth.isAdmin = false;
           auth.csrfToken = null;
+          uiState.dataMenuOpen = false;
+          uiState.backupMenuOpen = false;
+          uiState.backupStatus = null;
           uiState.openBoardMenuId = null;
           uiState.openAddBoardId = null;
           uiState.editBoardId = null;
@@ -305,6 +312,134 @@
     node.dataset.role = "sync-indicator";
     node.textContent = syncState.message;
     return node;
+  }
+
+  function loadBackupStatus() {
+    if (!auth.isAdmin || uiState.backupStatusLoading) return;
+    uiState.backupStatusLoading = true;
+    apiGet("/cloud-backup/status").then(function (status) {
+      uiState.backupStatus = status || null;
+    }).catch(function () {
+      uiState.backupStatus = null;
+    }).finally(function () {
+      uiState.backupStatusLoading = false;
+      render();
+    });
+  }
+
+  function renderDataMenu() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "workspace__menu";
+    wrapper.appendChild(actionButton("workspace__create-button", "toggle-data-menu", null, "Data tools", [
+      staticIconNode("icon-database"),
+      " ",
+      (function () {
+        const span = document.createElement("span");
+        span.textContent = "数据";
+        return span;
+      })()
+    ]));
+
+    if (!uiState.dataMenuOpen) return wrapper;
+
+    const menu = document.createElement("div");
+    menu.className = "workspace-menu";
+    menu.appendChild(workspaceMenuItem("export-full-backup", "icon-download", "导出完整 JSON", "保存一份可恢复的本地文件"));
+    menu.appendChild(workspaceMenuItem("import-full-backup", "icon-upload", "导入完整 JSON", "用本地文件恢复整个看板"));
+    menu.appendChild(workspaceMenuItem("toggle-backups", "icon-history", "恢复 KV 历史", "查看最近自动备份"));
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
+  function workspaceMenuItem(action, iconClass, title, description) {
+    const button = document.createElement("button");
+    button.className = "workspace-menu__item";
+    button.type = "button";
+    button.dataset.action = action;
+    button.appendChild(staticIconNode(iconClass));
+
+    const text = document.createElement("span");
+    text.className = "workspace-menu__text";
+    const name = document.createElement("span");
+    name.className = "workspace-menu__name";
+    name.textContent = title;
+    const desc = document.createElement("span");
+    desc.className = "workspace-menu__desc";
+    desc.textContent = description;
+    text.appendChild(name);
+    text.appendChild(desc);
+    button.appendChild(text);
+    return button;
+  }
+
+  function renderBackupMenu() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "workspace__menu";
+
+    const connectedCount = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
+      ? uiState.backupStatus.providers.filter(function (provider) { return provider.connected; }).length
+      : 0;
+    const trigger = actionButton("workspace__create-button", "toggle-backup-menu", null, "Cloud backups", [
+      staticIconNode(connectedCount > 0 ? "icon-cloud" : "icon-cloud-upload"),
+      " ",
+      (function () {
+        const span = document.createElement("span");
+        span.textContent = connectedCount > 0 ? "云备份 " + connectedCount : "云备份";
+        return span;
+      })()
+    ]);
+    wrapper.appendChild(trigger);
+
+    if (!uiState.backupMenuOpen) return wrapper;
+
+    const menu = document.createElement("div");
+    menu.className = "backup-menu";
+    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
+      ? uiState.backupStatus.providers
+      : [];
+
+    if (uiState.backupStatusLoading) {
+      const loading = document.createElement("div");
+      loading.className = "backup-menu__message";
+      loading.textContent = "Loading...";
+      menu.appendChild(loading);
+    } else {
+      providers.forEach(function (provider) {
+        menu.appendChild(renderBackupProviderRow(provider));
+      });
+    }
+
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
+  function renderBackupProviderRow(provider) {
+    const row = document.createElement("div");
+    row.className = "backup-menu__row";
+
+    const meta = document.createElement("div");
+    meta.className = "backup-menu__meta";
+    const name = document.createElement("span");
+    name.className = "backup-menu__name";
+    name.textContent = provider.label || provider.id;
+    const state = document.createElement("span");
+    state.className = "backup-menu__state";
+    state.textContent = provider.connected ? "已连接" : (provider.configured ? "未连接" : "未配置");
+    meta.appendChild(name);
+    meta.appendChild(state);
+    row.appendChild(meta);
+
+    const action = actionButton(
+      provider.connected ? "board-cancel-button" : "board-save-button",
+      provider.connected ? "disconnect-cloud-backup" : "connect-cloud-backup",
+      null,
+      "",
+      [provider.connected ? "断开" : "连接"]
+    );
+    action.dataset.providerId = provider.id;
+    action.disabled = !provider.configured && !provider.connected;
+    row.appendChild(action);
+    return row;
   }
 
   function renderBackupsModal() {
@@ -407,6 +542,9 @@
         boards = local.boards;
       }
       render();
+      if (auth.isAdmin) {
+        loadBackupStatus();
+      }
     });
   }
 
@@ -973,8 +1111,8 @@
 
     menu.appendChild(menuItem("toggle-view-mode", board.displayMode === "icons" ? "icon-list" : "icon-layout-grid", TEXT.toggleView));
     menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
-    menu.appendChild(menuItem("import-board", "icon-download", TEXT.importBoard));
-    menu.appendChild(menuItem("export-board", "icon-upload", TEXT.exportBoard));
+    menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
+    menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
     menu.appendChild(menuItem("delete-board", "icon-trash-2", TEXT.deleteBoard, true));
     return menu;
   }
@@ -1307,33 +1445,8 @@
     if (sync) right.appendChild(sync);
 
     if (auth.isAdmin) {
-      right.appendChild(actionButton("workspace__create-button", "toggle-backups", null, "", [
-        staticIconNode("icon-history"),
-        " ",
-        (function () {
-          const span = document.createElement("span");
-          span.textContent = TEXT.backups;
-          return span;
-        })()
-      ]));
-      right.appendChild(actionButton("workspace__create-button", "export-full-backup", null, "Export JSON backup", [
-        staticIconNode("icon-download"),
-        " ",
-        (function () {
-          const span = document.createElement("span");
-          span.textContent = "JSON";
-          return span;
-        })()
-      ]));
-      right.appendChild(actionButton("workspace__create-button", "import-full-backup", null, "Import JSON backup", [
-        staticIconNode("icon-upload"),
-        " ",
-        (function () {
-          const span = document.createElement("span");
-          span.textContent = "Import";
-          return span;
-        })()
-      ]));
+      right.appendChild(renderDataMenu());
+      right.appendChild(renderBackupMenu());
       right.appendChild(actionButton("workspace__create-button", "toggle-create-board", null, "", [
         staticIconNode("icon-plus"),
         " " + TEXT.createBoard
@@ -2159,6 +2272,11 @@
         uiState.openBoardMenuId = null;
         render();
       }
+      if ((uiState.dataMenuOpen || uiState.backupMenuOpen) && !event.target.closest(".workspace__menu")) {
+        uiState.dataMenuOpen = false;
+        uiState.backupMenuOpen = false;
+        render();
+      }
       return;
     }
 
@@ -2218,6 +2336,8 @@
         return;
       }
       uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
+      uiState.backupMenuOpen = false;
       uiState.createBoardOpen = false;
       uiState.backupsOpen = true;
       uiState.backupsLoading = true;
@@ -2276,6 +2396,7 @@
         return;
       }
       uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
       exportFullBackup();
       render();
       return;
@@ -2286,8 +2407,72 @@
         return;
       }
       uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
       pickFullBackupFile();
       render();
+      return;
+    }
+
+    if (action === "toggle-data-menu") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      uiState.backupMenuOpen = false;
+      uiState.dataMenuOpen = !uiState.dataMenuOpen;
+      render();
+      return;
+    }
+
+    if (action === "toggle-backup-menu") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
+      uiState.backupMenuOpen = !uiState.backupMenuOpen;
+      render();
+      if (uiState.backupMenuOpen) {
+        loadBackupStatus();
+      }
+      return;
+    }
+
+    if (action === "connect-cloud-backup") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      const providerId = button.getAttribute("data-provider-id");
+      if (!providerId) return;
+      button.disabled = true;
+      apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/connect", "POST", {}).then(function (result) {
+        if (result && typeof result.url === "string") {
+          window.location.href = result.url;
+          return;
+        }
+        throw new Error("Missing authorization URL");
+      }).catch(function () {
+        button.disabled = false;
+        window.alert("Cloud backup authorization failed to start.");
+      });
+      return;
+    }
+
+    if (action === "disconnect-cloud-backup") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      const providerId = button.getAttribute("data-provider-id");
+      if (!providerId || !window.confirm("断开这个云备份服务？云盘里已有的备份文件会保留。")) {
+        return;
+      }
+      button.disabled = true;
+      apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/disconnect", "POST", {}).then(function () {
+        loadBackupStatus();
+      }).catch(function () {
+        button.disabled = false;
+        window.alert("Cloud backup disconnect failed.");
+      });
       return;
     }
 
@@ -2453,9 +2638,11 @@
       apiSend("/login", "POST", { password: password }).then(function (result) {
         auth.isAdmin = true;
         auth.csrfToken = result && typeof result.csrfToken === "string" ? result.csrfToken : null;
+        uiState.backupStatus = null;
         uiState.loginOpen = false;
         uiState.loginError = null;
         render();
+        loadBackupStatus();
       }).catch(function (error) {
         uiState.loginError = error && error.status === 429
           ? TEXT.loginRateLimited

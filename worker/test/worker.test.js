@@ -149,11 +149,13 @@ test("PUT /api/board schedules Google Drive backup when configured", async () =>
       updatedAt: "2026-01-01T00:00:00.000Z",
       boards: boardPayload.boards
     });
-    const env = createEnv({ state: initialState }, {
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:google:refresh_token": "refresh-token",
+      "cloud_backup:google:folder_id": "folder-id"
+    }, {
       GOOGLE_CLIENT_ID: "client-id",
-      GOOGLE_CLIENT_SECRET: "client-secret",
-      GOOGLE_REFRESH_TOKEN: "refresh-token",
-      GOOGLE_DRIVE_FOLDER_ID: "folder-id"
+      GOOGLE_CLIENT_SECRET: "client-secret"
     });
     const waitUntilTasks = [];
     const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
@@ -187,11 +189,13 @@ test("Google Drive backup failure does not block board save", async () => {
       updatedAt: "2026-01-01T00:00:00.000Z",
       boards: boardPayload.boards
     });
-    const env = createEnv({ state: initialState }, {
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:google:refresh_token": "refresh-token",
+      "cloud_backup:google:folder_id": "folder-id"
+    }, {
       GOOGLE_CLIENT_ID: "client-id",
-      GOOGLE_CLIENT_SECRET: "client-secret",
-      GOOGLE_REFRESH_TOKEN: "refresh-token",
-      GOOGLE_DRIVE_FOLDER_ID: "folder-id"
+      GOOGLE_CLIENT_SECRET: "client-secret"
     });
     const waitUntilTasks = [];
     const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
@@ -209,6 +213,148 @@ test("Google Drive backup failure does not block board save", async () => {
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test("cloud backup connect returns OAuth authorization URLs", async () => {
+  const env = createEnv({}, {
+    GOOGLE_CLIENT_ID: "client-id",
+    GOOGLE_CLIENT_SECRET: "client-secret",
+    DROPBOX_CLIENT_ID: "dropbox-id",
+    DROPBOX_CLIENT_SECRET: "dropbox-secret",
+    ONEDRIVE_CLIENT_ID: "onedrive-id",
+    ONEDRIVE_CLIENT_SECRET: "onedrive-secret"
+  });
+  const { cookie, csrfToken } = await login(env);
+
+  for (const [provider, host, redirectUri] of [
+    ["google", "accounts.google.com", "https://example.com/api/cloud-backup/google/callback"],
+    ["dropbox", "www.dropbox.com", "https://example.com/api/cloud-backup/dropbox/callback"],
+    ["onedrive", "login.microsoftonline.com", "https://example.com/api/cloud-backup/onedrive/callback"]
+  ]) {
+    const res = await worker.fetch(new Request(`https://example.com/api/cloud-backup/${provider}/connect`, {
+      method: "POST",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken }
+    }), env);
+
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    const authUrl = new URL(body.url);
+    assert.equal(authUrl.hostname, host);
+    assert.equal(authUrl.searchParams.get("redirect_uri"), redirectUri);
+    const state = authUrl.searchParams.get("state");
+    assert.equal(typeof state, "string");
+    const stored = JSON.parse(await env.BOARD_KV.get("cloud_backup_oauth_state:" + state));
+    assert.equal(stored.provider, provider);
+    assert.equal(stored.redirectUri, redirectUri);
+  }
+});
+
+test("Google Drive callback stores refresh token and folder id", async () => {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    calls.push({ input: String(input), init });
+    if (String(input).includes("oauth2.googleapis.com/token")) {
+      return Response.json({ access_token: "access-token", refresh_token: "refresh-token" });
+    }
+    return Response.json({ id: "folder-id" });
+  };
+
+  try {
+    const env = createEnv({
+      "cloud_backup_oauth_state:state-1": JSON.stringify({
+        provider: "google",
+        redirectUri: "https://example.com/api/cloud-backup/google/callback"
+      })
+    }, {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret"
+    });
+    const res = await worker.fetch(new Request("https://example.com/api/cloud-backup/google/callback?state=state-1&code=code-1"), env);
+
+    assert.equal(res.status, 200);
+    assert.equal(await env.BOARD_KV.get("cloud_backup:google:refresh_token"), "refresh-token");
+    assert.equal(await env.BOARD_KV.get("cloud_backup:google:folder_id"), "folder-id");
+    assert.equal(await env.BOARD_KV.get("cloud_backup_oauth_state:state-1"), null);
+    assert.equal(calls.length, 2);
+    assert.match(calls[0].input, /oauth2\.googleapis\.com\/token/);
+    assert.match(calls[1].input, /googleapis\.com\/drive\/v3\/files/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Dropbox and OneDrive callbacks store refresh tokens", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    if (String(input).includes("dropboxapi.com/oauth2/token")) {
+      return Response.json({ access_token: "dropbox-access", refresh_token: "dropbox-refresh" });
+    }
+    if (String(input).includes("login.microsoftonline.com")) {
+      return Response.json({ access_token: "onedrive-access", refresh_token: "onedrive-refresh" });
+    }
+    return Response.json({ id: "ok" });
+  };
+
+  try {
+    const env = createEnv({
+      "cloud_backup_oauth_state:dropbox-state": JSON.stringify({
+        provider: "dropbox",
+        redirectUri: "https://example.com/api/cloud-backup/dropbox/callback"
+      }),
+      "cloud_backup_oauth_state:onedrive-state": JSON.stringify({
+        provider: "onedrive",
+        redirectUri: "https://example.com/api/cloud-backup/onedrive/callback"
+      })
+    }, {
+      DROPBOX_CLIENT_ID: "dropbox-id",
+      DROPBOX_CLIENT_SECRET: "dropbox-secret",
+      ONEDRIVE_CLIENT_ID: "onedrive-id",
+      ONEDRIVE_CLIENT_SECRET: "onedrive-secret"
+    });
+
+    const dropbox = await worker.fetch(new Request("https://example.com/api/cloud-backup/dropbox/callback?state=dropbox-state&code=code-1"), env);
+    const onedrive = await worker.fetch(new Request("https://example.com/api/cloud-backup/onedrive/callback?state=onedrive-state&code=code-2"), env);
+
+    assert.equal(dropbox.status, 200);
+    assert.equal(onedrive.status, 200);
+    assert.equal(await env.BOARD_KV.get("cloud_backup:dropbox:refresh_token"), "dropbox-refresh");
+    assert.equal(await env.BOARD_KV.get("cloud_backup:onedrive:refresh_token"), "onedrive-refresh");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("cloud backup status and disconnect report provider state", async () => {
+  const env = createEnv({
+    "cloud_backup:google:refresh_token": "refresh-token",
+    "cloud_backup:google:folder_id": "folder-id",
+    "cloud_backup:google:connected_at": "2026-01-01T00:00:00.000Z"
+  }, {
+    GOOGLE_CLIENT_ID: "client-id",
+    GOOGLE_CLIENT_SECRET: "client-secret",
+    DROPBOX_CLIENT_ID: "dropbox-id",
+    DROPBOX_CLIENT_SECRET: "dropbox-secret"
+  });
+  const { cookie, csrfToken } = await login(env);
+
+  const status = await worker.fetch(new Request("https://example.com/api/cloud-backup/status", {
+    headers: { Cookie: cookie }
+  }), env);
+  assert.equal(status.status, 200);
+  const body = await status.json();
+  assert.equal(body.providers.length, 3);
+  assert.equal(body.providers.find((provider) => provider.id === "google").connected, true);
+  assert.equal(body.providers.find((provider) => provider.id === "dropbox").configured, true);
+  assert.equal(body.providers.find((provider) => provider.id === "onedrive").configured, false);
+
+  const disconnected = await worker.fetch(new Request("https://example.com/api/cloud-backup/google/disconnect", {
+    method: "POST",
+    headers: { Cookie: cookie, "X-CSRF-Token": csrfToken }
+  }), env);
+  assert.equal(disconnected.status, 200);
+  assert.equal(await env.BOARD_KV.get("cloud_backup:google:refresh_token"), null);
+  assert.equal(await env.BOARD_KV.get("cloud_backup:google:folder_id"), null);
 });
 
 test("authenticated write requests require CSRF token", async () => {

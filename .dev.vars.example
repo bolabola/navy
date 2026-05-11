@@ -1,8 +1,14 @@
 ADMIN_PASSWORD=replace-with-a-local-dev-password
 SESSION_SECRET=replace-with-at-least-32-random-characters
 
-# Optional: upload every automatic KV backup to Google Drive.
+# Optional: Google Drive OAuth client for in-app backup authorization.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REFRESH_TOKEN=
-GOOGLE_DRIVE_FOLDER_ID=
+
+# Optional: Dropbox OAuth client for in-app backup authorization.
+DROPBOX_CLIENT_ID=
+DROPBOX_CLIENT_SECRET=
+
+# Optional: OneDrive OAuth client for in-app backup authorization.
+ONEDRIVE_CLIENT_ID=
+ONEDRIVE_CLIENT_SECRET=

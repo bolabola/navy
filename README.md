@@ -228,20 +228,49 @@ npx wrangler secret put ADMIN_PASSWORD
 
 ---
 
-## Google Drive 外部备份
+## 云端外部备份
 
-应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。如果配置了下面 4 个 Worker secrets，同一份备份也会异步上传到 Google Drive 指定文件夹；Google Drive 上传失败不会阻断正常保存。
+应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。连接云端备份后，同一份备份也会异步上传到已连接的 Google Drive、Dropbox 或 OneDrive；某个云端上传失败不会阻断正常保存。
+
+### 一次性创建 OAuth App
+
+每个服务都需要先创建自己的 OAuth App。创建完成后，把对应的 Client ID 和 Client Secret 设置为 Cloudflare Worker secrets。
+
+| 服务 | 创建入口 | 回调地址 | Secrets |
+|---|---|---|---|
+| Google Drive | <https://console.cloud.google.com/>，启用 Google Drive API，创建 Web application OAuth client | `https://你的域名/api/cloud-backup/google/callback` | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
+| Dropbox | <https://www.dropbox.com/developers/apps>，创建 Scoped access app，权限至少包含文件写入 | `https://你的域名/api/cloud-backup/dropbox/callback` | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |
+| OneDrive | <https://portal.azure.com/> 或 <https://entra.microsoft.com/>，创建 App registration，允许 personal Microsoft accounts 时用 `/common` 流程 | `https://你的域名/api/cloud-backup/onedrive/callback` | `ONEDRIVE_CLIENT_ID` / `ONEDRIVE_CLIENT_SECRET` |
+
+Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许文件内容写入。OneDrive 需要允许 `Files.ReadWrite` 和 `offline_access`。
+
+### 设置 Cloudflare secrets
+
+只配置你要用的服务即可：
 
 ```bash
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put GOOGLE_REFRESH_TOKEN
-npx wrangler secret put GOOGLE_DRIVE_FOLDER_ID
+
+npx wrangler secret put DROPBOX_CLIENT_ID
+npx wrangler secret put DROPBOX_CLIENT_SECRET
+
+npx wrangler secret put ONEDRIVE_CLIENT_ID
+npx wrangler secret put ONEDRIVE_CLIENT_SECRET
 ```
 
-推荐使用个人 Google 账号的 OAuth refresh token，并授权 Drive 文件创建权限。`GOOGLE_DRIVE_FOLDER_ID` 是 Drive 文件夹 URL 里的 id，例如 `https://drive.google.com/drive/folders/<这里就是 folder id>`。
+设置 secrets 后重新部署。
 
-上传文件名格式类似：
+### 后台连接和断开
+
+1. 登录看板后台。
+2. 点击顶栏的 `Backup` 下拉按钮。
+3. 在 Google Drive、Dropbox、OneDrive 中选择已配置的服务，点击 `Connect`。
+4. 跳转到对应授权页后确认授权。
+5. 回到看板后，该服务会显示 `Connected`。
+6. 需要取消时，在同一个下拉列表点击 `Disconnect`。
+
+授权成功后，Worker 会自动在对应云盘创建或使用 `board-trello-backups` 文件夹，并把 refresh token 和必要的文件夹信息存到 `BOARD_KV`。后续每次自动备份都会上传类似下面的文件：
 
 ```text
 state_backup_2026-05-11T08-30-00-000Z.json

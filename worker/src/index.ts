@@ -10,6 +10,12 @@ import {
   handleRestoreBackup
 } from "./boardRoutes";
 import { getConfigError } from "./config";
+import {
+  handleCloudBackupCallback,
+  handleCloudBackupConnect,
+  handleCloudBackupDisconnect,
+  handleCloudBackupStatus
+} from "./cloudBackup";
 import { handleFavicon, handleUrlTitles } from "./miscRoutes";
 import { isSameOriginWrite, methodNotAllowed, withSecurityHeaders, type Env } from "./shared";
 
@@ -33,6 +39,12 @@ export { routeApi };
 export default worker;
 
 async function routeApi(request: Request, env: Env, url: URL, ctx?: ExecutionContext): Promise<Response> {
+  const cloudBackupMatch = url.pathname.match(/^\/api\/cloud-backup\/([^/]+)\/(callback|connect|disconnect)$/);
+  if (cloudBackupMatch && cloudBackupMatch[2] === "callback") {
+    if (request.method === "GET") return handleCloudBackupCallback(request, env, url, cloudBackupMatch[1]);
+    return methodNotAllowed("GET");
+  }
+
   if (!isSameOriginWrite(request)) {
     return new Response("Cross-origin writes are not allowed", { status: 403 });
   }
@@ -50,6 +62,21 @@ async function routeApi(request: Request, env: Env, url: URL, ctx?: ExecutionCon
 
   if (url.pathname === "/api/backups/restore") {
     if (request.method === "POST") return handleRestoreBackup(request, env, ctx);
+    return methodNotAllowed("POST");
+  }
+
+  if (url.pathname === "/api/cloud-backup/status") {
+    if (request.method === "GET") return handleCloudBackupStatus(request, env);
+    return methodNotAllowed("GET");
+  }
+
+  if (cloudBackupMatch && cloudBackupMatch[2] === "connect") {
+    if (request.method === "POST") return handleCloudBackupConnect(request, env, cloudBackupMatch[1]);
+    return methodNotAllowed("POST");
+  }
+
+  if (cloudBackupMatch && cloudBackupMatch[2] === "disconnect") {
+    if (request.method === "POST") return handleCloudBackupDisconnect(request, env, cloudBackupMatch[1]);
     return methodNotAllowed("POST");
   }
 

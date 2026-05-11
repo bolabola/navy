@@ -1,5 +1,5 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
-import { scheduleGoogleDriveBackup } from "./googleDriveBackup";
+import { scheduleCloudBackups } from "./cloudBackup";
 import { jsonResponse, isPlainObject, type BoardPutPayload, type BoardStateEnvelope, type Env } from "./shared";
 import { validateBoardState } from "./validation";
 
@@ -149,7 +149,7 @@ async function writeBoardBackup(env: Env, existingRaw: string, ctx?: ExecutionCo
   const suffix = new Date().toISOString().replace(/[:.]/g, "-");
   const key = BACKUP_PREFIX + suffix;
   await env.BOARD_KV.put(key, existingRaw);
-  scheduleGoogleDriveBackup(env, key, existingRaw, ctx);
+  scheduleCloudBackups(env, key, existingRaw, ctx);
 }
 
 async function pruneBoardBackups(env: Env): Promise<void> {

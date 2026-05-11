@@ -7,6 +7,10 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
   GOOGLE_DRIVE_FOLDER_ID?: string;
+  DROPBOX_CLIENT_ID?: string;
+  DROPBOX_CLIENT_SECRET?: string;
+  ONEDRIVE_CLIENT_ID?: string;
+  ONEDRIVE_CLIENT_SECRET?: string;
 }
 
 export interface BoardStateEnvelope {
