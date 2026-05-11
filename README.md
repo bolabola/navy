@@ -27,79 +27,29 @@ npm run dev
 
 ## 部署到 Cloudflare
 
-### 1. 一键部署向导
-
 Windows PowerShell：
 
 ```powershell
 .\scripts\cloudflare.ps1
 ```
 
-直接运行脚本即可。它会自动检查部署 token、创建或复用 `BOARD_KV`、提示是否设置生产 secrets，并询问是否部署。一路按回车会走推荐流程。
+只使用这个向导部署。它会按顺序完成：
 
-如果本机没有部署 token，脚本会让你选择：
+- 检查或保存 Cloudflare deploy token
+- 创建或复用 `BOARD_KV`
+- 生成本地 `.wrangler.deploy.toml`，写入真实 KV namespace id
+- 提示是否设置生产 `ADMIN_PASSWORD` 和 `SESSION_SECRET`
+- 调用 Wrangler 部署 Worker 和静态资源
 
-- 粘贴已有的 Cloudflare deploy token
-- 使用 Dashboard 里 **Create additional tokens** 模板生成的 bootstrap token，再由脚本创建低权限 deploy token
+一路按回车会走推荐流程。如果本机没有部署 token，向导会让你选择粘贴已有 Cloudflare deploy token，或使用 Dashboard 里 **Create additional tokens** 模板生成的 bootstrap token，再由脚本创建低权限 deploy token。
 
 脚本可以把 deploy token 保存到 `.cloudflare-token.local` 供本项目复用。这个文件已加入 `.gitignore`，但它仍然是明文密钥文件，只应保存在自己的机器上。
 
-`wrangler.toml` 在仓库中保留 `REPLACE_WITH_KV_ID` 占位符。运行向导准备 KV 时，脚本会生成本地 `.wrangler.deploy.toml` 并写入你账号里的真实 namespace id；这个文件已加入 `.gitignore`，不会提交到公开仓库。
+`wrangler.toml` 在仓库中保留 `REPLACE_WITH_KV_ID` 占位符。向导准备 KV 时会生成本地 `.wrangler.deploy.toml` 并写入真实 namespace id；这个文件已加入 `.gitignore`，不会提交到公开仓库。
 
-### 2. 创建生产 KV namespace
+部署完成后，输出会显示访问地址，形如 `https://board-trello.<你的子域>.workers.dev`。
 
-```bash
-npx wrangler kv namespace create BOARD_KV
-```
-
-输出会给你一个 id，例如：
-
-```
-[[kv_namespaces]]
-binding = "BOARD_KV"
-id = "abc123def456..."
-```
-
-复制这个 `id`，填进 `wrangler.toml`，替换 `REPLACE_WITH_KV_ID`。
-
-Windows PowerShell 也可以自动创建或复用 `BOARD_KV`，并生成本地部署配置 `.wrangler.deploy.toml`：
-
-```powershell
-.\scripts\cloudflare.ps1 -PrepareKv
-```
-
-### 3. 设置生产 secrets
-
-```bash
-npx wrangler secret put ADMIN_PASSWORD
-# 提示后输入你的管理员密码
-
-npx wrangler secret put SESSION_SECRET
-# 提示后输入一个 32 位以上随机字符串
-# 可用：openssl rand -hex 32
-```
-
-Windows PowerShell 也可以运行：
-
-```powershell
-.\scripts\cloudflare.ps1 -SetSecrets
-```
-
-### 4. 部署
-
-```bash
-npm run deploy
-```
-
-Windows PowerShell 也可以运行：
-
-```powershell
-.\scripts\cloudflare.ps1 -Deploy
-```
-
-输出会显示访问地址，形如 `https://board-trello.<你的子域>.workers.dev`。
-
-### 5. （可选）绑定自定义域
+### （可选）绑定自定义域
 
 Cloudflare Dashboard → Workers & Pages → board-trello → Settings → Triggers → Custom Domains。
 
@@ -258,7 +208,6 @@ npx wrangler secret put ADMIN_PASSWORD
 | 命令 | 说明 |
 |---|---|
 | `npm run dev` | 本地开发服务器（含 KV 模拟） |
-| `npm run deploy` | 部署到 Cloudflare |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm test` | 编译 Worker 并运行 Node 内置测试 |
 

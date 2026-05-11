@@ -193,6 +193,9 @@ function Update-DeployWranglerConfig($NamespaceId) {
   }
 
   $content = Get-Content -Raw $WranglerToml
+  if ($content -notmatch "(?m)^\s*\[\[kv_namespaces\]\]\s*$") {
+    $content = $content -replace '(?m)^(binding\s*=\s*"[^"]+"\s*)$', "[[kv_namespaces]]`r`n`$1"
+  }
   $updated = $content -replace 'id = "REPLACE_WITH_KV_ID"', "id = `"$NamespaceId`""
   if ($updated -eq $content -and $content -notmatch [regex]::Escape($NamespaceId)) {
     $updated = $content -replace 'id = "[0-9a-fA-F]{32}"', "id = `"$NamespaceId`""
