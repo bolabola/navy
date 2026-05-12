@@ -23,7 +23,8 @@
   const LEGACY_ICON_MAP = { grid: "layout-grid", bolt: "zap", code: "code", spark: "sparkles", tool: "wrench", note: "file-text" };
   const ICON_NAME_RE = /^[a-z0-9-]+$/;
   const ICON_PICKER_OVERFLOW_LIMIT = 200;
-  const IMPORT_MAX_URLS = 30;
+  const IMPORT_MAX_URLS = 100;
+  const URL_TITLE_BATCH_SIZE = 30;
   const FULL_BACKUP_SCHEMA = "board-trello-v1";
   const URL_EXTRACT_RE = /https?:\/\/[^\s<>"'`]+/gi;
   const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]"'`]+$/;
@@ -3159,8 +3160,7 @@
       uiState.importingBoardId = boardId;
       render();
 
-      apiSend("/url-titles", "POST", { urls: urls }).then(function (results) {
-        const list = Array.isArray(results) ? results : [];
+      fetchUrlTitlesInBatches(urls).then(function (list) {
         const items = list.map(function (entry) {
           let normalized;
           try {
@@ -3190,6 +3190,20 @@
       });
     };
     reader.readAsText(file, "utf-8");
+  }
+
+  function fetchUrlTitlesInBatches(urls) {
+    const batches = [];
+    for (let i = 0; i < urls.length; i += URL_TITLE_BATCH_SIZE) {
+      batches.push(urls.slice(i, i + URL_TITLE_BATCH_SIZE));
+    }
+    return batches.reduce(function (chain, batch) {
+      return chain.then(function (all) {
+        return apiSend("/url-titles", "POST", { urls: batch }).then(function (results) {
+          return all.concat(Array.isArray(results) ? results : []);
+        });
+      });
+    }, Promise.resolve([]));
   }
 
   function csvEscape(value) {

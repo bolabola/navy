@@ -36,10 +36,17 @@ test("validateBoardState rejects invalid item URLs", () => {
   );
 });
 
-test("validateBoardState enforces board and item limits", () => {
+test("validateBoardState enforces board limit", () => {
   assert.equal(validateBoardState(Array.from({ length: 101 }, (_, i) => ({ ...validBoard, id: "b-" + i }))), "Too many boards");
+});
+
+test("validateBoardState enforces board item limit", () => {
   assert.equal(
-    validateBoardState([{ ...validBoard, items: Array.from({ length: 501 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" })) }]),
+    validateBoardState([{ ...validBoard, items: Array.from({ length: 100 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" + i })) }]),
+    null
+  );
+  assert.equal(
+    validateBoardState([{ ...validBoard, items: Array.from({ length: 101 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" + i })) }]),
     "Too many board items"
   );
 });
