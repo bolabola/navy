@@ -120,6 +120,34 @@ a {
   background: rgba(34, 132, 44, 0.52);
 }
 
+.workspace__cloud-backup {
+  max-width: 260px;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.16);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace__cloud-backup--success {
+  color: #f3fff0;
+  background: rgba(34, 132, 44, 0.52);
+}
+
+.workspace__cloud-backup--failed {
+  color: #fff2f0;
+  background: rgba(201, 55, 44, 0.72);
+}
+
+.workspace__cloud-backup--pending {
+  color: #fff7db;
+  background: rgba(151, 101, 0, 0.55);
+}
+
 .workspace__create-button {
   display: flex;
   align-items: center;
@@ -1147,6 +1175,10 @@ body.is-resizing {
 
   .workspace__sync {
     max-width: 112px;
+  }
+
+  .workspace__cloud-backup {
+    max-width: 132px;
   }
 
   .board-card__title-wrap {

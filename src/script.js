@@ -349,6 +349,46 @@
     return node;
   }
 
+  function renderCloudBackupIndicator() {
+    if (!auth.isAdmin) return null;
+    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
+      ? uiState.backupStatus.providers.filter(function (provider) { return provider.connected; })
+      : [];
+    if (!providers.length) return null;
+
+    const statuses = providers.map(function (provider) {
+      return provider.lastBackup && provider.lastBackup.status ? provider.lastBackup.status : "pending";
+    });
+    const failed = statuses.some(function (status) { return status === "failed"; });
+    const success = statuses.length > 0 && statuses.every(function (status) { return status === "success"; });
+
+    const node = document.createElement("span");
+    node.className = "workspace__cloud-backup workspace__cloud-backup--" + (failed ? "failed" : (success ? "success" : "pending"));
+    node.title = providers.map(formatCloudBackupProviderSummary).join("\n");
+    node.textContent = formatCloudBackupIndicatorText(providers, failed, success);
+    return node;
+  }
+
+  function formatCloudBackupIndicatorText(providers, failed, success) {
+    if (failed) {
+      const failedNames = providers
+        .filter(function (provider) { return provider.lastBackup && provider.lastBackup.status === "failed"; })
+        .map(function (provider) { return provider.label || provider.id; });
+      return "云备份失败: " + failedNames.join(", ");
+    }
+    if (success) return "云备份成功: " + providers.map(function (provider) { return provider.label || provider.id; }).join(", ");
+    return "云备份待确认: " + providers.map(function (provider) { return provider.label || provider.id; }).join(", ");
+  }
+
+  function formatCloudBackupProviderSummary(provider) {
+    const name = provider.label || provider.id;
+    if (!provider.lastBackup) return name + ": 尚无备份结果";
+    const status = provider.lastBackup.status === "success" ? "成功" : "失败";
+    const time = provider.lastBackup.at ? " " + formatDateTime(provider.lastBackup.at) : "";
+    const error = provider.lastBackup.error ? " - " + provider.lastBackup.error : "";
+    return name + ": " + status + time + error;
+  }
+
   function loadBackupStatus() {
     if (!auth.isAdmin || uiState.backupStatusLoading) return;
     uiState.backupStatusLoading = true;
@@ -1502,6 +1542,8 @@
     if (sync) right.appendChild(sync);
 
     if (auth.isAdmin) {
+      const cloudBackup = renderCloudBackupIndicator();
+      if (cloudBackup) right.appendChild(cloudBackup);
       right.appendChild(renderDataMenu());
       right.appendChild(renderBackupMenu());
       right.appendChild(actionButton("workspace__create-button", "toggle-create-board", null, "", [
