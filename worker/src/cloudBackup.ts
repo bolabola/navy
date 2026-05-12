@@ -1,7 +1,7 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
 import { jsonResponse, type Env } from "./shared";
 
-type ProviderId = "google" | "dropbox" | "onedrive";
+type ProviderId = "google" | "dropbox";
 
 interface ProviderConfig {
   id: ProviderId;
@@ -60,15 +60,6 @@ const PROVIDERS: ProviderConfig[] = [
       token_access_type: "offline"
     },
     tokenAuth: "basic"
-  },
-  {
-    id: "onedrive",
-    label: "OneDrive",
-    clientIdEnv: "ONEDRIVE_CLIENT_ID",
-    clientSecretEnv: "ONEDRIVE_CLIENT_SECRET",
-    authorizeUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    scope: "Files.ReadWrite offline_access"
   }
 ];
 
@@ -239,7 +230,6 @@ async function uploadProviderFile(
     await uploadDropboxFile(accessToken, fileName, rawState);
     return;
   }
-  await uploadOneDriveFile(accessToken, fileName, rawState);
 }
 
 async function uploadGoogleFile(accessToken: string, fileName: string, rawState: string, folderId: string): Promise<void> {
@@ -291,28 +281,12 @@ async function uploadDropboxFile(accessToken: string, fileName: string, rawState
   if (!response.ok) throw new Error(`Dropbox upload returned ${response.status}`);
 }
 
-async function uploadOneDriveFile(accessToken: string, fileName: string, rawState: string): Promise<void> {
-  await ensureOneDriveFolder(accessToken);
-  const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURIComponent(BACKUP_FOLDER_NAME)}/${encodeURIComponent(fileName)}:/content`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json; charset=UTF-8"
-    },
-    body: rawState
-  });
-
-  if (!response.ok) throw new Error(`OneDrive upload returned ${response.status}`);
-}
-
 async function prepareProviderFolder(provider: ProviderConfig, accessToken: string): Promise<string | undefined> {
   if (provider.id === "google") return createGoogleFolder(accessToken);
   if (provider.id === "dropbox") {
     await ensureDropboxFolder(accessToken);
     return undefined;
   }
-  await ensureOneDriveFolder(accessToken);
-  return undefined;
 }
 
 async function createGoogleFolder(accessToken: string): Promise<string> {
@@ -350,24 +324,6 @@ async function ensureDropboxFolder(accessToken: string): Promise<void> {
   throw new Error(`Dropbox folder create returned ${response.status}`);
 }
 
-async function ensureOneDriveFolder(accessToken: string): Promise<void> {
-  const response = await fetch("https://graph.microsoft.com/v1.0/me/drive/root/children", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      name: BACKUP_FOLDER_NAME,
-      folder: {},
-      "@microsoft.graph.conflictBehavior": "replace"
-    })
-  });
-
-  if (response.ok || response.status === 409) return;
-  throw new Error(`OneDrive folder create returned ${response.status}`);
-}
-
 async function getStoredProviderConfig(env: Env, provider: ProviderConfig): Promise<StoredProviderConfig | null> {
   const [storedRefreshToken, storedFolderId] = await Promise.all([
     env.BOARD_KV.get(providerKey(provider.id, "refresh_token")),
@@ -402,8 +358,6 @@ async function getAccessToken(env: Env, provider: ProviderConfig, refreshToken: 
     body.set("client_id", String(env[provider.clientIdEnv] || ""));
     body.set("client_secret", String(env[provider.clientSecretEnv] || ""));
   }
-  if (provider.id === "onedrive") body.set("scope", provider.scope);
-
   const response = await fetch(provider.tokenUrl, {
     method: "POST",
     headers: tokenHeaders(env, provider),
@@ -429,8 +383,6 @@ async function exchangeAuthorizationCode(env: Env, provider: ProviderConfig, cod
     body.set("client_id", String(env[provider.clientIdEnv] || ""));
     body.set("client_secret", String(env[provider.clientSecretEnv] || ""));
   }
-  if (provider.id === "onedrive") body.set("scope", provider.scope);
-
   const response = await fetch(provider.tokenUrl, {
     method: "POST",
     headers: tokenHeaders(env, provider),
@@ -471,7 +423,7 @@ function getProviderRedirectUri(request: Request, provider: ProviderId): string 
 function parseOAuthState(raw: string): OAuthState | null {
   try {
     const parsed = JSON.parse(raw) as Partial<OAuthState>;
-    if ((parsed.provider === "google" || parsed.provider === "dropbox" || parsed.provider === "onedrive") && typeof parsed.redirectUri === "string") {
+    if ((parsed.provider === "google" || parsed.provider === "dropbox") && typeof parsed.redirectUri === "string") {
       return { provider: parsed.provider, redirectUri: parsed.redirectUri };
     }
   } catch {

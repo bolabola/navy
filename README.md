@@ -230,7 +230,7 @@ npx wrangler secret put ADMIN_PASSWORD
 
 ## 云端外部备份
 
-应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。连接云端备份后，同一份备份也会异步上传到已连接的 Google Drive、Dropbox 或 OneDrive；某个云端上传失败不会阻断正常保存。
+应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。连接云端备份后，同一份备份也会异步上传到已连接的 Google Drive 或 Dropbox；某个云端上传失败不会阻断正常保存。
 
 ### 一次性创建 OAuth App
 
@@ -240,9 +240,8 @@ npx wrangler secret put ADMIN_PASSWORD
 |---|---|---|---|
 | Google Drive | <https://console.cloud.google.com/>，启用 Google Drive API，创建 Web application OAuth client | `https://你的域名/api/cloud-backup/google/callback` | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
 | Dropbox | <https://www.dropbox.com/developers/apps>，创建 Scoped access app，权限至少包含文件写入 | `https://你的域名/api/cloud-backup/dropbox/callback` | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |
-| OneDrive | <https://portal.azure.com/> 或 <https://entra.microsoft.com/>，创建 App registration，允许 personal Microsoft accounts 时用 `/common` 流程 | `https://你的域名/api/cloud-backup/onedrive/callback` | `ONEDRIVE_CLIENT_ID` / `ONEDRIVE_CLIENT_SECRET` |
 
-Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许文件内容写入。OneDrive 需要允许 `Files.ReadWrite` 和 `offline_access`。
+Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许 `files.content.write` 和 `files.metadata.write`。
 
 Google Drive 简要步骤：
 
@@ -263,6 +262,28 @@ https://你的域名/api/cloud-backup/google/callback
 
 6. 保存后复制 Client ID 和 Client Secret，用下面的 Wrangler secret 命令写入 Cloudflare。
 
+Dropbox 简要步骤：
+
+1. 打开 Dropbox App Console：<https://www.dropbox.com/developers/apps>。
+2. 点击 **Create app**。
+3. API 选择 **Scoped access**。
+4. Access type 选择 **App folder**。应用只会访问自己的 app 文件夹，备份会写入 `board-trello-backups`。
+5. App name 填一个唯一名称，例如 `board-trello-backup-你的名字`。
+6. 创建后进入 app 详情页，在 **Permissions** 中勾选：
+
+```text
+files.content.write
+files.metadata.write
+```
+
+7. 保存权限后，回到 **Settings**，在 **OAuth 2 Redirect URIs** 添加完整回调地址：
+
+```text
+https://你的域名/api/cloud-backup/dropbox/callback
+```
+
+8. 在同一页复制 **App key** 和 **App secret**。这里的 App key 对应 `DROPBOX_CLIENT_ID`，App secret 对应 `DROPBOX_CLIENT_SECRET`，用下面的 Wrangler secret 命令写入 Cloudflare。
+
 ### 设置 Cloudflare secrets
 
 只配置你要用的服务即可：
@@ -273,9 +294,6 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 
 npx wrangler secret put DROPBOX_CLIENT_ID
 npx wrangler secret put DROPBOX_CLIENT_SECRET
-
-npx wrangler secret put ONEDRIVE_CLIENT_ID
-npx wrangler secret put ONEDRIVE_CLIENT_SECRET
 ```
 
 设置 secrets 后重新部署。
@@ -284,7 +302,7 @@ npx wrangler secret put ONEDRIVE_CLIENT_SECRET
 
 1. 登录看板后台。
 2. 点击顶栏的 `Backup` 下拉按钮。
-3. 在 Google Drive、Dropbox、OneDrive 中选择已配置的服务，点击 `Connect`。
+3. 在 Google Drive、Dropbox 中选择已配置的服务，点击 `Connect`。
 4. 跳转到对应授权页后确认授权。
 5. 回到看板后，该服务会显示 `Connected`。
 6. 需要取消时，在同一个下拉列表点击 `Disconnect`。
@@ -302,6 +320,11 @@ state_backup_2026-05-11T08-30-00-000Z.json
 
 **登录后仍显示只读**
 浏览器 cookie 被拦截。生产环境 cookie 带 `Secure` 标志，只在 HTTPS 下生效。本地 `wrangler dev` 走 HTTP 也能用是因为 localhost 例外。
+
+**连接 Google Drive 时报 `403: access_denied`，提示应用正在测试中**
+这是 Google OAuth consent screen 还处于 Testing 状态。打开 Google Cloud Console → **APIs & Services** → **OAuth consent screen** → **Audience / Test users**，把正在授权时使用的 Google 邮箱加入 Test users 后再重新连接。
+
+如果希望任意 Google 账号都能连接，需要把 OAuth app 发布到 Production，并按 Google 要求完成验证。自用场景保持 Testing，然后只添加自己的邮箱最简单。
 
 **改了密码后无法登录**
 secrets 修改是即时生效的，但旧 cookie 仍然有效（除非也换 `SESSION_SECRET`）。强制踢出所有会话用：

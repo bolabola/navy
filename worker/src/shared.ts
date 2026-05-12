@@ -9,8 +9,6 @@ export interface Env {
   GOOGLE_DRIVE_FOLDER_ID?: string;
   DROPBOX_CLIENT_ID?: string;
   DROPBOX_CLIENT_SECRET?: string;
-  ONEDRIVE_CLIENT_ID?: string;
-  ONEDRIVE_CLIENT_SECRET?: string;
 }
 
 export interface BoardStateEnvelope {
