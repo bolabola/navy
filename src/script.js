@@ -1339,7 +1339,6 @@
       return button;
     }
 
-    menu.appendChild(menuItem("toggle-view-mode", board.displayMode === "icons" ? "icon-list" : "icon-layout-grid", TEXT.toggleView));
     menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
     menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
     menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
@@ -1428,6 +1427,11 @@
     header.className = "board-card__header";
     const titleWrap = document.createElement("div");
     titleWrap.className = "board-card__title-wrap";
+    if (auth.isAdmin) {
+      titleWrap.dataset.role = "board-drag-handle";
+      titleWrap.dataset.boardId = board.id;
+      titleWrap.title = TEXT.moveBoard;
+    }
     const glyph = document.createElement("span");
     glyph.className = "board-card__glyph";
     glyph.appendChild(iconNode(board.icon));
@@ -1440,20 +1444,14 @@
 
     const actions = document.createElement("div");
     actions.className = "board-card__actions";
+    actions.appendChild(actionButton("board-icon-button", "toggle-view-mode", board.id, TEXT.toggleView, [
+      staticIconNode(iconMode ? "icon-list" : "icon-layout-grid")
+    ]));
+    actions.appendChild(actionButton("board-icon-button", "toggle-collapse", board.id, board.collapsed ? TEXT.expand : TEXT.collapse, [
+      staticIconNode(board.collapsed ? "icon-chevron-down" : "icon-chevron-up")
+    ]));
     if (auth.isAdmin) {
-      const drag = document.createElement("button");
-      drag.className = "board-icon-button board-icon-button--drag";
-      drag.type = "button";
-      drag.dataset.role = "board-drag-handle";
-      drag.dataset.boardId = board.id;
-      drag.title = TEXT.moveBoard;
-      drag.appendChild(staticIconNode("icon-grip-vertical"));
-      actions.appendChild(drag);
-
       actions.appendChild(actionButton("board-icon-button", "toggle-add", board.id, TEXT.addRow, [staticIconNode("icon-plus")]));
-      actions.appendChild(actionButton("board-icon-button", "toggle-collapse", board.id, board.collapsed ? TEXT.expand : TEXT.collapse, [
-        staticIconNode(board.collapsed ? "icon-chevron-down" : "icon-chevron-up")
-      ]));
 
       const menuButton = actionButton("board-icon-button" + (uiState.importingBoardId === board.id ? " is-loading" : ""), "toggle-board-menu", board.id, "More", [
         staticIconNode("icon-ellipsis")
@@ -1764,7 +1762,7 @@
   }
 
   function renderDragGhost() {
-    if (!uiState.boardDragging) {
+    if (!uiState.boardDragging || !uiState.boardDragging.hasMoved) {
       return null;
     }
 
@@ -1979,6 +1977,16 @@
       return board.id === boardId ? updater(board) : board;
     });
     saveBoards();
+    render();
+  }
+
+  function mutateBoardUiPreference(boardId, updater) {
+    boards = boards.map(function (board) {
+      return board.id === boardId ? updater(board) : board;
+    });
+    if (auth.isAdmin) {
+      saveBoards();
+    }
     render();
   }
 
@@ -2396,6 +2404,9 @@
       offsetY: event.clientY - rect.top,
       ghostLeft: rect.left,
       ghostTop: rect.top,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      hasMoved: false,
       width: rect.width,
       height: rect.height,
       heightMap: heightMap,
@@ -2410,8 +2421,6 @@
       dropColumn: layoutEntry ? layoutEntry.column : 0,
       dropRow: layoutEntry ? layoutEntry.row : 0
     };
-    document.body.classList.add("is-board-dragging");
-    render();
   }
 
   function updateBoardDrag(event) {
@@ -2421,6 +2430,13 @@
 
     uiState.boardDragging.nextClientX = event.clientX;
     uiState.boardDragging.nextClientY = event.clientY;
+    if (Math.abs(event.clientX - uiState.boardDragging.startClientX) > 3 || Math.abs(event.clientY - uiState.boardDragging.startClientY) > 3) {
+      if (!uiState.boardDragging.hasMoved) {
+        uiState.boardDragging.hasMoved = true;
+        document.body.classList.add("is-board-dragging");
+        render();
+      }
+    }
 
     if (uiState.boardDragFrame) {
       return;
@@ -2461,7 +2477,7 @@
     const movingBoard = boards.find(function (board) {
       return board.id === dragging.boardId;
     });
-    if (movingBoard) {
+    if (movingBoard && dragging.hasMoved) {
       const nextBuckets = createColumnBuckets(boards.slice(), masonryLayout.columns);
       for (let columnIndex = 0; columnIndex < nextBuckets.length; columnIndex += 1) {
         nextBuckets[columnIndex] = nextBuckets[columnIndex].filter(function (entry) {
@@ -2769,7 +2785,7 @@
 
     if (action === "toggle-view-mode") {
       uiState.openBoardMenuId = null;
-      mutateBoard(boardId, function (board) {
+      mutateBoardUiPreference(boardId, function (board) {
         return Object.assign({}, board, {
           displayMode: board.displayMode === "icons" ? "list" : "icons"
         });
@@ -2782,7 +2798,7 @@
       if (uiState.openAddBoardId === boardId) {
         uiState.openAddBoardId = null;
       }
-      mutateBoard(boardId, function (board) {
+      mutateBoardUiPreference(boardId, function (board) {
         return Object.assign({}, board, { collapsed: !board.collapsed });
       });
       return;
@@ -3301,6 +3317,9 @@
 
     const boardHandle = event.target.closest('[data-role="board-drag-handle"]');
     if (boardHandle) {
+      if (event.target.closest("button, a, input, textarea, select, [contenteditable], .board-card__actions")) {
+        return;
+      }
       beginBoardDrag(boardHandle.getAttribute("data-board-id"), event);
     }
   });

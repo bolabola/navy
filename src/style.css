@@ -532,6 +532,15 @@ a {
   flex: 1;
 }
 
+.board-card__title-wrap[data-role="board-drag-handle"] {
+  cursor: grab;
+  user-select: none;
+}
+
+.board-card__title-wrap[data-role="board-drag-handle"]:active {
+  cursor: grabbing;
+}
+
 .board-card__glyph {
   display: inline-flex;
   align-items: center;
@@ -662,14 +671,6 @@ a {
 
 .board-actions-menu__item--danger:hover {
   background: rgba(201, 55, 44, 0.08);
-}
-
-.board-icon-button--drag {
-  cursor: grab;
-}
-
-.board-icon-button--drag:active {
-  cursor: grabbing;
 }
 
 body.is-board-dragging {
