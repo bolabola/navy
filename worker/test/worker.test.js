@@ -169,11 +169,11 @@ test("PUT /api/board schedules Google Drive backup when configured", async () =>
     assert.equal(res.status, 200);
     assert.equal(waitUntilTasks.length, 1);
     await Promise.all(waitUntilTasks);
-    assert.equal(calls.length, 2);
     assert.match(calls[0].input, /oauth2\.googleapis\.com\/token/);
     assert.match(calls[1].input, /googleapis\.com\/upload\/drive\/v3\/files/);
     assert.match(String(calls[1].init.body), /state_backup_/);
     assert.match(String(calls[1].init.body), /folder-id/);
+    assert.equal(calls.some((call) => /googleapis\.com\/drive\/v3\/files\?/.test(call.input)), true);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -215,21 +215,137 @@ test("Google Drive backup failure does not block board save", async () => {
   }
 });
 
+test("Google Drive backup pruning keeps the newest 100 files", async () => {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    calls.push({ input: String(input), init });
+    if (String(input).includes("oauth2.googleapis.com/token")) {
+      return Response.json({ access_token: "access-token" });
+    }
+    if (String(input).includes("upload/drive/v3/files")) {
+      return Response.json({ id: "drive-file-id" });
+    }
+    if (String(input).includes("googleapis.com/drive/v3/files?")) {
+      const files = Array.from({ length: 101 }, (_, index) => ({
+        id: `file-${index + 1}`,
+        name: `state_backup_2026-01-01T00-00-${String(index + 1).padStart(3, "0")}-000Z.json`,
+        createdTime: `2026-01-01T00:00:${String(index + 1).padStart(2, "0")}.000Z`
+      }));
+      return Response.json({ files });
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:google:refresh_token": "refresh-token",
+      "cloud_backup:google:folder_id": "folder-id"
+    }, {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+    const res = await worker.fetch(new Request("https://example.com/api/board", {
+      method: "PUT",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ version: 1, boards: boardPayload.boards })
+    }), env, ctx);
+
+    assert.equal(res.status, 200);
+    await Promise.all(waitUntilTasks);
+    const deletes = calls.filter((call) => call.init.method === "DELETE");
+    assert.equal(deletes.length, 1);
+    assert.match(deletes[0].input, /\/drive\/v3\/files\/file-1$/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Dropbox backup pruning keeps the newest 100 files", async () => {
+  const previousFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    calls.push({ input: String(input), init });
+    const url = String(input);
+    if (url.includes("dropboxapi.com/oauth2/token")) {
+      return Response.json({ access_token: "dropbox-access" });
+    }
+    if (url.includes("/2/files/create_folder_v2")) {
+      return new Response(null, { status: 409 });
+    }
+    if (url.includes("/2/files/upload")) {
+      return Response.json({ id: "uploaded" });
+    }
+    if (url.includes("/2/files/list_folder")) {
+      const entries = Array.from({ length: 101 }, (_, index) => ({
+        ".tag": "file",
+        name: `state_backup_2026-01-01T00-00-${String(index + 1).padStart(3, "0")}-000Z.json`,
+        path_lower: `/board-trello-backups/state_backup_2026-01-01t00-00-${String(index + 1).padStart(3, "0")}-000z.json`,
+        server_modified: `2026-01-01T00:00:${String(index + 1).padStart(2, "0")}.000Z`
+      }));
+      return Response.json({ entries, cursor: "cursor", has_more: false });
+    }
+    if (url.includes("/2/files/delete_v2")) {
+      return Response.json({});
+    }
+    return Response.json({});
+  };
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:dropbox:refresh_token": "refresh-token"
+    }, {
+      DROPBOX_CLIENT_ID: "dropbox-id",
+      DROPBOX_CLIENT_SECRET: "dropbox-secret"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+    const res = await worker.fetch(new Request("https://example.com/api/board", {
+      method: "PUT",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ version: 1, boards: boardPayload.boards })
+    }), env, ctx);
+
+    assert.equal(res.status, 200);
+    await Promise.all(waitUntilTasks);
+    const deletes = calls.filter((call) => call.input.includes("/2/files/delete_v2"));
+    assert.equal(deletes.length, 1);
+    assert.deepEqual(JSON.parse(deletes[0].init.body), {
+      path: "/board-trello-backups/state_backup_2026-01-01t00-00-001-000z.json"
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("cloud backup connect returns OAuth authorization URLs", async () => {
   const env = createEnv({}, {
     GOOGLE_CLIENT_ID: "client-id",
     GOOGLE_CLIENT_SECRET: "client-secret",
     DROPBOX_CLIENT_ID: "dropbox-id",
-    DROPBOX_CLIENT_SECRET: "dropbox-secret",
-    ONEDRIVE_CLIENT_ID: "onedrive-id",
-    ONEDRIVE_CLIENT_SECRET: "onedrive-secret"
+    DROPBOX_CLIENT_SECRET: "dropbox-secret"
   });
   const { cookie, csrfToken } = await login(env);
 
   for (const [provider, host, redirectUri] of [
     ["google", "accounts.google.com", "https://example.com/api/cloud-backup/google/callback"],
-    ["dropbox", "www.dropbox.com", "https://example.com/api/cloud-backup/dropbox/callback"],
-    ["onedrive", "login.microsoftonline.com", "https://example.com/api/cloud-backup/onedrive/callback"]
+    ["dropbox", "www.dropbox.com", "https://example.com/api/cloud-backup/dropbox/callback"]
   ]) {
     const res = await worker.fetch(new Request(`https://example.com/api/cloud-backup/${provider}/connect`, {
       method: "POST",
@@ -284,14 +400,11 @@ test("Google Drive callback stores refresh token and folder id", async () => {
   }
 });
 
-test("Dropbox and OneDrive callbacks store refresh tokens", async () => {
+test("Dropbox callback stores refresh token", async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     if (String(input).includes("dropboxapi.com/oauth2/token")) {
       return Response.json({ access_token: "dropbox-access", refresh_token: "dropbox-refresh" });
-    }
-    if (String(input).includes("login.microsoftonline.com")) {
-      return Response.json({ access_token: "onedrive-access", refresh_token: "onedrive-refresh" });
     }
     return Response.json({ id: "ok" });
   };
@@ -301,25 +414,16 @@ test("Dropbox and OneDrive callbacks store refresh tokens", async () => {
       "cloud_backup_oauth_state:dropbox-state": JSON.stringify({
         provider: "dropbox",
         redirectUri: "https://example.com/api/cloud-backup/dropbox/callback"
-      }),
-      "cloud_backup_oauth_state:onedrive-state": JSON.stringify({
-        provider: "onedrive",
-        redirectUri: "https://example.com/api/cloud-backup/onedrive/callback"
       })
     }, {
       DROPBOX_CLIENT_ID: "dropbox-id",
-      DROPBOX_CLIENT_SECRET: "dropbox-secret",
-      ONEDRIVE_CLIENT_ID: "onedrive-id",
-      ONEDRIVE_CLIENT_SECRET: "onedrive-secret"
+      DROPBOX_CLIENT_SECRET: "dropbox-secret"
     });
 
     const dropbox = await worker.fetch(new Request("https://example.com/api/cloud-backup/dropbox/callback?state=dropbox-state&code=code-1"), env);
-    const onedrive = await worker.fetch(new Request("https://example.com/api/cloud-backup/onedrive/callback?state=onedrive-state&code=code-2"), env);
 
     assert.equal(dropbox.status, 200);
-    assert.equal(onedrive.status, 200);
     assert.equal(await env.BOARD_KV.get("cloud_backup:dropbox:refresh_token"), "dropbox-refresh");
-    assert.equal(await env.BOARD_KV.get("cloud_backup:onedrive:refresh_token"), "onedrive-refresh");
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -343,10 +447,9 @@ test("cloud backup status and disconnect report provider state", async () => {
   }), env);
   assert.equal(status.status, 200);
   const body = await status.json();
-  assert.equal(body.providers.length, 3);
+  assert.equal(body.providers.length, 2);
   assert.equal(body.providers.find((provider) => provider.id === "google").connected, true);
   assert.equal(body.providers.find((provider) => provider.id === "dropbox").configured, true);
-  assert.equal(body.providers.find((provider) => provider.id === "onedrive").configured, false);
 
   const disconnected = await worker.fetch(new Request("https://example.com/api/cloud-backup/google/disconnect", {
     method: "POST",

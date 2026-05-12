@@ -30,7 +30,15 @@ interface StoredProviderConfig {
   folderId?: string;
 }
 
+interface RemoteBackupFile {
+  id: string;
+  name: string;
+  createdAt?: string;
+}
+
 const BACKUP_FOLDER_NAME = "board-trello-backups";
+const BACKUP_FILE_PREFIX = "state_backup_";
+const CLOUD_BACKUP_KEEP_COUNT = 100;
 const OAUTH_STATE_PREFIX = "cloud_backup_oauth_state:";
 const OAUTH_STATE_TTL_SECONDS = 10 * 60;
 
@@ -55,7 +63,7 @@ const PROVIDERS: ProviderConfig[] = [
     clientSecretEnv: "DROPBOX_CLIENT_SECRET",
     authorizeUrl: "https://www.dropbox.com/oauth2/authorize",
     tokenUrl: "https://api.dropboxapi.com/oauth2/token",
-    scope: "files.content.write files.metadata.write",
+    scope: "files.content.write files.metadata.read files.metadata.write",
     extraAuthParams: {
       token_access_type: "offline"
     },
@@ -223,11 +231,13 @@ async function uploadProviderFile(
 ): Promise<void> {
   if (provider.id === "google") {
     await uploadGoogleFile(accessToken, fileName, rawState, folderId || "");
+    await pruneGoogleBackups(accessToken, folderId || "");
     return;
   }
   if (provider.id === "dropbox") {
     await ensureDropboxFolder(accessToken);
     await uploadDropboxFile(accessToken, fileName, rawState);
+    await pruneDropboxBackups(accessToken);
     return;
   }
 }
@@ -279,6 +289,127 @@ async function uploadDropboxFile(accessToken: string, fileName: string, rawState
   });
 
   if (!response.ok) throw new Error(`Dropbox upload returned ${response.status}`);
+}
+
+async function pruneGoogleBackups(accessToken: string, folderId: string): Promise<void> {
+  if (!folderId) throw new Error("Google Drive folder id is missing");
+
+  const files: RemoteBackupFile[] = [];
+  let pageToken = "";
+  do {
+    const url = new URL("https://www.googleapis.com/drive/v3/files");
+    url.searchParams.set("pageSize", "1000");
+    url.searchParams.set("fields", "nextPageToken,files(id,name,createdTime)");
+    url.searchParams.set("q", `'${escapeDriveQueryValue(folderId)}' in parents and trashed = false and name contains '${BACKUP_FILE_PREFIX}'`);
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!response.ok) throw new Error(`Google Drive backup list returned ${response.status}`);
+
+    const parsed = (await response.json()) as {
+      nextPageToken?: unknown;
+      files?: Array<{ id?: unknown; name?: unknown; createdTime?: unknown }>;
+    };
+    for (const file of parsed.files || []) {
+      if (typeof file.id === "string" && typeof file.name === "string" && file.name.startsWith(BACKUP_FILE_PREFIX)) {
+        files.push({
+          id: file.id,
+          name: file.name,
+          createdAt: typeof file.createdTime === "string" ? file.createdTime : undefined
+        });
+      }
+    }
+    pageToken = typeof parsed.nextPageToken === "string" ? parsed.nextPageToken : "";
+  } while (pageToken);
+
+  await Promise.all(getOldRemoteBackups(files).map(async (file) => {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`Google Drive backup delete returned ${response.status}`);
+    }
+  }));
+}
+
+async function pruneDropboxBackups(accessToken: string): Promise<void> {
+  const files: RemoteBackupFile[] = [];
+  let cursor = "";
+  let hasMore = false;
+
+  do {
+    const response = await fetch(cursor
+      ? "https://api.dropboxapi.com/2/files/list_folder/continue"
+      : "https://api.dropboxapi.com/2/files/list_folder", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(cursor ? { cursor } : {
+        path: `/${BACKUP_FOLDER_NAME}`,
+        recursive: false,
+        include_deleted: false,
+        limit: 2000
+      })
+    });
+    if (!response.ok) throw new Error(`Dropbox backup list returned ${response.status}`);
+
+    const parsed = (await response.json()) as {
+      entries?: Array<{ ".tag"?: unknown; name?: unknown; path_lower?: unknown; server_modified?: unknown }>;
+      cursor?: unknown;
+      has_more?: unknown;
+    };
+    for (const entry of parsed.entries || []) {
+      if (
+        entry[".tag"] === "file" &&
+        typeof entry.name === "string" &&
+        entry.name.startsWith(BACKUP_FILE_PREFIX) &&
+        typeof entry.path_lower === "string"
+      ) {
+        files.push({
+          id: entry.path_lower,
+          name: entry.name,
+          createdAt: typeof entry.server_modified === "string" ? entry.server_modified : undefined
+        });
+      }
+    }
+    cursor = typeof parsed.cursor === "string" ? parsed.cursor : "";
+    hasMore = parsed.has_more === true;
+  } while (hasMore && cursor);
+
+  await Promise.all(getOldRemoteBackups(files).map(async (file) => {
+    const response = await fetch("https://api.dropboxapi.com/2/files/delete_v2", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ path: file.id })
+    });
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`Dropbox backup delete returned ${response.status}`);
+    }
+  }));
+}
+
+function getOldRemoteBackups(files: RemoteBackupFile[]): RemoteBackupFile[] {
+  return files
+    .slice()
+    .sort((a, b) => remoteBackupSortKey(b).localeCompare(remoteBackupSortKey(a)))
+    .slice(CLOUD_BACKUP_KEEP_COUNT);
+}
+
+function remoteBackupSortKey(file: RemoteBackupFile): string {
+  const match = /^state_backup_(.+)\.json$/.exec(file.name);
+  return match ? match[1] : file.createdAt || file.name;
+}
+
+function escapeDriveQueryValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 async function prepareProviderFolder(provider: ProviderConfig, accessToken: string): Promise<string | undefined> {

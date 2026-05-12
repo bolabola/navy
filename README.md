@@ -230,7 +230,7 @@ npx wrangler secret put ADMIN_PASSWORD
 
 ## 云端外部备份
 
-应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。连接云端备份后，同一份备份也会异步上传到已连接的 Google Drive 或 Dropbox；某个云端上传失败不会阻断正常保存。
+应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。连接云端备份后，同一份备份也会异步上传到已连接的 Google Drive 或 Dropbox；每个云端目录只保留最近 100 份自动备份，某个云端上传或清理失败不会阻断正常保存。
 
 ### 一次性创建 OAuth App
 
@@ -241,7 +241,7 @@ npx wrangler secret put ADMIN_PASSWORD
 | Google Drive | <https://console.cloud.google.com/>，启用 Google Drive API，创建 Web application OAuth client | `https://你的域名/api/cloud-backup/google/callback` | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
 | Dropbox | <https://www.dropbox.com/developers/apps>，创建 Scoped access app，权限至少包含文件写入 | `https://你的域名/api/cloud-backup/dropbox/callback` | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |
 
-Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许 `files.content.write` 和 `files.metadata.write`。
+Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许 `files.content.write`、`files.metadata.read` 和 `files.metadata.write`。
 
 Google Drive 简要步骤：
 
@@ -273,6 +273,7 @@ Dropbox 简要步骤：
 
 ```text
 files.content.write
+files.metadata.read
 files.metadata.write
 ```
 
@@ -283,6 +284,8 @@ https://你的域名/api/cloud-backup/dropbox/callback
 ```
 
 8. 在同一页复制 **App key** 和 **App secret**。这里的 App key 对应 `DROPBOX_CLIENT_ID`，App secret 对应 `DROPBOX_CLIENT_SECRET`，用下面的 Wrangler secret 命令写入 Cloudflare。
+
+如果已有 Dropbox 连接是在加入 `files.metadata.read` 前授权的，需要在看板里先 `Disconnect`，再重新 `Connect`，让新的权限生效。
 
 ### 设置 Cloudflare secrets
 
@@ -307,7 +310,7 @@ npx wrangler secret put DROPBOX_CLIENT_SECRET
 5. 回到看板后，该服务会显示 `Connected`。
 6. 需要取消时，在同一个下拉列表点击 `Disconnect`。
 
-授权成功后，Worker 会自动在对应云盘创建或使用 `board-trello-backups` 文件夹，并把 refresh token 和必要的文件夹信息存到 `BOARD_KV`。后续每次自动备份都会上传类似下面的文件：
+授权成功后，Worker 会自动在对应云盘创建或使用 `board-trello-backups` 文件夹，并把 refresh token 和必要的文件夹信息存到 `BOARD_KV`。后续每次自动备份都会上传类似下面的文件，并在上传成功后删除第 101 份及更旧的自动备份：
 
 ```text
 state_backup_2026-05-11T08-30-00-000Z.json
