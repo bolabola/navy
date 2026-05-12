@@ -61,9 +61,7 @@ export async function handlePutBoard(request: Request, env: Env, ctx?: Execution
     }), 409, { "Cache-Control": "no-store" });
   }
 
-  if (existingRaw) {
-    await writeBoardBackup(env, existingRaw, ctx);
-  }
+  const backupKey = existingRaw ? await writeBoardBackup(env, existingRaw, ctx) : null;
 
   const nextState: BoardStateEnvelope = {
     version: currentVersion == null ? 1 : currentVersion + 1,
@@ -77,7 +75,8 @@ export async function handlePutBoard(request: Request, env: Env, ctx?: Execution
   return jsonResponse(JSON.stringify({
     ok: true,
     version: nextState.version,
-    updatedAt: nextState.updatedAt
+    updatedAt: nextState.updatedAt,
+    backupKey
   }), 200, { "Cache-Control": "no-store" });
 }
 
@@ -125,9 +124,7 @@ export async function handleRestoreBackup(request: Request, env: Env, ctx?: Exec
   const existing = existingRaw ? parseStoredBoardState(existingRaw) : null;
   if (existingRaw && !existing) return new Response("Stored board state is invalid", { status: 500 });
 
-  if (existingRaw) {
-    await writeBoardBackup(env, existingRaw, ctx);
-  }
+  const backupKey = existingRaw ? await writeBoardBackup(env, existingRaw, ctx) : null;
 
   const nextVersion = existing ? existing.version + 1 : 1;
   const nextState: BoardStateEnvelope = {
@@ -141,15 +138,17 @@ export async function handleRestoreBackup(request: Request, env: Env, ctx?: Exec
   return jsonResponse(JSON.stringify({
     ok: true,
     version: nextState.version,
-    updatedAt: nextState.updatedAt
+    updatedAt: nextState.updatedAt,
+    backupKey
   }), 200, { "Cache-Control": "no-store" });
 }
 
-async function writeBoardBackup(env: Env, existingRaw: string, ctx?: ExecutionContext): Promise<void> {
+async function writeBoardBackup(env: Env, existingRaw: string, ctx?: ExecutionContext): Promise<string> {
   const suffix = new Date().toISOString().replace(/[:.]/g, "-");
   const key = BACKUP_PREFIX + suffix;
   await env.BOARD_KV.put(key, existingRaw);
   scheduleCloudBackups(env, key, existingRaw, ctx);
+  return key;
 }
 
 async function pruneBoardBackups(env: Env): Promise<void> {

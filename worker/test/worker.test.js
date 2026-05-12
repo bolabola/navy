@@ -122,7 +122,9 @@ test("PUT /api/board stores state and rejects stale versions", async () => {
     body: JSON.stringify(boardPayload)
   }), env);
   assert.equal(created.status, 200);
-  assert.equal((await created.json()).version, 1);
+  const createdBody = await created.json();
+  assert.equal(createdBody.version, 1);
+  assert.equal(createdBody.backupKey, null);
 
   const stale = await worker.fetch(new Request("https://example.com/api/board", {
     method: "PUT",
@@ -167,6 +169,9 @@ test("PUT /api/board schedules Google Drive backup when configured", async () =>
     }), env, ctx);
 
     assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.version, 2);
+    assert.match(body.backupKey, /^state_backup:/);
     assert.equal(waitUntilTasks.length, 1);
     await Promise.all(waitUntilTasks);
     assert.match(calls[0].input, /oauth2\.googleapis\.com\/token/);

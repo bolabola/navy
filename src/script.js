@@ -119,8 +119,12 @@
     importingBoardId: null,
     dataMenuOpen: false,
     backupMenuOpen: false,
+    saveStatusMenuOpen: false,
     backupStatus: null,
     backupStatusLoading: false,
+    backupStatusRequest: null,
+    pendingBackupKey: null,
+    backupStatusPollTimer: null,
     backupsOpen: false,
     backupsLoading: false,
     backupsError: null,
@@ -246,6 +250,7 @@
       window.clearTimeout(saveTimer);
     }
     setSyncState("saving", TEXT.syncSaving);
+    startPendingCloudBackup(null);
     saveTimer = window.setTimeout(function () {
       saveTimer = null;
       flushPendingSave();
@@ -270,8 +275,13 @@
         serverState.version = result.version;
         serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
       }
+      if (result && typeof result.backupKey === "string") {
+        startPendingCloudBackup(result.backupKey);
+      } else {
+        clearPendingCloudBackup();
+      }
       setSyncState("saved", TEXT.syncSaved);
-      refreshBackupStatusAfterSave();
+      refreshBackupStatusAfterSave(result && typeof result.backupKey === "string" ? result.backupKey : null);
     }).catch(function (error) {
         if (error && error.status === 401) {
           auth.isAdmin = false;
@@ -283,7 +293,9 @@
           }
           uiState.dataMenuOpen = false;
           uiState.backupMenuOpen = false;
+          uiState.saveStatusMenuOpen = false;
           uiState.backupStatus = null;
+          clearPendingCloudBackup();
           uiState.openBoardMenuId = null;
           uiState.openAddBoardId = null;
           uiState.editBoardId = null;
@@ -299,6 +311,7 @@
           return;
         }
         setSyncState("failed", TEXT.syncFailed);
+        clearPendingCloudBackup();
         console.warn("Sync to backend failed:", error);
     }).finally(function () {
       saveInFlight = false;
@@ -321,6 +334,20 @@
     updateSyncIndicator();
   }
 
+  function startPendingCloudBackup(backupKey) {
+    uiState.pendingBackupKey = backupKey || "__pending__";
+    render();
+  }
+
+  function clearPendingCloudBackup() {
+    uiState.pendingBackupKey = null;
+    if (uiState.backupStatusPollTimer) {
+      window.clearTimeout(uiState.backupStatusPollTimer);
+      uiState.backupStatusPollTimer = null;
+    }
+    render();
+  }
+
   function handleSaveConflict() {
     cacheBoardsLocally();
     if (window.confirm(TEXT.syncConflictConfirm)) {
@@ -333,80 +360,186 @@
   }
 
   function updateSyncIndicator() {
-    const node = app.querySelector('[data-role="sync-indicator"]');
-    if (!node) return;
-    node.textContent = syncState.message;
-    node.className = "workspace__sync workspace__sync--" + syncState.status;
-    node.hidden = !syncState.message;
-  }
-
-  function renderSyncIndicator() {
-    if (!auth.isAdmin || !syncState.message) return null;
-    const node = document.createElement("span");
-    node.className = "workspace__sync workspace__sync--" + syncState.status;
-    node.dataset.role = "sync-indicator";
-    node.textContent = syncState.message;
-    return node;
-  }
-
-  function renderCloudBackupIndicator() {
-    if (!auth.isAdmin) return null;
-    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
-      ? uiState.backupStatus.providers.filter(function (provider) { return provider.connected; })
-      : [];
-    if (!providers.length) return null;
-
-    const statuses = providers.map(function (provider) {
-      return provider.lastBackup && provider.lastBackup.status ? provider.lastBackup.status : "pending";
-    });
-    const failed = statuses.some(function (status) { return status === "failed"; });
-    const success = statuses.length > 0 && statuses.every(function (status) { return status === "success"; });
-
-    const node = document.createElement("span");
-    node.className = "workspace__cloud-backup workspace__cloud-backup--" + (failed ? "failed" : (success ? "success" : "pending"));
-    node.title = providers.map(formatCloudBackupProviderSummary).join("\n");
-    node.textContent = formatCloudBackupIndicatorText(providers, failed, success);
-    return node;
-  }
-
-  function formatCloudBackupIndicatorText(providers, failed, success) {
-    if (failed) {
-      const failedNames = providers
-        .filter(function (provider) { return provider.lastBackup && provider.lastBackup.status === "failed"; })
-        .map(function (provider) { return provider.label || provider.id; });
-      return "云备份失败: " + failedNames.join(", ");
-    }
-    if (success) return "云备份成功: " + providers.map(function (provider) { return provider.label || provider.id; }).join(", ");
-    return "云备份待确认: " + providers.map(function (provider) { return provider.label || provider.id; }).join(", ");
-  }
-
-  function formatCloudBackupProviderSummary(provider) {
-    const name = provider.label || provider.id;
-    if (!provider.lastBackup) return name + ": 尚无备份结果";
-    const status = provider.lastBackup.status === "success" ? "成功" : "失败";
-    const time = provider.lastBackup.at ? " " + formatDateTime(provider.lastBackup.at) : "";
-    const error = provider.lastBackup.error ? " - " + provider.lastBackup.error : "";
-    return name + ": " + status + time + error;
+    render();
   }
 
   function loadBackupStatus() {
-    if (!auth.isAdmin || uiState.backupStatusLoading) return;
+    if (!auth.isAdmin) return Promise.resolve(null);
+    if (uiState.backupStatusRequest) return uiState.backupStatusRequest;
     uiState.backupStatusLoading = true;
-    apiGet("/cloud-backup/status").then(function (status) {
+    uiState.backupStatusRequest = apiGet("/cloud-backup/status").then(function (status) {
       uiState.backupStatus = status || null;
+      return uiState.backupStatus;
     }).catch(function () {
       uiState.backupStatus = null;
+      return null;
     }).finally(function () {
+      uiState.backupStatusRequest = null;
       uiState.backupStatusLoading = false;
+      updatePendingCloudBackupState();
       render();
     });
+    return uiState.backupStatusRequest;
   }
 
-  function refreshBackupStatusAfterSave() {
+  function refreshBackupStatusAfterSave(backupKey) {
     if (!auth.isAdmin) return;
+    if (backupKey) {
+      pollCloudBackupStatus(backupKey, 0);
+      return;
+    }
     window.setTimeout(function () {
       loadBackupStatus();
     }, 1200);
+  }
+
+  function pollCloudBackupStatus(backupKey, attempt) {
+    if (!auth.isAdmin || uiState.pendingBackupKey !== backupKey) return;
+    if (uiState.backupStatusPollTimer) {
+      window.clearTimeout(uiState.backupStatusPollTimer);
+    }
+    uiState.backupStatusPollTimer = window.setTimeout(function () {
+      uiState.backupStatusPollTimer = null;
+      loadBackupStatus().finally(function () {
+        if (!uiState.pendingBackupKey || uiState.pendingBackupKey !== backupKey || isPendingCloudBackupResolved()) {
+          updatePendingCloudBackupState();
+          render();
+          return;
+        }
+        if (attempt < 8) {
+          pollCloudBackupStatus(backupKey, attempt + 1);
+        }
+      });
+    }, attempt === 0 ? 1200 : 1800);
+  }
+
+  function updatePendingCloudBackupState() {
+    if (!uiState.pendingBackupKey || uiState.pendingBackupKey === "__pending__") return;
+    if (isPendingCloudBackupResolved()) {
+      uiState.pendingBackupKey = null;
+      if (uiState.backupStatusPollTimer) {
+        window.clearTimeout(uiState.backupStatusPollTimer);
+        uiState.backupStatusPollTimer = null;
+      }
+    }
+  }
+
+  function isPendingCloudBackupResolved() {
+    const pendingKey = uiState.pendingBackupKey;
+    if (!pendingKey || pendingKey === "__pending__") return false;
+    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
+      ? uiState.backupStatus.providers.filter(function (provider) { return provider.connected; })
+      : [];
+    if (!providers.length) return true;
+    return providers.every(function (provider) {
+      return provider.lastBackup && provider.lastBackup.key === pendingKey;
+    });
+  }
+
+  function renderSaveStatusMenu() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "workspace__menu";
+
+    const entries = getSaveStatusEntries();
+    const counts = entries.reduce(function (acc, entry) {
+      acc[entry.status] = (acc[entry.status] || 0) + 1;
+      return acc;
+    }, {});
+    const summaryStatus = counts.failed ? "failed" : (counts.saving ? "saving" : (counts.pending ? "pending" : (counts.saved ? "saved" : "idle")));
+    const summary = counts.failed
+      ? "保存失败 " + counts.failed
+      : (counts.saving
+        ? "保存中 " + counts.saving
+        : (counts.pending
+          ? "待确认 " + counts.pending
+          : (counts.saved ? "保存成功 " + counts.saved : "保存状态")));
+
+    wrapper.appendChild(actionButton("workspace__save-status workspace__save-status--" + summaryStatus, "toggle-save-status-menu", null, "Save status", [
+      staticIconNode(summaryStatus === "failed" ? "icon-alert-circle" : (summaryStatus === "saving" ? "icon-refresh-cw" : ((summaryStatus === "pending" || summaryStatus === "idle") ? "icon-clock" : "icon-check-circle"))),
+      " ",
+      (function () {
+        const span = document.createElement("span");
+        span.textContent = summary;
+        return span;
+      })()
+    ]));
+
+    if (!uiState.saveStatusMenuOpen) return wrapper;
+
+    const menu = document.createElement("div");
+    menu.className = "save-status-menu";
+    entries.forEach(function (entry) {
+      menu.appendChild(renderSaveStatusRow(entry));
+    });
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
+  function getSaveStatusEntries() {
+    const entries = [{
+      id: "local",
+      label: "常规保存",
+      status: syncState.status === "failed" ? "failed" : (syncState.status === "saving" ? "saving" : (syncState.status === "saved" ? "saved" : "idle")),
+      detail: syncState.message || (syncState.status === "idle" ? "等待修改" : "")
+    }];
+
+    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
+      ? uiState.backupStatus.providers
+      : [];
+    providers.filter(function (provider) {
+      return provider.connected;
+    }).forEach(function (provider) {
+      entries.push(getCloudSaveStatusEntry(provider));
+    });
+    return entries;
+  }
+
+  function getCloudSaveStatusEntry(provider) {
+    const last = provider.lastBackup || null;
+    const pendingKey = uiState.pendingBackupKey;
+    const pendingKnown = pendingKey && pendingKey !== "__pending__";
+    const matchesPending = pendingKnown && last && last.key === pendingKey;
+    if (pendingKey && (!pendingKnown || !matchesPending)) {
+      return {
+        id: provider.id,
+        label: provider.label || provider.id,
+        status: "saving",
+        detail: "备份中"
+      };
+    }
+    if (!last) {
+      return {
+        id: provider.id,
+        label: provider.label || provider.id,
+        status: "pending",
+        detail: "尚无备份结果"
+      };
+    }
+    return {
+      id: provider.id,
+      label: provider.label || provider.id,
+      status: last.status === "success" ? "saved" : "failed",
+      detail: formatBackupProviderLastBackup(last)
+    };
+  }
+
+  function renderSaveStatusRow(entry) {
+    const row = document.createElement("div");
+    row.className = "save-status-menu__row save-status-menu__row--" + entry.status;
+    row.appendChild(staticIconNode(entry.status === "failed" ? "icon-x-circle" : (entry.status === "saved" ? "icon-check-circle" : ((entry.status === "pending" || entry.status === "idle") ? "icon-clock" : "icon-refresh-cw"))));
+
+    const text = document.createElement("span");
+    text.className = "save-status-menu__text";
+    const name = document.createElement("span");
+    name.className = "save-status-menu__name";
+    name.textContent = entry.label;
+    const detail = document.createElement("span");
+    detail.className = "save-status-menu__detail";
+    detail.textContent = entry.detail;
+    text.appendChild(name);
+    text.appendChild(detail);
+    row.appendChild(text);
+    return row;
   }
 
   function renderDataMenu() {
@@ -1538,12 +1671,8 @@
 
     const right = document.createElement("div");
     right.className = "workspace__navbar-right";
-    const sync = renderSyncIndicator();
-    if (sync) right.appendChild(sync);
-
     if (auth.isAdmin) {
-      const cloudBackup = renderCloudBackupIndicator();
-      if (cloudBackup) right.appendChild(cloudBackup);
+      right.appendChild(renderSaveStatusMenu());
       right.appendChild(renderDataMenu());
       right.appendChild(renderBackupMenu());
       right.appendChild(actionButton("workspace__create-button", "toggle-create-board", null, "", [
@@ -2371,9 +2500,10 @@
         uiState.openBoardMenuId = null;
         render();
       }
-      if ((uiState.dataMenuOpen || uiState.backupMenuOpen) && !event.target.closest(".workspace__menu")) {
+      if ((uiState.dataMenuOpen || uiState.backupMenuOpen || uiState.saveStatusMenuOpen) && !event.target.closest(".workspace__menu")) {
         uiState.dataMenuOpen = false;
         uiState.backupMenuOpen = false;
+        uiState.saveStatusMenuOpen = false;
         render();
       }
       return;
@@ -2437,6 +2567,7 @@
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
       uiState.backupMenuOpen = false;
+      uiState.saveStatusMenuOpen = false;
       uiState.createBoardOpen = false;
       uiState.backupsOpen = true;
       uiState.backupsLoading = true;
@@ -2478,11 +2609,14 @@
           serverState.version = result.version;
           serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
         }
+        if (result && typeof result.backupKey === "string") {
+          startPendingCloudBackup(result.backupKey);
+        }
         return loadServerBoardState();
       }).then(function () {
         uiState.backupsOpen = false;
         setSyncState("saved", TEXT.syncSaved);
-        refreshBackupStatusAfterSave();
+        refreshBackupStatusAfterSave(uiState.pendingBackupKey && uiState.pendingBackupKey !== "__pending__" ? uiState.pendingBackupKey : null);
         render();
       }).catch(function () {
         window.alert(TEXT.backupRestoreFailed);
@@ -2497,6 +2631,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.saveStatusMenuOpen = false;
       exportFullBackup();
       render();
       return;
@@ -2508,6 +2643,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.saveStatusMenuOpen = false;
       pickFullBackupFile();
       render();
       return;
@@ -2519,6 +2655,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.backupMenuOpen = false;
+      uiState.saveStatusMenuOpen = false;
       uiState.dataMenuOpen = !uiState.dataMenuOpen;
       render();
       return;
@@ -2530,9 +2667,25 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.saveStatusMenuOpen = false;
       uiState.backupMenuOpen = !uiState.backupMenuOpen;
       render();
       if (uiState.backupMenuOpen) {
+        loadBackupStatus();
+      }
+      return;
+    }
+
+    if (action === "toggle-save-status-menu") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
+      uiState.backupMenuOpen = false;
+      uiState.saveStatusMenuOpen = !uiState.saveStatusMenuOpen;
+      render();
+      if (uiState.saveStatusMenuOpen) {
         loadBackupStatus();
       }
       return;
@@ -2933,8 +3086,11 @@
             serverState.version = result.version;
             serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
           }
+          if (result && typeof result.backupKey === "string") {
+            startPendingCloudBackup(result.backupKey);
+          }
           setSyncState("saved", TEXT.syncSaved);
-          refreshBackupStatusAfterSave();
+          refreshBackupStatusAfterSave(result && typeof result.backupKey === "string" ? result.backupKey : null);
           render();
         }).catch(function (error) {
           if (error && error.status === 409) {
