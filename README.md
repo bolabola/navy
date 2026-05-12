@@ -232,18 +232,20 @@ npx wrangler secret put ADMIN_PASSWORD
 
 应用每次覆盖 `state` 前都会先写入 KV 备份 `state_backup:*`。连接云端备份后，同一份备份也会异步上传到已连接的 Google Drive 或 Dropbox；每个云端目录只保留最近 100 份自动备份，某个云端上传或清理失败不会阻断正常保存。
 
-### 一次性创建 OAuth App
+### OAuth App 准备
 
 每个服务都需要先创建自己的 OAuth App。创建完成后，把对应的 Client ID 和 Client Secret 设置为 Cloudflare Worker secrets。
 
-| 服务 | 创建入口 | 回调地址 | Secrets |
-|---|---|---|---|
-| Google Drive | <https://console.cloud.google.com/>，启用 Google Drive API，创建 Web application OAuth client | `https://你的域名/api/cloud-backup/google/callback` | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
-| Dropbox | <https://www.dropbox.com/developers/apps>，创建 Scoped access app，权限至少包含文件写入 | `https://你的域名/api/cloud-backup/dropbox/callback` | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |
+#### Google Drive
 
-Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许 `files.content.write`、`files.metadata.read` 和 `files.metadata.write`。
+| 配置项 | 值 |
+|---|---|
+| 创建入口 | <https://console.cloud.google.com/> |
+| 回调地址 | `https://你的域名/api/cloud-backup/google/callback` |
+| Secrets | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
+| 权限范围 | `https://www.googleapis.com/auth/drive.file` |
 
-Google Drive 简要步骤：
+步骤：
 
 1. Google Cloud Console → **APIs & Services** → **Credentials**。
 2. **Create credentials** → **OAuth client ID**。
@@ -262,7 +264,18 @@ https://你的域名/api/cloud-backup/google/callback
 
 6. 保存后复制 Client ID 和 Client Secret，用下面的 Wrangler secret 命令写入 Cloudflare。
 
-Dropbox 简要步骤：
+如果 OAuth consent screen 还在 Testing，需要到 **APIs & Services** → **OAuth consent screen** → **Audience / Test users**，把正在授权时使用的 Google 邮箱加入 Test users。
+
+#### Dropbox
+
+| 配置项 | 值 |
+|---|---|
+| 创建入口 | <https://www.dropbox.com/developers/apps> |
+| 回调地址 | `https://你的域名/api/cloud-backup/dropbox/callback` |
+| Secrets | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |
+| 权限范围 | `files.content.write`、`files.metadata.read`、`files.metadata.write` |
+
+步骤：
 
 1. 打开 Dropbox App Console：<https://www.dropbox.com/developers/apps>。
 2. 点击 **Create app**。
