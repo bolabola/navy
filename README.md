@@ -244,6 +244,25 @@ npx wrangler secret put ADMIN_PASSWORD
 
 Google OAuth consent screen 如果还在 Testing，需要把自己的 Google 账号加到 Test users。Dropbox 需要在 app 权限里允许文件内容写入。OneDrive 需要允许 `Files.ReadWrite` 和 `offline_access`。
 
+Google Drive 简要步骤：
+
+1. Google Cloud Console → **APIs & Services** → **Credentials**。
+2. **Create credentials** → **OAuth client ID**。
+3. Application type 选择 **Web application**，不要选 Service Account。
+4. **Authorized JavaScript origins** 填域名来源，不带路径：
+
+```text
+https://你的域名
+```
+
+5. **Authorized redirect URIs** 填完整回调地址：
+
+```text
+https://你的域名/api/cloud-backup/google/callback
+```
+
+6. 保存后复制 Client ID 和 Client Secret，用下面的 Wrangler secret 命令写入 Cloudflare。
+
 ### 设置 Cloudflare secrets
 
 只配置你要用的服务即可：
