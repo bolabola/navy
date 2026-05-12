@@ -174,6 +174,9 @@ test("PUT /api/board schedules Google Drive backup when configured", async () =>
     assert.match(String(calls[1].init.body), /state_backup_/);
     assert.match(String(calls[1].init.body), /folder-id/);
     assert.equal(calls.some((call) => /googleapis\.com\/drive\/v3\/files\?/.test(call.input)), true);
+    const backupStatus = JSON.parse(await env.BOARD_KV.get("cloud_backup:google:last_backup"));
+    assert.equal(backupStatus.status, "success");
+    assert.match(backupStatus.fileName, /^state_backup_/);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -210,6 +213,9 @@ test("Google Drive backup failure does not block board save", async () => {
     assert.equal((await res.json()).version, 2);
     assert.equal(waitUntilTasks.length, 1);
     await Promise.all(waitUntilTasks);
+    const backupStatus = JSON.parse(await env.BOARD_KV.get("cloud_backup:google:last_backup"));
+    assert.equal(backupStatus.status, "failed");
+    assert.match(backupStatus.error, /Google Drive token refresh returned 502/);
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -433,7 +439,13 @@ test("cloud backup status and disconnect report provider state", async () => {
   const env = createEnv({
     "cloud_backup:google:refresh_token": "refresh-token",
     "cloud_backup:google:folder_id": "folder-id",
-    "cloud_backup:google:connected_at": "2026-01-01T00:00:00.000Z"
+    "cloud_backup:google:connected_at": "2026-01-01T00:00:00.000Z",
+    "cloud_backup:google:last_backup": JSON.stringify({
+      status: "success",
+      at: "2026-01-01T00:01:00.000Z",
+      key: "state_backup:2026-01-01T00-00-00-000Z",
+      fileName: "state_backup_2026-01-01T00-00-00-000Z.json"
+    })
   }, {
     GOOGLE_CLIENT_ID: "client-id",
     GOOGLE_CLIENT_SECRET: "client-secret",
@@ -448,7 +460,9 @@ test("cloud backup status and disconnect report provider state", async () => {
   assert.equal(status.status, 200);
   const body = await status.json();
   assert.equal(body.providers.length, 2);
-  assert.equal(body.providers.find((provider) => provider.id === "google").connected, true);
+  const google = body.providers.find((provider) => provider.id === "google");
+  assert.equal(google.connected, true);
+  assert.equal(google.lastBackup.status, "success");
   assert.equal(body.providers.find((provider) => provider.id === "dropbox").configured, true);
 
   const disconnected = await worker.fetch(new Request("https://example.com/api/cloud-backup/google/disconnect", {
@@ -458,6 +472,7 @@ test("cloud backup status and disconnect report provider state", async () => {
   assert.equal(disconnected.status, 200);
   assert.equal(await env.BOARD_KV.get("cloud_backup:google:refresh_token"), null);
   assert.equal(await env.BOARD_KV.get("cloud_backup:google:folder_id"), null);
+  assert.equal(await env.BOARD_KV.get("cloud_backup:google:last_backup"), null);
 });
 
 test("authenticated write requests require CSRF token", async () => {

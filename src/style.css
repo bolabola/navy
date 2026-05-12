@@ -243,10 +243,26 @@ a {
 }
 
 .backup-menu__state,
+.backup-menu__last,
 .backup-menu__message {
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
+}
+
+.backup-menu__last {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-menu__last--success {
+  color: #216e4e;
+}
+
+.backup-menu__last--failed {
+  color: #ae2e24;
 }
 
 .backup-menu .board-save-button,

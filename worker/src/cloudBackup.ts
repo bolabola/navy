@@ -30,6 +30,14 @@ interface StoredProviderConfig {
   folderId?: string;
 }
 
+interface ProviderBackupStatus {
+  status: "success" | "failed";
+  at: string;
+  key: string;
+  fileName: string;
+  error?: string;
+}
+
 interface RemoteBackupFile {
   id: string;
   name: string;
@@ -92,16 +100,18 @@ export async function handleCloudBackupStatus(request: Request, env: Env): Promi
   }
 
   const providers = await Promise.all(PROVIDERS.map(async (provider) => {
-    const [stored, connectedAt] = await Promise.all([
+    const [stored, connectedAt, lastStatus] = await Promise.all([
       getStoredProviderConfig(env, provider),
-      env.BOARD_KV.get(providerKey(provider.id, "connected_at"))
+      env.BOARD_KV.get(providerKey(provider.id, "connected_at")),
+      getProviderBackupStatus(env, provider)
     ]);
     return {
       id: provider.id,
       label: provider.label,
       configured: isProviderClientConfigured(env, provider),
       connected: Boolean(stored),
-      connectedAt: connectedAt || null
+      connectedAt: connectedAt || null,
+      lastBackup: lastStatus
     };
   }));
 
@@ -153,6 +163,7 @@ export async function handleCloudBackupDisconnect(request: Request, env: Env, pr
     env.BOARD_KV.delete(providerKey(provider.id, "refresh_token")),
     env.BOARD_KV.delete(providerKey(provider.id, "folder_id")),
     env.BOARD_KV.delete(providerKey(provider.id, "connected_at")),
+    env.BOARD_KV.delete(providerKey(provider.id, "last_backup")),
     provider.id === "google" ? env.BOARD_KV.delete("google_drive:refresh_token") : Promise.resolve(),
     provider.id === "google" ? env.BOARD_KV.delete("google_drive:folder_id") : Promise.resolve(),
     provider.id === "google" ? env.BOARD_KV.delete("google_drive:connected_at") : Promise.resolve()
@@ -209,17 +220,37 @@ export async function handleCloudBackupCallback(request: Request, env: Env, url:
 }
 
 async function uploadCloudBackups(env: Env, key: string, rawState: string): Promise<void> {
-  const results = await Promise.all(PROVIDERS.map(async (provider) => {
+  const results = await Promise.allSettled(PROVIDERS.map(async (provider) => {
     if (!isProviderClientConfigured(env, provider)) return;
     const config = await getStoredProviderConfig(env, provider);
     if (!config) return;
 
-    const accessToken = await getAccessToken(env, provider, config.refreshToken);
     const fileName = `${key.replace(/[^a-zA-Z0-9._-]+/g, "_")}.json`;
-    await uploadProviderFile(provider, accessToken, fileName, rawState, config.folderId);
+    try {
+      const accessToken = await getAccessToken(env, provider, config.refreshToken);
+      await uploadProviderFile(provider, accessToken, fileName, rawState, config.folderId);
+      await storeProviderBackupStatus(env, provider, {
+        status: "success",
+        at: new Date().toISOString(),
+        key,
+        fileName
+      });
+    } catch (error) {
+      await storeProviderBackupStatus(env, provider, {
+        status: "failed",
+        at: new Date().toISOString(),
+        key,
+        fileName,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   }));
 
-  void results;
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length) {
+    throw new Error(`${failures.length} cloud backup provider(s) failed`);
+  }
 }
 
 async function uploadProviderFile(
@@ -478,6 +509,35 @@ async function storeProviderConfig(env: Env, provider: ProviderConfig, refreshTo
   ];
   if (folderId) writes.push(env.BOARD_KV.put(providerKey(provider.id, "folder_id"), folderId));
   await Promise.all(writes);
+}
+
+async function getProviderBackupStatus(env: Env, provider: ProviderConfig): Promise<ProviderBackupStatus | null> {
+  const raw = await env.BOARD_KV.get(providerKey(provider.id, "last_backup"));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ProviderBackupStatus>;
+    if (
+      (parsed.status === "success" || parsed.status === "failed") &&
+      typeof parsed.at === "string" &&
+      typeof parsed.key === "string" &&
+      typeof parsed.fileName === "string"
+    ) {
+      return {
+        status: parsed.status,
+        at: parsed.at,
+        key: parsed.key,
+        fileName: parsed.fileName,
+        error: typeof parsed.error === "string" ? parsed.error : undefined
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function storeProviderBackupStatus(env: Env, provider: ProviderConfig, status: ProviderBackupStatus): Promise<void> {
+  await env.BOARD_KV.put(providerKey(provider.id, "last_backup"), JSON.stringify(status));
 }
 
 async function getAccessToken(env: Env, provider: ProviderConfig, refreshToken: string): Promise<string> {

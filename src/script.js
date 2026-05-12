@@ -262,16 +262,17 @@
     const payloadVersion = serverState.version;
     const payloadBoards = boards;
 
-      apiSend("/board", "PUT", {
-        version: payloadVersion,
-        boards: payloadBoards
-      }).then(function (result) {
-        if (result && Number.isInteger(result.version)) {
-          serverState.version = result.version;
-          serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
-        }
-        setSyncState("saved", TEXT.syncSaved);
-      }).catch(function (error) {
+    apiSend("/board", "PUT", {
+      version: payloadVersion,
+      boards: payloadBoards
+    }).then(function (result) {
+      if (result && Number.isInteger(result.version)) {
+        serverState.version = result.version;
+        serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
+      }
+      setSyncState("saved", TEXT.syncSaved);
+      refreshBackupStatusAfterSave();
+    }).catch(function (error) {
         if (error && error.status === 401) {
           auth.isAdmin = false;
           auth.csrfToken = null;
@@ -299,19 +300,19 @@
         }
         setSyncState("failed", TEXT.syncFailed);
         console.warn("Sync to backend failed:", error);
-      }).finally(function () {
-        saveInFlight = false;
-        if (savePending && auth.isAdmin) {
-          setSyncState("saving", TEXT.syncSaving);
-          if (saveTimer) {
-            window.clearTimeout(saveTimer);
-          }
-          saveTimer = window.setTimeout(function () {
-            saveTimer = null;
-            flushPendingSave();
-          }, SAVE_DEBOUNCE_MS);
+    }).finally(function () {
+      saveInFlight = false;
+      if (savePending && auth.isAdmin) {
+        setSyncState("saving", TEXT.syncSaving);
+        if (saveTimer) {
+          window.clearTimeout(saveTimer);
         }
-      });
+        saveTimer = window.setTimeout(function () {
+          saveTimer = null;
+          flushPendingSave();
+        }, SAVE_DEBOUNCE_MS);
+      }
+    });
   }
 
   function setSyncState(status, message) {
@@ -359,6 +360,13 @@
       uiState.backupStatusLoading = false;
       render();
     });
+  }
+
+  function refreshBackupStatusAfterSave() {
+    if (!auth.isAdmin) return;
+    window.setTimeout(function () {
+      loadBackupStatus();
+    }, 1200);
   }
 
   function renderDataMenu() {
@@ -461,6 +469,12 @@
     state.textContent = provider.connected ? "已连接" : (provider.configured ? "未连接" : "未配置");
     meta.appendChild(name);
     meta.appendChild(state);
+    if (provider.lastBackup) {
+      const last = document.createElement("span");
+      last.className = "backup-menu__last backup-menu__last--" + (provider.lastBackup.status === "success" ? "success" : "failed");
+      last.textContent = formatBackupProviderLastBackup(provider.lastBackup);
+      meta.appendChild(last);
+    }
     row.appendChild(meta);
 
     const action = actionButton(
@@ -474,6 +488,15 @@
     action.disabled = !provider.configured && !provider.connected;
     row.appendChild(action);
     return row;
+  }
+
+  function formatBackupProviderLastBackup(lastBackup) {
+    const time = lastBackup && lastBackup.at ? formatDateTime(lastBackup.at) : "";
+    if (lastBackup.status === "success") {
+      return time ? "上次成功 " + time : "上次成功";
+    }
+    const error = lastBackup && lastBackup.error ? ": " + lastBackup.error : "";
+    return (time ? "上次失败 " + time : "上次失败") + error;
   }
 
   function renderBackupsModal() {
@@ -2417,6 +2440,7 @@
       }).then(function () {
         uiState.backupsOpen = false;
         setSyncState("saved", TEXT.syncSaved);
+        refreshBackupStatusAfterSave();
         render();
       }).catch(function () {
         window.alert(TEXT.backupRestoreFailed);
@@ -2868,6 +2892,7 @@
             serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
           }
           setSyncState("saved", TEXT.syncSaved);
+          refreshBackupStatusAfterSave();
           render();
         }).catch(function (error) {
           if (error && error.status === 409) {
