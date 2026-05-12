@@ -145,6 +145,8 @@
 
   let boards = normalizeBoards(defaultBoards);
   let saveTimer = null;
+  let saveInFlight = false;
+  let savePending = false;
   let masonryLayout = { positions: [], height: 0, columns: 1 };
 
   function loadBoardsFromLocal() {
@@ -239,15 +241,30 @@
     if (!auth.isAdmin) {
       return;
     }
+    savePending = true;
     if (saveTimer) {
       window.clearTimeout(saveTimer);
     }
     setSyncState("saving", TEXT.syncSaving);
     saveTimer = window.setTimeout(function () {
       saveTimer = null;
+      flushPendingSave();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  function flushPendingSave() {
+    if (!auth.isAdmin || saveInFlight || !savePending) {
+      return;
+    }
+
+    savePending = false;
+    saveInFlight = true;
+    const payloadVersion = serverState.version;
+    const payloadBoards = boards;
+
       apiSend("/board", "PUT", {
-        version: serverState.version,
-        boards: boards
+        version: payloadVersion,
+        boards: payloadBoards
       }).then(function (result) {
         if (result && Number.isInteger(result.version)) {
           serverState.version = result.version;
@@ -258,6 +275,11 @@
         if (error && error.status === 401) {
           auth.isAdmin = false;
           auth.csrfToken = null;
+          savePending = false;
+          if (saveTimer) {
+            window.clearTimeout(saveTimer);
+            saveTimer = null;
+          }
           uiState.dataMenuOpen = false;
           uiState.backupMenuOpen = false;
           uiState.backupStatus = null;
@@ -270,14 +292,26 @@
           return;
         }
         if (error && error.status === 409) {
+          savePending = false;
           setSyncState("failed", TEXT.syncConflict);
           handleSaveConflict();
           return;
         }
         setSyncState("failed", TEXT.syncFailed);
         console.warn("Sync to backend failed:", error);
+      }).finally(function () {
+        saveInFlight = false;
+        if (savePending && auth.isAdmin) {
+          setSyncState("saving", TEXT.syncSaving);
+          if (saveTimer) {
+            window.clearTimeout(saveTimer);
+          }
+          saveTimer = window.setTimeout(function () {
+            saveTimer = null;
+            flushPendingSave();
+          }, SAVE_DEBOUNCE_MS);
+        }
       });
-    }, SAVE_DEBOUNCE_MS);
   }
 
   function setSyncState(status, message) {
@@ -344,8 +378,8 @@
 
     const menu = document.createElement("div");
     menu.className = "workspace-menu";
-    menu.appendChild(workspaceMenuItem("export-full-backup", "icon-download", "导出完整 JSON", "保存一份可恢复的本地文件"));
-    menu.appendChild(workspaceMenuItem("import-full-backup", "icon-upload", "导入完整 JSON", "用本地文件恢复整个看板"));
+    menu.appendChild(workspaceMenuItem("export-full-backup", "icon-upload", "导出完整 JSON", "保存一份可恢复的本地文件"));
+    menu.appendChild(workspaceMenuItem("import-full-backup", "icon-download", "导入完整 JSON", "用本地文件恢复整个看板"));
     menu.appendChild(workspaceMenuItem("toggle-backups", "icon-history", "恢复 KV 历史", "查看最近自动备份"));
     wrapper.appendChild(menu);
     return wrapper;
