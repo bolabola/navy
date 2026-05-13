@@ -1,6 +1,7 @@
 (function () {
   const STORAGE_KEY = "trello-nav-board-state-v4";
   const API_BASE = "/api";
+  const GITHUB_URL = "https://github.com/bolabola/navy";
   const SAVE_DEBOUNCE_MS = 500;
   const MIN_BOARD_HEIGHT = 160;
   const MAX_BOARD_HEIGHT = 640;
@@ -77,6 +78,7 @@
     invalidUrl: "请输入有效的网址。",
     login: "登录",
     logout: "退出",
+    guestUnsavedNotice: "未登录操作不会保存，刷新后会恢复原始状态",
     loginPlaceholder: "管理员密码",
     loginFailed: "密码错误",
     loginConfigError: "服务端密码配置无效，请检查 .dev.vars 或 Cloudflare secrets",
@@ -849,6 +851,9 @@
   }
 
   function saveBoards() {
+    if (!auth.isAdmin) {
+      return;
+    }
     cacheBoardsLocally();
     pushToBackend();
   }
@@ -1430,11 +1435,9 @@
     header.className = "board-card__header";
     const titleWrap = document.createElement("div");
     titleWrap.className = "board-card__title-wrap";
-    if (auth.isAdmin) {
-      titleWrap.dataset.role = "board-drag-handle";
-      titleWrap.dataset.boardId = board.id;
-      titleWrap.title = TEXT.moveBoard;
-    }
+    titleWrap.dataset.role = "board-drag-handle";
+    titleWrap.dataset.boardId = board.id;
+    titleWrap.title = TEXT.moveBoard;
     const glyph = document.createElement("span");
     glyph.className = "board-card__glyph";
     glyph.appendChild(iconNode(board.icon));
@@ -1491,14 +1494,12 @@
       body.appendChild(list);
       card.appendChild(body);
 
-      if (auth.isAdmin) {
-        const resize = document.createElement("div");
-        resize.className = "board-resize-handle";
-        resize.dataset.role = "resize-handle";
-        resize.dataset.boardId = board.id;
-        resize.title = TEXT.resize;
-        card.appendChild(resize);
-      }
+      const resize = document.createElement("div");
+      resize.className = "board-resize-handle";
+      resize.dataset.role = "resize-handle";
+      resize.dataset.boardId = board.id;
+      resize.title = TEXT.resize;
+      card.appendChild(resize);
     }
 
     return card;
@@ -1668,10 +1669,27 @@
     title.className = "workspace__navbar-title";
     title.textContent = TEXT.title;
     left.appendChild(title);
+    if (!auth.isAdmin) {
+      const notice = document.createElement("span");
+      notice.className = "workspace__guest-notice";
+      notice.textContent = TEXT.guestUnsavedNotice;
+      left.appendChild(notice);
+    }
     nav.appendChild(left);
 
     const right = document.createElement("div");
     right.className = "workspace__navbar-right";
+    const github = document.createElement("a");
+    github.className = "workspace__github-link";
+    github.href = GITHUB_URL;
+    github.target = "_blank";
+    github.rel = "noreferrer";
+    github.title = GITHUB_URL;
+    github.appendChild(staticIconNode("icon-external-link"));
+    const githubText = document.createElement("span");
+    githubText.textContent = "GitHub";
+    github.appendChild(githubText);
+    right.appendChild(github);
     if (auth.isAdmin) {
       right.appendChild(renderSaveStatusMenu());
       right.appendChild(renderDataMenu());
@@ -2913,8 +2931,10 @@
         uiState.backupStatus = null;
         uiState.loginOpen = false;
         uiState.loginError = null;
-        render();
-        loadBackupStatus();
+        loadServerBoardState().catch(function () {}).finally(function () {
+          render();
+          loadBackupStatus();
+        });
       }).catch(function (error) {
         uiState.loginError = error && error.status === 429
           ? TEXT.loginRateLimited
@@ -3322,9 +3342,6 @@
   });
 
   app.addEventListener("pointerdown", function (event) {
-    if (!auth.isAdmin) {
-      return;
-    }
     const resizeHandle = event.target.closest('[data-role="resize-handle"]');
     if (resizeHandle) {
       beginResize(resizeHandle.getAttribute("data-board-id"), resizeHandle, event);
