@@ -625,6 +625,10 @@ test("Dropbox cloud backup list and restore remote state", async () => {
       return Response.json({ access_token: "access-token" });
     }
     if (url.includes("content.dropboxapi.com/2/files/download")) {
+      const downloadArg = JSON.parse(init.headers["Dropbox-API-Arg"]);
+      if (downloadArg.path === "id:dropbox-cloud-file") {
+        return new Response("invalid file id for this request", { status: 400 });
+      }
       return new Response(remoteState, { headers: { "Content-Type": "application/json" } });
     }
     if (url.includes("content.dropboxapi.com/2/files/upload")) {
@@ -681,8 +685,11 @@ test("Dropbox cloud backup list and restore remote state", async () => {
     const state = JSON.parse(await env.BOARD_KV.get("state"));
     assert.equal(state.version, 2);
     assert.equal(state.boards[0].id, "dropbox-restored-board");
-    const downloadCall = calls.find((call) => call.url.includes("content.dropboxapi.com/2/files/download"));
-    assert.equal(JSON.parse(downloadCall.init.headers["Dropbox-API-Arg"]).path, "id:dropbox-cloud-file");
+    const downloadCalls = calls.filter((call) => call.url.includes("content.dropboxapi.com/2/files/download"));
+    assert.deepEqual(downloadCalls.map((call) => JSON.parse(call.init.headers["Dropbox-API-Arg"]).path), [
+      "id:dropbox-cloud-file",
+      "/board-trello-backups/state_backup_2026-01-03t00-00-00-000z.json"
+    ]);
     await Promise.all(waitUntilTasks);
   } finally {
     globalThis.fetch = previousFetch;

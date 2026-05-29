@@ -1123,6 +1123,17 @@ body.is-board-dragging {
   object-fit: cover;
 }
 
+.link-row__icon--github {
+  background: #24292f;
+  color: #ffffff;
+}
+
+.link-row__github-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .link-row__fallback {
   display: none;
   color: var(--muted);

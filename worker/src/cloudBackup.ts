@@ -574,21 +574,31 @@ async function downloadGoogleBackup(accessToken: string, fileId: string): Promis
 }
 
 async function downloadDropboxBackup(accessToken: string, backup: RemoteBackupFile): Promise<string> {
+  const targets = Array.from(new Set([backup.id, backup.path].filter((value): value is string => Boolean(value))));
+  let lastError = "";
+  let lastStatus = 502;
+
+  for (const target of targets) {
+    const response = await fetchDropboxDownload(accessToken, target);
+    if (response.ok) return response.text();
+
+    lastStatus = response.status;
+    const details = await readResponseText(response);
+    lastError = `Dropbox backup download returned ${response.status}${details ? `: ${details}` : ""}`;
+  }
+
+  throw new CloudBackupProviderError(lastError || "Dropbox backup download failed", lastStatus);
+}
+
+async function fetchDropboxDownload(accessToken: string, path: string): Promise<Response> {
   const response = await fetch("https://content.dropboxapi.com/2/files/download", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Dropbox-API-Arg": JSON.stringify({ path: backup.id || backup.path })
+      "Dropbox-API-Arg": JSON.stringify({ path })
     }
   });
-  if (!response.ok) {
-    const details = await readResponseText(response);
-    throw new CloudBackupProviderError(
-      `Dropbox backup download returned ${response.status}${details ? `: ${details}` : ""}`,
-      response.status
-    );
-  }
-  return response.text();
+  return response;
 }
 
 async function readResponseText(response: Response): Promise<string> {
