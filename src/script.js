@@ -1944,6 +1944,7 @@
 
   function rerenderBoardWall(useFlip) {
     const previousRects = useFlip ? captureBoardRects() : new Map();
+    const scrollState = captureScrollState();
     masonryLayout = buildMasonryLayout();
 
     const wall = app.querySelector(".board-wall");
@@ -1953,6 +1954,7 @@
       wall.replaceChildren(renderBoardLayer());
     }
 
+    restoreScrollState(scrollState);
     if (useFlip) {
       animateBoardFlip(previousRects);
     }
@@ -1960,6 +1962,7 @@
 
   function render() {
     const previousRects = captureBoardRects();
+    const scrollState = captureScrollState();
 
     const main = document.createElement("main");
     main.className = "workspace";
@@ -1994,6 +1997,45 @@
     }
     animateBoardFlip(previousRects);
     bindIconPickers(app);
+    restoreScrollState(scrollState);
+  }
+
+  function captureScrollState() {
+    const state = {
+      wall: null,
+      lists: {}
+    };
+    const wall = app.querySelector(".board-wall-scroll");
+    if (wall) {
+      state.wall = {
+        left: wall.scrollLeft,
+        top: wall.scrollTop
+      };
+    }
+    app.querySelectorAll('.board-list[data-board-id]').forEach(function (list) {
+      state.lists[list.getAttribute("data-board-id")] = {
+        left: list.scrollLeft,
+        top: list.scrollTop
+      };
+    });
+    return state;
+  }
+
+  function restoreScrollState(state) {
+    if (!state) return;
+    const wall = app.querySelector(".board-wall-scroll");
+    if (wall && state.wall) {
+      wall.scrollLeft = state.wall.left;
+      wall.scrollTop = state.wall.top;
+    }
+    Object.keys(state.lists || {}).forEach(function (boardId) {
+      const list = app.querySelector('.board-list[data-board-id="' + cssEscape(boardId) + '"]');
+      const saved = state.lists[boardId];
+      if (list && saved) {
+        list.scrollLeft = saved.left;
+        list.scrollTop = saved.top;
+      }
+    });
   }
 
   function estimateBoardHeight(board) {
