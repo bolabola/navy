@@ -1347,7 +1347,7 @@
     anchor.href = href;
     anchor.target = "_blank";
     anchor.rel = "noreferrer";
-    anchor.title = title;
+    anchor.title = urlOnly ? title : (iconOnly ? title + " - " + url : url);
 
     if (!urlOnly) {
       const icon = document.createElement("span");
