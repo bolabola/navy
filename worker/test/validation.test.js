@@ -20,6 +20,7 @@ const validBoard = {
 
 test("validateBoardState accepts a valid board payload", () => {
   assert.equal(validateBoardState([validBoard]), null);
+  assert.equal(validateBoardState([{ ...validBoard, displayMode: "urls" }]), null);
 });
 
 test("validateBoardState rejects invalid board shape", () => {

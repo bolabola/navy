@@ -833,10 +833,26 @@
         height: clampHeight(board.height),
         collapsed: Boolean(board.collapsed),
         column: Number.isInteger(board.column) ? board.column : null,
-        displayMode: board.displayMode === "icons" ? "icons" : "list",
+        displayMode: normalizeDisplayMode(board.displayMode),
         items: normalizeBoardItems(board.items)
       };
     });
+  }
+
+  function normalizeDisplayMode(mode) {
+    return mode === "icons" || mode === "urls" ? mode : "list";
+  }
+
+  function nextDisplayMode(mode) {
+    if (mode === "list") return "icons";
+    if (mode === "icons") return "urls";
+    return "list";
+  }
+
+  function displayModeButtonIcon(mode) {
+    if (mode === "icons") return "icon-link";
+    if (mode === "urls") return "icon-list";
+    return "icon-layout-grid";
   }
 
   function normalizeBoardItems(sourceItems) {
@@ -974,6 +990,10 @@
     } catch (error) {
       return url;
     }
+  }
+
+  function displayUrlWithoutProtocol(url) {
+    return String(url || "").trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
   }
 
   function extractUrlsFromText(text) {
@@ -1305,10 +1325,11 @@
     const href = toExternalUrl(item.url);
     const initial = (item.name || title).trim().charAt(0).toUpperCase() || "?";
     const iconOnly = displayMode === "icons";
+    const urlOnly = displayMode === "urls";
     const showDelete = editing && auth.isAdmin;
 
     const row = document.createElement("div");
-    row.className = "link-row" + (iconOnly ? " link-row--icon-only" : "") + (showDelete ? " link-row--editing" : "");
+    row.className = "link-row" + (iconOnly ? " link-row--icon-only" : "") + (urlOnly ? " link-row--url-only" : "") + (showDelete ? " link-row--editing" : "");
     row.dataset.role = "link-row";
     row.dataset.boardId = boardId;
     row.dataset.itemId = item.id;
@@ -1326,26 +1347,28 @@
     anchor.href = href;
     anchor.target = "_blank";
     anchor.rel = "noreferrer";
-    anchor.title = title + " - " + url;
+    anchor.title = title;
 
-    const icon = document.createElement("span");
-    icon.className = "link-row__icon";
-    const img = document.createElement("img");
-    img.alt = "";
-    img.loading = "lazy";
-    img.referrerPolicy = "no-referrer";
-    img.dataset.faviconDomain = faviconDomain(item.url);
-    icon.appendChild(img);
-    const fallback = document.createElement("span");
-    fallback.className = "link-row__fallback";
-    fallback.textContent = initial;
-    icon.appendChild(fallback);
-    hydrateFaviconImage(img, icon, item.url);
-    anchor.appendChild(icon);
+    if (!urlOnly) {
+      const icon = document.createElement("span");
+      icon.className = "link-row__icon";
+      const img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.dataset.faviconDomain = faviconDomain(item.url);
+      icon.appendChild(img);
+      const fallback = document.createElement("span");
+      fallback.className = "link-row__fallback";
+      fallback.textContent = initial;
+      icon.appendChild(fallback);
+      hydrateFaviconImage(img, icon, item.url);
+      anchor.appendChild(icon);
+    }
 
     const name = document.createElement("span");
     name.className = "link-row__name";
-    name.textContent = title;
+    name.textContent = urlOnly ? displayUrlWithoutProtocol(url) : title;
     anchor.appendChild(name);
     row.appendChild(anchor);
 
@@ -1450,6 +1473,7 @@
     const editOpen = uiState.editBoardId === board.id;
     const menuOpen = uiState.openBoardMenuId === board.id;
     const iconMode = board.displayMode === "icons";
+    const urlMode = board.displayMode === "urls";
     const card = document.createElement("article");
     card.className = "board-card" + (board.collapsed ? " is-collapsed" : "") + (menuOpen ? " has-open-menu" : "") + (extraClass ? " " + extraClass : "");
     card.dataset.boardId = board.id;
@@ -1476,7 +1500,7 @@
     const actions = document.createElement("div");
     actions.className = "board-card__actions";
     actions.appendChild(actionButton("board-icon-button", "toggle-view-mode", board.id, TEXT.toggleView, [
-      staticIconNode(iconMode ? "icon-list" : "icon-layout-grid")
+      staticIconNode(displayModeButtonIcon(board.displayMode))
     ]));
     actions.appendChild(actionButton("board-icon-button", "toggle-collapse", board.id, board.collapsed ? TEXT.expand : TEXT.collapse, [
       staticIconNode(board.collapsed ? "icon-chevron-down" : "icon-chevron-up")
@@ -1503,7 +1527,7 @@
       const body = document.createElement("div");
       body.className = "board-card__body";
       const list = document.createElement("div");
-      list.className = "board-list" + (iconMode ? " board-list--icons" : "");
+      list.className = "board-list" + (iconMode ? " board-list--icons" : "") + (urlMode ? " board-list--urls" : "");
       list.dataset.role = "board-list";
       list.dataset.boardId = board.id;
       if (board.items.length) {
@@ -2833,7 +2857,7 @@
       uiState.openBoardMenuId = null;
       mutateBoardUiPreference(boardId, function (board) {
         return Object.assign({}, board, {
-          displayMode: board.displayMode === "icons" ? "list" : "icons"
+          displayMode: nextDisplayMode(board.displayMode)
         });
       });
       return;

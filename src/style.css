@@ -919,6 +919,10 @@ body.is-board-dragging {
   width: 100%;
 }
 
+.board-list--urls .link-row__anchor {
+  gap: 0;
+}
+
 .link-row {
   position: relative;
   border-radius: 7px;
@@ -1006,6 +1010,14 @@ body.is-board-dragging {
   width: 16px;
   height: 16px;
   border-radius: 4px;
+}
+
+.link-row--url-only .link-row__name {
+  color: #44546f;
+}
+
+.link-row--url-only:hover .link-row__name {
+  color: #0c66e4;
 }
 
 .link-row-placeholder {

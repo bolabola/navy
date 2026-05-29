@@ -49,7 +49,12 @@ function validateBoard(value: unknown): string | null {
   if (board.height !== undefined && (typeof board.height !== "number" || !Number.isFinite(board.height))) return "Invalid board height";
   if (board.collapsed !== undefined && typeof board.collapsed !== "boolean") return "Invalid board collapsed flag";
   if (board.column !== undefined && board.column !== null && !Number.isInteger(board.column)) return "Invalid board column";
-  if (board.displayMode !== undefined && board.displayMode !== "list" && board.displayMode !== "icons") return "Invalid board display mode";
+  if (
+    board.displayMode !== undefined &&
+    board.displayMode !== "list" &&
+    board.displayMode !== "icons" &&
+    board.displayMode !== "urls"
+  ) return "Invalid board display mode";
   if (board.items !== undefined && !Array.isArray(board.items)) return "Invalid board items";
 
   const items = Array.isArray(board.items) ? board.items : [];
