@@ -33,19 +33,30 @@ npm run dev
 
 ## 部署
 
+macOS / Linux：
+
+```bash
+chmod +x ./scripts/cloudflare.sh
+./scripts/cloudflare.sh
+```
+
 Windows PowerShell：
 
 ```powershell
 .\scripts\cloudflare.ps1
 ```
 
+也可使用 `npm run deploy`（macOS / Linux）或 `npm run deploy:win`（Windows）。
+
+macOS / Linux 脚本依赖 `bash`、`curl` 和 `jq`。
+
 部署脚本会完成以下事项：
 
 - 检查或保存 Cloudflare deploy token。
 - 创建或复用 `BOARD_KV`。
 - 生成本地 `.wrangler.deploy.toml`，写入真实 KV namespace id。
-- 提示设置生产环境 `ADMIN_PASSWORD` 和 `SESSION_SECRET`。
 - 调用 Wrangler 部署 Worker 和静态资源。
+- 按需设置生产环境 `ADMIN_PASSWORD` 和 `SESSION_SECRET`。
 
 `wrangler.toml` 中的 KV id 保留为 `REPLACE_WITH_KV_ID`。真实 namespace id 写入本地 `.wrangler.deploy.toml`，该文件已加入 `.gitignore`。
 
@@ -229,7 +240,8 @@ Browser
 | `npm run dev` | 启动本地开发服务 |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm test` | 编译 Worker 并运行测试 |
-| `npm run deploy` | 运行 Cloudflare 部署脚本 |
+| `npm run deploy` | 运行 Cloudflare 部署脚本（macOS / Linux） |
+| `npm run deploy:win` | 运行 Cloudflare 部署脚本（Windows） |
 
 ## 故障排查
 

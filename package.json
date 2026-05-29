@@ -4,7 +4,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cloudflare.ps1",
+    "deploy": "bash ./scripts/cloudflare.sh",
+    "deploy:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cloudflare.ps1",
     "typecheck": "tsc --noEmit",
     "test": "tsc --outDir .tmp-test --rootDir worker --module commonjs --moduleResolution node --target ES2022 --lib ES2022 --types @cloudflare/workers-types --skipLibCheck --noEmit false worker/src/index.ts worker/src/validation.ts worker/src/urlSafety.ts && node --test worker/test/*.test.js"
   },

@@ -367,12 +367,15 @@ function Invoke-Wizard {
     Invoke-PrepareKv
   }
 
-  if (Read-YesNo "Set or reset production ADMIN_PASSWORD and SESSION_SECRET" $false) {
-    Invoke-SetSecrets
+  $shouldSetSecrets = Read-YesNo "Set or reset production ADMIN_PASSWORD and SESSION_SECRET" $false
+  $shouldDeploy = Read-YesNo "Deploy now" $true
+
+  if ($shouldDeploy) {
+    Invoke-DeployWithRetry
   }
 
-  if (Read-YesNo "Deploy now" $true) {
-    Invoke-DeployWithRetry
+  if ($shouldSetSecrets) {
+    Invoke-SetSecrets
   }
 }
 
@@ -380,5 +383,5 @@ if ($Wizard) { Invoke-Wizard; return }
 if ($SetToken) { Invoke-SetToken }
 if ($CreateDeployToken) { Invoke-CreateDeployToken }
 if ($PrepareKv) { Invoke-PrepareKv }
-if ($SetSecrets) { Invoke-SetSecrets }
 if ($Deploy) { Invoke-DeployWithRetry }
+if ($SetSecrets) { Invoke-SetSecrets }
