@@ -46,6 +46,17 @@ interface RemoteBackupFile {
   id: string;
   name: string;
   createdAt?: string;
+  path?: string;
+}
+
+class CloudBackupProviderError extends Error {
+  readonly status: number;
+
+  constructor(message: string, providerStatus: number) {
+    super(message);
+    this.name = "CloudBackupProviderError";
+    this.status = providerStatus >= 400 && providerStatus < 500 ? providerStatus : 502;
+  }
 }
 
 const BACKUP_FOLDER_NAME = "board-trello-backups";
@@ -79,7 +90,7 @@ const PROVIDERS: ProviderConfig[] = [
     clientSecretEnv: "DROPBOX_CLIENT_SECRET",
     authorizeUrl: "https://www.dropbox.com/oauth2/authorize",
     tokenUrl: "https://api.dropboxapi.com/oauth2/token",
-    scope: "files.content.write files.metadata.read files.metadata.write",
+    scope: "files.content.read files.content.write files.metadata.read files.metadata.write",
     extraAuthParams: {
       token_access_type: "offline"
     },
@@ -235,7 +246,15 @@ export async function handleCloudBackupRestore(request: Request, env: Env, provi
   const backup = backups.find((entry) => entry.id === payload.id);
   if (!backup) return new Response("Cloud backup not found", { status: 404 });
 
-  const backupRaw = await downloadProviderBackup(provider, accessToken, backup);
+  let backupRaw: string;
+  try {
+    backupRaw = await downloadProviderBackup(provider, accessToken, backup);
+  } catch (error) {
+    if (error instanceof CloudBackupProviderError) {
+      return new Response(error.message, { status: error.status });
+    }
+    throw error;
+  }
   const restored = parseStoredBoardState(backupRaw);
   if (!restored) return new Response("Cloud backup is invalid", { status: 500 });
 
@@ -436,7 +455,7 @@ async function pruneDropboxBackups(accessToken: string): Promise<void> {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ path: file.id })
+      body: JSON.stringify({ path: file.path || file.id })
     });
     if (!response.ok && response.status !== 409) {
       throw new Error(`Dropbox backup delete returned ${response.status}`);
@@ -510,7 +529,7 @@ async function listDropboxBackups(accessToken: string): Promise<RemoteBackupFile
     if (!response.ok) throw new Error(`Dropbox backup list returned ${response.status}`);
 
     const parsed = (await response.json()) as {
-      entries?: Array<{ ".tag"?: unknown; name?: unknown; path_lower?: unknown; server_modified?: unknown }>;
+      entries?: Array<{ ".tag"?: unknown; id?: unknown; name?: unknown; path_lower?: unknown; server_modified?: unknown }>;
       cursor?: unknown;
       has_more?: unknown;
     };
@@ -522,8 +541,9 @@ async function listDropboxBackups(accessToken: string): Promise<RemoteBackupFile
         typeof entry.path_lower === "string"
       ) {
         files.push({
-          id: entry.path_lower,
+          id: typeof entry.id === "string" ? entry.id : entry.path_lower,
           name: entry.name,
+          path: entry.path_lower,
           createdAt: typeof entry.server_modified === "string" ? entry.server_modified : undefined
         });
       }
@@ -541,7 +561,7 @@ async function downloadProviderBackup(
   backup: RemoteBackupFile
 ): Promise<string> {
   if (provider.id === "google") return downloadGoogleBackup(accessToken, backup.id);
-  if (provider.id === "dropbox") return downloadDropboxBackup(accessToken, backup.id);
+  if (provider.id === "dropbox") return downloadDropboxBackup(accessToken, backup);
   throw new Error(`Unsupported backup provider: ${provider.id}`);
 }
 
@@ -553,16 +573,30 @@ async function downloadGoogleBackup(accessToken: string, fileId: string): Promis
   return response.text();
 }
 
-async function downloadDropboxBackup(accessToken: string, path: string): Promise<string> {
+async function downloadDropboxBackup(accessToken: string, backup: RemoteBackupFile): Promise<string> {
   const response = await fetch("https://content.dropboxapi.com/2/files/download", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Dropbox-API-Arg": JSON.stringify({ path })
+      "Dropbox-API-Arg": JSON.stringify({ path: backup.id || backup.path })
     }
   });
-  if (!response.ok) throw new Error(`Dropbox backup download returned ${response.status}`);
+  if (!response.ok) {
+    const details = await readResponseText(response);
+    throw new CloudBackupProviderError(
+      `Dropbox backup download returned ${response.status}${details ? `: ${details}` : ""}`,
+      response.status
+    );
+  }
   return response.text();
+}
+
+async function readResponseText(response: Response): Promise<string> {
+  try {
+    return (await response.text()).slice(0, 500);
+  } catch {
+    return "";
+  }
 }
 
 function getOldRemoteBackups(files: RemoteBackupFile[]): RemoteBackupFile[] {

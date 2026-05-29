@@ -415,6 +415,9 @@ test("cloud backup connect returns OAuth authorization URLs", async () => {
     const authUrl = new URL(body.url);
     assert.equal(authUrl.hostname, host);
     assert.equal(authUrl.searchParams.get("redirect_uri"), redirectUri);
+    if (provider === "dropbox") {
+      assert.equal(authUrl.searchParams.get("scope"), "files.content.read files.content.write files.metadata.read files.metadata.write");
+    }
     const state = authUrl.searchParams.get("state");
     assert.equal(typeof state, "string");
     const stored = JSON.parse(await env.BOARD_KV.get("cloud_backup_oauth_state:" + state));
@@ -601,6 +604,85 @@ test("Google Drive cloud backup list and restore remote state", async () => {
     assert.equal(state.version, 2);
     assert.equal(state.boards[0].id, "restored-board");
     assert.equal(JSON.parse(await env.BOARD_KV.get(restoredBody.backupKey)).boards[0].id, "board-1");
+    await Promise.all(waitUntilTasks);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("Dropbox cloud backup list and restore remote state", async () => {
+  const previousFetch = globalThis.fetch;
+  const remoteState = JSON.stringify({
+    version: 1,
+    updatedAt: "2026-01-03T00:00:00.000Z",
+    boards: [{ id: "dropbox-restored-board", title: "Restored", items: [{ id: "restored-item", name: "Restored", url: "https://restored.example/" }] }]
+  });
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.includes("api.dropboxapi.com/oauth2/token")) {
+      return Response.json({ access_token: "access-token" });
+    }
+    if (url.includes("content.dropboxapi.com/2/files/download")) {
+      return new Response(remoteState, { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("content.dropboxapi.com/2/files/upload")) {
+      return Response.json({ id: "id:uploaded-current-state" });
+    }
+    if (url.includes("api.dropboxapi.com/2/files/list_folder")) {
+      return Response.json({
+        entries: [{
+          ".tag": "file",
+          id: "id:dropbox-cloud-file",
+          name: "state_backup_2026-01-03T00-00-00-000Z.json",
+          path_lower: "/board-trello-backups/state_backup_2026-01-03t00-00-00-000z.json",
+          server_modified: "2026-01-03T00:00:00.000Z"
+        }],
+        cursor: "cursor-1",
+        has_more: false
+      });
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:dropbox:refresh_token": "refresh-token"
+    }, {
+      DROPBOX_CLIENT_ID: "client-id",
+      DROPBOX_CLIENT_SECRET: "client-secret"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+
+    const listed = await worker.fetch(new Request("https://example.com/api/cloud-backup/dropbox/backups", {
+      headers: { Cookie: cookie }
+    }), env, ctx);
+    assert.equal(listed.status, 200);
+    assert.deepEqual((await listed.json()).backups.map((backup) => backup.id), ["id:dropbox-cloud-file"]);
+
+    const restored = await worker.fetch(new Request("https://example.com/api/cloud-backup/dropbox/restore", {
+      method: "POST",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ id: "id:dropbox-cloud-file" })
+    }), env, ctx);
+    assert.equal(restored.status, 200);
+    const restoredBody = await restored.json();
+    assert.equal(restoredBody.version, 2);
+    assert.match(restoredBody.backupKey, /^state_backup:/);
+    const state = JSON.parse(await env.BOARD_KV.get("state"));
+    assert.equal(state.version, 2);
+    assert.equal(state.boards[0].id, "dropbox-restored-board");
+    const downloadCall = calls.find((call) => call.url.includes("content.dropboxapi.com/2/files/download"));
+    assert.equal(JSON.parse(downloadCall.init.headers["Dropbox-API-Arg"]).path, "id:dropbox-cloud-file");
     await Promise.all(waitUntilTasks);
   } finally {
     globalThis.fetch = previousFetch;
