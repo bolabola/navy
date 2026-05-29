@@ -1950,11 +1950,9 @@
     github.href = GITHUB_URL;
     github.target = "_blank";
     github.rel = "noreferrer";
-    github.title = GITHUB_URL;
-    github.appendChild(staticIconNode("icon-external-link"));
-    const githubText = document.createElement("span");
-    githubText.textContent = "GitHub";
-    github.appendChild(githubText);
+    github.title = "GitHub";
+    github.setAttribute("aria-label", "GitHub");
+    github.appendChild(githubIconNode());
     right.appendChild(github);
     if (auth.isAdmin) {
       right.appendChild(renderDataMenu());

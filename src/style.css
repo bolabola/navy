@@ -131,6 +131,16 @@ a {
   line-height: 1;
 }
 
+.workspace__github-link .link-row__github-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.workspace__github-link {
+  padding: 6px 8px;
+}
+
 .workspace__save-status {
   display: flex;
   align-items: center;
@@ -1307,8 +1317,7 @@ body.is-resizing {
     display: none;
   }
 
-  .workspace__create-button span,
-  .workspace__github-link span {
+  .workspace__create-button span {
     display: none;
   }
 
