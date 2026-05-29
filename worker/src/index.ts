@@ -14,6 +14,8 @@ import {
   handleCloudBackupCallback,
   handleCloudBackupConnect,
   handleCloudBackupDisconnect,
+  handleCloudBackupListBackups,
+  handleCloudBackupRestore,
   handleCloudBackupStatus
 } from "./cloudBackup";
 import { handleFavicon, handleUrlTitles } from "./miscRoutes";
@@ -39,7 +41,7 @@ export { routeApi };
 export default worker;
 
 async function routeApi(request: Request, env: Env, url: URL, ctx?: ExecutionContext): Promise<Response> {
-  const cloudBackupMatch = url.pathname.match(/^\/api\/cloud-backup\/([^/]+)\/(callback|connect|disconnect)$/);
+  const cloudBackupMatch = url.pathname.match(/^\/api\/cloud-backup\/([^/]+)\/(callback|connect|disconnect|backups|restore)$/);
   if (cloudBackupMatch && cloudBackupMatch[2] === "callback") {
     if (request.method === "GET") return handleCloudBackupCallback(request, env, url, cloudBackupMatch[1]);
     return methodNotAllowed("GET");
@@ -77,6 +79,16 @@ async function routeApi(request: Request, env: Env, url: URL, ctx?: ExecutionCon
 
   if (cloudBackupMatch && cloudBackupMatch[2] === "disconnect") {
     if (request.method === "POST") return handleCloudBackupDisconnect(request, env, cloudBackupMatch[1]);
+    return methodNotAllowed("POST");
+  }
+
+  if (cloudBackupMatch && cloudBackupMatch[2] === "backups") {
+    if (request.method === "GET") return handleCloudBackupListBackups(request, env, cloudBackupMatch[1]);
+    return methodNotAllowed("GET");
+  }
+
+  if (cloudBackupMatch && cloudBackupMatch[2] === "restore") {
+    if (request.method === "POST") return handleCloudBackupRestore(request, env, cloudBackupMatch[1], ctx);
     return methodNotAllowed("POST");
   }
 

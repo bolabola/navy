@@ -193,6 +193,32 @@ a {
   width: 240px;
 }
 
+.backup-menu {
+  width: 360px;
+}
+
+.backup-menu--grouped {
+  gap: 10px;
+}
+
+.backup-menu__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backup-menu__section + .backup-menu__section {
+  border-top: 1px solid rgba(9, 30, 66, 0.08);
+  padding-top: 8px;
+}
+
+.backup-menu__heading {
+  padding: 0 4px;
+  color: #44546f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .save-status-menu {
   width: 280px;
 }
@@ -300,13 +326,49 @@ a {
   justify-content: space-between;
   gap: 10px;
   min-height: 40px;
+  border-radius: 4px;
+  padding: 6px 4px;
+}
+
+.backup-menu__row i[class^="icon-"] {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 15px !important;
+}
+
+.backup-menu__row--saved i[class^="icon-"] {
+  color: #216e4e;
+}
+
+.backup-menu__row--failed i[class^="icon-"] {
+  color: #ae2e24;
+}
+
+.backup-menu__row--saving i[class^="icon-"],
+.backup-menu__row--pending i[class^="icon-"],
+.backup-menu__row--idle i[class^="icon-"] {
+  color: #946f00;
 }
 
 .backup-menu__meta {
   display: flex;
   min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 2px;
+}
+
+.backup-menu__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.backup-menu__actions .board-save-button,
+.backup-menu__actions .board-cancel-button {
+  padding-right: 10px;
+  padding-left: 10px;
+  white-space: nowrap;
 }
 
 .backup-menu__name {

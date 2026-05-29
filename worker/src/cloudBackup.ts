@@ -1,5 +1,6 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
-import { jsonResponse, type Env } from "./shared";
+import { jsonResponse, isPlainObject, type BoardStateEnvelope, type Env } from "./shared";
+import { validateBoardState } from "./validation";
 
 type ProviderId = "google" | "dropbox";
 
@@ -49,7 +50,11 @@ interface RemoteBackupFile {
 
 const BACKUP_FOLDER_NAME = "board-trello-backups";
 const BACKUP_FILE_PREFIX = "state_backup_";
+const STATE_KEY = "state";
+const LOCAL_BACKUP_PREFIX = "state_backup:";
+const LOCAL_BACKUP_KEEP_COUNT = 10;
 const CLOUD_BACKUP_KEEP_COUNT = 100;
+const CLOUD_BACKUP_LIST_COUNT = 10;
 const OAUTH_STATE_PREFIX = "cloud_backup_oauth_state:";
 const OAUTH_STATE_TTL_SECONDS = 10 * 60;
 
@@ -173,6 +178,88 @@ export async function handleCloudBackupDisconnect(request: Request, env: Env, pr
   ]);
 
   return jsonResponse(JSON.stringify({ ok: true }), 200, { "Cache-Control": "no-store" });
+}
+
+export async function handleCloudBackupListBackups(request: Request, env: Env, providerId: string): Promise<Response> {
+  if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const provider = getProvider(providerId);
+  if (!provider) return new Response("Unknown backup provider", { status: 404 });
+  if (!isProviderClientConfigured(env, provider)) {
+    return new Response(`${provider.label} OAuth client is not configured`, { status: 500 });
+  }
+
+  const config = await getStoredProviderConfig(env, provider);
+  if (!config) return new Response(`${provider.label} backup is not connected`, { status: 409 });
+
+  const accessToken = await getAccessToken(env, provider, config.refreshToken);
+  const backups = getRecentRemoteBackups(
+    await listProviderBackups(provider, accessToken, config.folderId),
+    CLOUD_BACKUP_LIST_COUNT
+  );
+
+  return jsonResponse(JSON.stringify({ provider: provider.id, backups }), 200, { "Cache-Control": "no-store" });
+}
+
+export async function handleCloudBackupRestore(request: Request, env: Env, providerId: string, ctx?: ExecutionContext): Promise<Response> {
+  if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  if (!(await isCsrfTokenValid(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
+    return new Response("Invalid CSRF token", { status: 403 });
+  }
+
+  const provider = getProvider(providerId);
+  if (!provider) return new Response("Unknown backup provider", { status: 404 });
+  if (!isProviderClientConfigured(env, provider)) {
+    return new Response(`${provider.label} OAuth client is not configured`, { status: 500 });
+  }
+
+  let payload: { id?: unknown };
+  try {
+    payload = (await request.json()) as { id?: unknown };
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+  if (typeof payload.id !== "string" || !payload.id) {
+    return new Response("Invalid backup id", { status: 400 });
+  }
+
+  const config = await getStoredProviderConfig(env, provider);
+  if (!config) return new Response(`${provider.label} backup is not connected`, { status: 409 });
+
+  const accessToken = await getAccessToken(env, provider, config.refreshToken);
+  const backups = await listProviderBackups(provider, accessToken, config.folderId);
+  const backup = backups.find((entry) => entry.id === payload.id);
+  if (!backup) return new Response("Cloud backup not found", { status: 404 });
+
+  const backupRaw = await downloadProviderBackup(provider, accessToken, backup);
+  const restored = parseStoredBoardState(backupRaw);
+  if (!restored) return new Response("Cloud backup is invalid", { status: 500 });
+
+  const existingRaw = await env.BOARD_KV.get(STATE_KEY);
+  const existing = existingRaw ? parseStoredBoardState(existingRaw) : null;
+  if (existingRaw && !existing) return new Response("Stored board state is invalid", { status: 500 });
+
+  const backupKey = existingRaw ? await writeLocalBoardBackup(env, existingRaw, ctx) : null;
+  const nextState: BoardStateEnvelope = {
+    version: existing ? existing.version + 1 : 1,
+    updatedAt: new Date().toISOString(),
+    boards: restored.boards
+  };
+  await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
+  await pruneLocalBoardBackups(env);
+
+  return jsonResponse(JSON.stringify({
+    ok: true,
+    provider: provider.id,
+    restoredBackup: backup,
+    version: nextState.version,
+    updatedAt: nextState.updatedAt,
+    backupKey
+  }), 200, { "Cache-Control": "no-store" });
 }
 
 export async function handleCloudBackupCallback(request: Request, env: Env, url: URL, providerId: string): Promise<Response> {
@@ -326,6 +413,44 @@ async function uploadDropboxFile(accessToken: string, fileName: string, rawState
 }
 
 async function pruneGoogleBackups(accessToken: string, folderId: string): Promise<void> {
+  const files = await listGoogleBackups(accessToken, folderId);
+
+  await Promise.all(getOldRemoteBackups(files).map(async (file) => {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`Google Drive backup delete returned ${response.status}`);
+    }
+  }));
+}
+
+async function pruneDropboxBackups(accessToken: string): Promise<void> {
+  const files = await listDropboxBackups(accessToken);
+
+  await Promise.all(getOldRemoteBackups(files).map(async (file) => {
+    const response = await fetch("https://api.dropboxapi.com/2/files/delete_v2", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ path: file.id })
+    });
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`Dropbox backup delete returned ${response.status}`);
+    }
+  }));
+}
+
+async function listProviderBackups(provider: ProviderConfig, accessToken: string, folderId?: string): Promise<RemoteBackupFile[]> {
+  if (provider.id === "google") return listGoogleBackups(accessToken, folderId || "");
+  if (provider.id === "dropbox") return listDropboxBackups(accessToken);
+  return [];
+}
+
+async function listGoogleBackups(accessToken: string, folderId: string): Promise<RemoteBackupFile[]> {
   if (!folderId) throw new Error("Google Drive folder id is missing");
 
   const files: RemoteBackupFile[] = [];
@@ -358,18 +483,10 @@ async function pruneGoogleBackups(accessToken: string, folderId: string): Promis
     pageToken = typeof parsed.nextPageToken === "string" ? parsed.nextPageToken : "";
   } while (pageToken);
 
-  await Promise.all(getOldRemoteBackups(files).map(async (file) => {
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Google Drive backup delete returned ${response.status}`);
-    }
-  }));
+  return files;
 }
 
-async function pruneDropboxBackups(accessToken: string): Promise<void> {
+async function listDropboxBackups(accessToken: string): Promise<RemoteBackupFile[]> {
   const files: RemoteBackupFile[] = [];
   let cursor = "";
   let hasMore = false;
@@ -415,31 +532,101 @@ async function pruneDropboxBackups(accessToken: string): Promise<void> {
     hasMore = parsed.has_more === true;
   } while (hasMore && cursor);
 
-  await Promise.all(getOldRemoteBackups(files).map(async (file) => {
-    const response = await fetch("https://api.dropboxapi.com/2/files/delete_v2", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ path: file.id })
-    });
-    if (!response.ok && response.status !== 409) {
-      throw new Error(`Dropbox backup delete returned ${response.status}`);
+  return files;
+}
+
+async function downloadProviderBackup(
+  provider: ProviderConfig,
+  accessToken: string,
+  backup: RemoteBackupFile
+): Promise<string> {
+  if (provider.id === "google") return downloadGoogleBackup(accessToken, backup.id);
+  if (provider.id === "dropbox") return downloadDropboxBackup(accessToken, backup.id);
+  throw new Error(`Unsupported backup provider: ${provider.id}`);
+}
+
+async function downloadGoogleBackup(accessToken: string, fileId: string): Promise<string> {
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) throw new Error(`Google Drive backup download returned ${response.status}`);
+  return response.text();
+}
+
+async function downloadDropboxBackup(accessToken: string, path: string): Promise<string> {
+  const response = await fetch("https://content.dropboxapi.com/2/files/download", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Dropbox-API-Arg": JSON.stringify({ path })
     }
-  }));
+  });
+  if (!response.ok) throw new Error(`Dropbox backup download returned ${response.status}`);
+  return response.text();
 }
 
 function getOldRemoteBackups(files: RemoteBackupFile[]): RemoteBackupFile[] {
+  return getSortedRemoteBackups(files)
+    .slice(CLOUD_BACKUP_KEEP_COUNT);
+}
+
+function getRecentRemoteBackups(files: RemoteBackupFile[], count: number): RemoteBackupFile[] {
+  return getSortedRemoteBackups(files)
+    .slice(0, count);
+}
+
+function getSortedRemoteBackups(files: RemoteBackupFile[]): RemoteBackupFile[] {
   return files
     .slice()
-    .sort((a, b) => remoteBackupSortKey(b).localeCompare(remoteBackupSortKey(a)))
-    .slice(CLOUD_BACKUP_KEEP_COUNT);
+    .sort((a, b) => remoteBackupSortKey(b).localeCompare(remoteBackupSortKey(a)));
 }
 
 function remoteBackupSortKey(file: RemoteBackupFile): string {
   const match = /^state_backup_(.+)\.json$/.exec(file.name);
   return match ? match[1] : file.createdAt || file.name;
+}
+
+async function writeLocalBoardBackup(env: Env, existingRaw: string, ctx?: ExecutionContext): Promise<string> {
+  const suffix = new Date().toISOString().replace(/[:.]/g, "-");
+  const key = LOCAL_BACKUP_PREFIX + suffix;
+  await env.BOARD_KV.put(key, existingRaw);
+  scheduleCloudBackups(env, key, existingRaw, ctx);
+  return key;
+}
+
+async function pruneLocalBoardBackups(env: Env): Promise<void> {
+  const listed = await env.BOARD_KV.list({ prefix: LOCAL_BACKUP_PREFIX });
+  const stale = listed.keys
+    .map((key) => key.name)
+    .sort()
+    .reverse()
+    .slice(LOCAL_BACKUP_KEEP_COUNT);
+
+  await Promise.all(stale.map((key) => env.BOARD_KV.delete(key)));
+}
+
+function parseStoredBoardState(raw: string): BoardStateEnvelope | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (Array.isArray(parsed)) {
+    const error = validateBoardState(parsed);
+    return error ? null : { version: 0, updatedAt: "", boards: parsed };
+  }
+
+  if (!isPlainObject(parsed)) return null;
+  const version = parsed.version;
+  const updatedAt = parsed.updatedAt;
+  const boards = parsed.boards;
+  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return null;
+  if (typeof updatedAt !== "string") return null;
+  if (!Array.isArray(boards)) return null;
+  const error = validateBoardState(boards);
+  return error ? null : { version, updatedAt, boards };
 }
 
 function escapeDriveQueryValue(value: string): string {

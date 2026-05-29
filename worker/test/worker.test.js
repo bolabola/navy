@@ -527,6 +527,86 @@ test("cloud backup status and disconnect report provider state", async () => {
   assert.equal(await env.BOARD_KV.get("cloud_backup:google:last_backup"), null);
 });
 
+test("Google Drive cloud backup list and restore remote state", async () => {
+  const previousFetch = globalThis.fetch;
+  const remoteState = JSON.stringify({
+    version: 1,
+    updatedAt: "2026-01-02T00:00:00.000Z",
+    boards: [{ id: "restored-board", title: "Restored", items: [{ id: "restored-item", name: "Restored", url: "https://restored.example/" }] }]
+  });
+  const remoteFiles = Array.from({ length: 12 }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    return {
+      id: index === 11 ? "cloud-file" : `cloud-file-${index + 1}`,
+      name: `state_backup_2026-01-${day}T00-00-00-000Z.json`,
+      createdTime: `2026-01-${day}T00:00:00.000Z`
+    };
+  });
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.includes("oauth2.googleapis.com/token")) {
+      return Response.json({ access_token: "access-token" });
+    }
+    if (url.includes("upload/drive/v3/files")) {
+      return Response.json({ id: "uploaded-current-state" });
+    }
+    if (url.includes("googleapis.com/drive/v3/files/cloud-file") && url.includes("alt=media")) {
+      return new Response(remoteState, { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("googleapis.com/drive/v3/files?")) {
+      return Response.json({ files: remoteFiles });
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:google:refresh_token": "refresh-token",
+      "cloud_backup:google:folder_id": "folder-id"
+    }, {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+
+    const listed = await worker.fetch(new Request("https://example.com/api/cloud-backup/google/backups", {
+      headers: { Cookie: cookie }
+    }), env, ctx);
+    assert.equal(listed.status, 200);
+    const listedBody = await listed.json();
+    assert.equal(listedBody.backups.length, 10);
+    assert.deepEqual(listedBody.backups.map((backup) => backup.id).slice(0, 3), ["cloud-file", "cloud-file-11", "cloud-file-10"]);
+    assert.equal(listedBody.backups.some((backup) => backup.id === "cloud-file-2"), false);
+
+    const restored = await worker.fetch(new Request("https://example.com/api/cloud-backup/google/restore", {
+      method: "POST",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ id: "cloud-file" })
+    }), env, ctx);
+    assert.equal(restored.status, 200);
+    const restoredBody = await restored.json();
+    assert.equal(restoredBody.version, 2);
+    assert.match(restoredBody.backupKey, /^state_backup:/);
+    const state = JSON.parse(await env.BOARD_KV.get("state"));
+    assert.equal(state.version, 2);
+    assert.equal(state.boards[0].id, "restored-board");
+    assert.equal(JSON.parse(await env.BOARD_KV.get(restoredBody.backupKey)).boards[0].id, "board-1");
+    await Promise.all(waitUntilTasks);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("authenticated write requests require CSRF token", async () => {
   const env = createEnv();
   const { cookie, csrfToken } = await login(env);
