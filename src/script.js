@@ -1070,6 +1070,7 @@
     setFaviconFallback(domain);
     const pending = fetch(faviconUrlForDomain(domain, forceRefresh), { cache: forceRefresh ? "reload" : "force-cache" }).then(function (res) {
       if (!res.ok) throw new Error("Favicon request failed");
+      if (res.headers.get("X-Favicon-Fallback") === "1") throw new Error("Favicon fallback");
       return res.blob();
     }).then(blobToDataUrl);
     faviconCache.set(domain, { status: "pending", promise: pending });

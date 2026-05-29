@@ -690,8 +690,13 @@ test("favicon refresh bypasses and updates the edge cache", async () => {
       }
     }
   };
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (input) => {
     fetchCalls += 1;
+    if (String(input) === "https://example.com/") {
+      return new Response("<html></html>", {
+        headers: { "Content-Type": "text/html" }
+      });
+    }
     return new Response("favicon-" + fetchCalls, {
       headers: { "Content-Type": "image/png" }
     });
@@ -700,19 +705,121 @@ test("favicon refresh bypasses and updates the edge cache", async () => {
   try {
     const env = createEnv();
     const first = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com"), env);
-    assert.equal(await first.text(), "favicon-1");
+    assert.equal(await first.text(), "favicon-2");
 
     const cached = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com"), env);
-    assert.equal(await cached.text(), "favicon-1");
-    assert.equal(fetchCalls, 1);
+    assert.equal(await cached.text(), "favicon-2");
+    assert.equal(fetchCalls, 2);
 
     const refreshed = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com&refresh=1"), env);
-    assert.equal(await refreshed.text(), "favicon-2");
-    assert.equal(fetchCalls, 2);
+    assert.equal(await refreshed.text(), "favicon-4");
+    assert.equal(fetchCalls, 4);
 
     const afterRefresh = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com"), env);
-    assert.equal(await afterRefresh.text(), "favicon-2");
-    assert.equal(fetchCalls, 2);
+    assert.equal(await afterRefresh.text(), "favicon-4");
+    assert.equal(fetchCalls, 4);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousCaches === undefined) {
+      delete globalThis.caches;
+    } else {
+      globalThis.caches = previousCaches;
+    }
+  }
+});
+
+test("favicon uses declared icon links before favicon aggregators", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousCaches = globalThis.caches;
+  const cachedResponses = new Map();
+  const calls = [];
+
+  globalThis.caches = {
+    default: {
+      async match(request) {
+        const cached = cachedResponses.get(request.url);
+        return cached ? cached.clone() : null;
+      },
+      async put(request, response) {
+        cachedResponses.set(request.url, response.clone());
+      }
+    }
+  };
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url === "https://custom.example/") {
+      return new Response('<html><head><link rel="icon" href="@/assets/img/nav_icon_g.png"></head></html>', {
+        headers: { "Content-Type": "text/html" }
+      });
+    }
+    if (url === "https://custom.example/assets/img/nav_icon_g.png") {
+      return new Response("declared-icon", {
+        headers: { "Content-Type": "image/png" }
+      });
+    }
+    return new Response("unexpected", { status: 404 });
+  };
+
+  try {
+    const env = createEnv();
+    const res = await worker.fetch(new Request("https://example.com/api/favicon?d=custom.example"), env);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), "declared-icon");
+    assert.deepEqual(calls, [
+      "https://custom.example/",
+      "https://custom.example/assets/img/nav_icon_g.png"
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousCaches === undefined) {
+      delete globalThis.caches;
+    } else {
+      globalThis.caches = previousCaches;
+    }
+  }
+});
+
+test("favicon returns a cacheable fallback when upstream sources fail", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousCaches = globalThis.caches;
+  const cachedResponses = new Map();
+  let fetchCalls = 0;
+
+  globalThis.caches = {
+    default: {
+      async match(request) {
+        const cached = cachedResponses.get(request.url);
+        return cached ? cached.clone() : null;
+      },
+      async put(request, response) {
+        cachedResponses.set(request.url, response.clone());
+      }
+    }
+  };
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return new Response("no icon", { status: 404 });
+  };
+
+  try {
+    const env = createEnv();
+    const first = await worker.fetch(new Request("https://example.com/api/favicon?d=missing.example"), env);
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("X-Favicon-Fallback"), "1");
+    assert.match(first.headers.get("Content-Type"), /image\/svg\+xml/);
+    assert.match(await first.text(), /<svg/);
+    assert.equal(fetchCalls, 4);
+
+    const cached = await worker.fetch(new Request("https://example.com/api/favicon?d=missing.example"), env);
+    assert.equal(cached.status, 200);
+    assert.equal(cached.headers.get("X-Favicon-Fallback"), "1");
+    assert.equal(fetchCalls, 4);
+
+    const refreshed = await worker.fetch(new Request("https://example.com/api/favicon?d=missing.example&refresh=1"), env);
+    assert.equal(refreshed.status, 200);
+    assert.equal(refreshed.headers.get("X-Favicon-Fallback"), "1");
+    assert.equal(fetchCalls, 8);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousCaches === undefined) {
