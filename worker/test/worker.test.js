@@ -672,3 +672,53 @@ test("favicon rejects malformed domains", async () => {
   const res = await worker.fetch(new Request("https://example.com/api/favicon?d=localhost"), env);
   assert.equal(res.status, 400);
 });
+
+test("favicon refresh bypasses and updates the edge cache", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousCaches = globalThis.caches;
+  const cachedResponses = new Map();
+  let fetchCalls = 0;
+
+  globalThis.caches = {
+    default: {
+      async match(request) {
+        const cached = cachedResponses.get(request.url);
+        return cached ? cached.clone() : null;
+      },
+      async put(request, response) {
+        cachedResponses.set(request.url, response.clone());
+      }
+    }
+  };
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return new Response("favicon-" + fetchCalls, {
+      headers: { "Content-Type": "image/png" }
+    });
+  };
+
+  try {
+    const env = createEnv();
+    const first = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com"), env);
+    assert.equal(await first.text(), "favicon-1");
+
+    const cached = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com"), env);
+    assert.equal(await cached.text(), "favicon-1");
+    assert.equal(fetchCalls, 1);
+
+    const refreshed = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com&refresh=1"), env);
+    assert.equal(await refreshed.text(), "favicon-2");
+    assert.equal(fetchCalls, 2);
+
+    const afterRefresh = await worker.fetch(new Request("https://example.com/api/favicon?d=example.com"), env);
+    assert.equal(await afterRefresh.text(), "favicon-2");
+    assert.equal(fetchCalls, 2);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousCaches === undefined) {
+      delete globalThis.caches;
+    } else {
+      globalThis.caches = previousCaches;
+    }
+  }
+});

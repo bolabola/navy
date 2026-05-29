@@ -19,7 +19,7 @@
   const BOARD_ADD_FORM_HEIGHT = 104;
   const BOARD_ICON_TILE_SIZE = 24;
   const BOARD_ICON_TILE_GAP = 6;
-  const FAVICON_FAILURE_RETRY_MS = 30 * 1000;
+  const FAVICON_RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];
   const BOARD_ACCENTS = ["#0079bf", "#42526e", "#00a3bf", "#5aac44", "#eb5a46", "#89609e", "#ff9f1a"];
   const DEFAULT_BOARD_ICONS = ["layout-grid", "zap", "code", "sparkles", "wrench", "file-text"];
   const LEGACY_ICON_MAP = { grid: "layout-grid", bolt: "zap", code: "code", spark: "sparkles", tool: "wrench", note: "file-text" };
@@ -1005,8 +1005,9 @@
     }
   }
 
-  function faviconUrlForDomain(domain) {
-    return "/api/favicon?d=" + encodeURIComponent(domain || "example.com");
+  function faviconUrlForDomain(domain, forceRefresh) {
+    const url = "/api/favicon?d=" + encodeURIComponent(domain || "example.com");
+    return forceRefresh ? url + "&refresh=1" : url;
   }
 
   function blobToDataUrl(blob) {
@@ -1018,11 +1019,55 @@
     });
   }
 
+  function setFaviconFallback(domain) {
+    app.querySelectorAll('img[data-favicon-domain="' + cssEscape(domain) + '"]').forEach(function (node) {
+      const wrapper = node.closest(".link-row__icon");
+      if (wrapper) wrapper.classList.add("is-fallback");
+    });
+  }
+
+  function applyFaviconDataUrl(domain, dataUrl) {
+    app.querySelectorAll('img[data-favicon-domain="' + cssEscape(domain) + '"]').forEach(function (node) {
+      node.src = dataUrl;
+      const wrapper = node.closest(".link-row__icon");
+      if (wrapper) wrapper.classList.remove("is-fallback");
+    });
+  }
+
+  function scheduleFaviconRetry(domain, attempts) {
+    const delay = FAVICON_RETRY_DELAYS_MS[Math.min(attempts, FAVICON_RETRY_DELAYS_MS.length - 1)];
+    const retryAt = Date.now() + delay;
+    const timer = setTimeout(function () {
+      const cached = faviconCache.get(domain);
+      if (cached && cached.status === "failed" && cached.retryAt <= Date.now()) {
+        loadFaviconDomain(domain, true, attempts + 1);
+      }
+    }, delay);
+    faviconCache.set(domain, { status: "failed", retryAt: retryAt, attempts: attempts, timer: timer });
+  }
+
+  function loadFaviconDomain(domain, forceRefresh, attempts) {
+    setFaviconFallback(domain);
+    const pending = fetch(faviconUrlForDomain(domain, forceRefresh), { cache: forceRefresh ? "reload" : "force-cache" }).then(function (res) {
+      if (!res.ok) throw new Error("Favicon request failed");
+      return res.blob();
+    }).then(blobToDataUrl);
+    faviconCache.set(domain, { status: "pending", promise: pending });
+
+    pending.then(function (dataUrl) {
+      if (!dataUrl) throw new Error("Empty favicon");
+      faviconCache.set(domain, dataUrl);
+      applyFaviconDataUrl(domain, dataUrl);
+    }).catch(function () {
+      scheduleFaviconRetry(domain, attempts);
+      setFaviconFallback(domain);
+    });
+  }
+
   function hydrateFaviconImage(img, icon, url) {
     const domain = faviconDomain(url);
     const cached = faviconCache.get(domain);
-    const isRetryableFailure = cached && cached.status === "failed";
-    if (isRetryableFailure && Date.now() < cached.retryAt) {
+    if (cached && cached.status === "failed") {
       icon.classList.add("is-fallback");
       return;
     }
@@ -1033,27 +1078,7 @@
     if (cached && cached.status === "pending") return;
 
     icon.classList.add("is-fallback");
-    const pending = fetch(faviconUrlForDomain(domain), { cache: isRetryableFailure ? "reload" : "force-cache" }).then(function (res) {
-      if (!res.ok) throw new Error("Favicon request failed");
-      return res.blob();
-    }).then(blobToDataUrl);
-    faviconCache.set(domain, { status: "pending", promise: pending });
-
-    pending.then(function (dataUrl) {
-      if (!dataUrl) throw new Error("Empty favicon");
-      faviconCache.set(domain, dataUrl);
-      app.querySelectorAll('img[data-favicon-domain="' + cssEscape(domain) + '"]').forEach(function (node) {
-        node.src = dataUrl;
-        const wrapper = node.closest(".link-row__icon");
-        if (wrapper) wrapper.classList.remove("is-fallback");
-      });
-    }).catch(function () {
-      faviconCache.set(domain, { status: "failed", retryAt: Date.now() + FAVICON_FAILURE_RETRY_MS });
-      app.querySelectorAll('img[data-favicon-domain="' + cssEscape(domain) + '"]').forEach(function (node) {
-        const wrapper = node.closest(".link-row__icon");
-        if (wrapper) wrapper.classList.add("is-fallback");
-      });
-    });
+    loadFaviconDomain(domain, false, 0);
   }
 
   function nextBoardAccent() {

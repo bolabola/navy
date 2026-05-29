@@ -16,10 +16,15 @@ export async function handleFavicon(request: Request, url: URL): Promise<Respons
     return new Response("Bad domain", { status: 400 });
   }
 
-  const cacheKey = new Request(request.url, { method: "GET" });
+  const forceRefresh = url.searchParams.get("refresh") === "1";
+  const cacheUrl = new URL(request.url);
+  cacheUrl.searchParams.delete("refresh");
+  const cacheKey = new Request(cacheUrl.toString(), { method: "GET" });
   const cache = caches.default;
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
+  if (!forceRefresh) {
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached;
+  }
 
   const upstream = "https://www.google.com/s2/favicons?sz=" + FAVICON_SIZE + "&domain_url=https://" + encodeURIComponent(domain);
   let res: Response;
