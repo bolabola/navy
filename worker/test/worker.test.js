@@ -226,6 +226,53 @@ test("Google Drive backup failure does not block board save", async () => {
   }
 });
 
+test("Google Drive backup failure stores OAuth error details", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    if (String(input).includes("oauth2.googleapis.com/token")) {
+      return Response.json({
+        error: "invalid_grant",
+        error_description: "Token has been expired or revoked."
+      }, { status: 400 });
+    }
+    return new Response("unexpected", { status: 500 });
+  };
+
+  try {
+    const initialState = JSON.stringify({
+      version: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      boards: boardPayload.boards
+    });
+    const env = createEnv({
+      state: initialState,
+      "cloud_backup:google:refresh_token": "refresh-token",
+      "cloud_backup:google:folder_id": "folder-id"
+    }, {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret"
+    });
+    const waitUntilTasks = [];
+    const ctx = { waitUntil: (promise) => waitUntilTasks.push(promise) };
+    const { cookie, csrfToken } = await login(env);
+    const res = await worker.fetch(new Request("https://example.com/api/board", {
+      method: "PUT",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ version: 1, boards: boardPayload.boards })
+    }), env, ctx);
+
+    assert.equal(res.status, 200);
+    await Promise.all(waitUntilTasks);
+    const backupStatus = JSON.parse(await env.BOARD_KV.get("cloud_backup:google:last_backup"));
+    assert.equal(backupStatus.status, "failed");
+    assert.match(backupStatus.error, /Google Drive token refresh returned 400/);
+    assert.match(backupStatus.error, /invalid_grant/);
+    assert.match(backupStatus.error, /expired or revoked/i);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("Google Drive backup pruning keeps the newest 100 files", async () => {
   const previousFetch = globalThis.fetch;
   const calls = [];

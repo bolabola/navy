@@ -18,6 +18,9 @@ interface ProviderConfig {
 interface TokenResponse {
   access_token?: unknown;
   refresh_token?: unknown;
+  error?: unknown;
+  error_description?: unknown;
+  error_subtype?: unknown;
 }
 
 interface OAuthState {
@@ -540,6 +543,38 @@ async function storeProviderBackupStatus(env: Env, provider: ProviderConfig, sta
   await env.BOARD_KV.put(providerKey(provider.id, "last_backup"), JSON.stringify(status));
 }
 
+async function readTokenErrorMessage(response: Response, prefix: string): Promise<string> {
+  const raw = (await response.text()).trim();
+  if (!raw) {
+    return `${prefix} ${response.status}`;
+  }
+
+  let detail = "";
+  try {
+    const parsed = JSON.parse(raw) as TokenResponse;
+    const parts: string[] = [];
+    if (typeof parsed.error === "string" && parsed.error) {
+      parts.push(parsed.error);
+    }
+    if (typeof parsed.error_description === "string" && parsed.error_description) {
+      parts.push(parsed.error_description);
+    }
+    if (typeof parsed.error_subtype === "string" && parsed.error_subtype) {
+      parts.push(`subtype=${parsed.error_subtype}`);
+    }
+    detail = parts.join(": ");
+  } catch {
+    detail = raw.replace(/\s+/g, " ");
+  }
+
+  if (!detail) {
+    return `${prefix} ${response.status}`;
+  }
+
+  const clipped = detail.length > 240 ? `${detail.slice(0, 240)}...` : detail;
+  return `${prefix} ${response.status} (${clipped})`;
+}
+
 async function getAccessToken(env: Env, provider: ProviderConfig, refreshToken: string): Promise<string> {
   const body = new URLSearchParams({
     refresh_token: refreshToken,
@@ -555,7 +590,9 @@ async function getAccessToken(env: Env, provider: ProviderConfig, refreshToken: 
     body
   });
 
-  if (!response.ok) throw new Error(`${provider.label} token refresh returned ${response.status}`);
+  if (!response.ok) {
+    throw new Error(await readTokenErrorMessage(response, `${provider.label} token refresh returned`));
+  }
   const parsed = (await response.json()) as TokenResponse;
   if (typeof parsed.access_token !== "string" || !parsed.access_token) {
     throw new Error(`${provider.label} token refresh did not return an access token`);
@@ -580,7 +617,9 @@ async function exchangeAuthorizationCode(env: Env, provider: ProviderConfig, cod
     body
   });
 
-  if (!response.ok) throw new Error(`${provider.label} authorization code exchange returned ${response.status}`);
+  if (!response.ok) {
+    throw new Error(await readTokenErrorMessage(response, `${provider.label} authorization code exchange returned`));
+  }
   return (await response.json()) as TokenResponse;
 }
 
