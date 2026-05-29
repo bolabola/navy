@@ -340,14 +340,14 @@ async function uploadCloudBackups(env: Env, key: string, rawState: string): Prom
       await uploadProviderFile(provider, accessToken, fileName, rawState, config.folderId);
       await storeProviderBackupStatus(env, provider, {
         status: "success",
-        at: new Date().toISOString(),
+        at: parseLocalBackupKeyToIso(key),
         key,
         fileName
       });
     } catch (error) {
       await storeProviderBackupStatus(env, provider, {
         status: "failed",
-        at: new Date().toISOString(),
+        at: parseLocalBackupKeyToIso(key),
         key,
         fileName,
         error: error instanceof Error ? error.message : String(error)
@@ -772,6 +772,13 @@ async function getProviderBackupStatus(env: Env, provider: ProviderConfig): Prom
 
 async function storeProviderBackupStatus(env: Env, provider: ProviderConfig, status: ProviderBackupStatus): Promise<void> {
   await env.BOARD_KV.put(providerKey(provider.id, "last_backup"), JSON.stringify(status));
+}
+
+function parseLocalBackupKeyToIso(key: string): string {
+  const raw = key.startsWith(LOCAL_BACKUP_PREFIX) ? key.slice(LOCAL_BACKUP_PREFIX.length) : key;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/);
+  if (!match) return new Date().toISOString();
+  return `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`;
 }
 
 async function readTokenErrorMessage(response: Response, prefix: string): Promise<string> {

@@ -123,8 +123,8 @@
     importingBoardId: null,
     dataMenuOpen: false,
     backupMenuOpen: false,
-    saveStatusMenuOpen: false,
     backupStatus: null,
+    localLastBackup: null,
     backupStatusLoading: false,
     backupStatusRequest: null,
     pendingBackupKey: null,
@@ -286,6 +286,7 @@
       }
       if (result && typeof result.backupKey === "string") {
         startPendingCloudBackup(result.backupKey);
+        setLocalLastBackupFromKey(result.backupKey);
       } else {
         clearPendingCloudBackup();
       }
@@ -302,8 +303,8 @@
           }
           uiState.dataMenuOpen = false;
           uiState.backupMenuOpen = false;
-          uiState.saveStatusMenuOpen = false;
           uiState.backupStatus = null;
+          uiState.localLastBackup = null;
           clearPendingCloudBackup();
           uiState.openBoardMenuId = null;
           uiState.openAddBoardId = null;
@@ -376,8 +377,12 @@
     if (!auth.isAdmin) return Promise.resolve(null);
     if (uiState.backupStatusRequest) return uiState.backupStatusRequest;
     uiState.backupStatusLoading = true;
-    uiState.backupStatusRequest = apiGet("/cloud-backup/status").then(function (status) {
-      uiState.backupStatus = status || null;
+    uiState.backupStatusRequest = Promise.all([
+      apiGet("/cloud-backup/status"),
+      apiGet("/backups").catch(function () { return { backups: [] }; })
+    ]).then(function (results) {
+      uiState.backupStatus = results[0] || null;
+      syncLocalLastBackupFromApi(results[1]);
       return uiState.backupStatus;
     }).catch(function () {
       uiState.backupStatus = null;
@@ -445,110 +450,307 @@
     });
   }
 
-  function renderSaveStatusMenu() {
+  function renderBackupMenu() {
     const wrapper = document.createElement("div");
     wrapper.className = "workspace__menu";
 
-    const entries = getSaveStatusEntries();
-    const counts = entries.reduce(function (acc, entry) {
-      acc[entry.status] = (acc[entry.status] || 0) + 1;
-      return acc;
-    }, {});
-    const summaryStatus = counts.failed ? "failed" : (counts.saving ? "saving" : (counts.pending ? "pending" : (counts.saved ? "saved" : "idle")));
-    const summary = counts.failed
-      ? "保存失败 " + counts.failed
-      : (counts.saving
-        ? "保存中 " + counts.saving
-        : (counts.pending
-          ? "待确认 " + counts.pending
-          : (counts.saved ? "保存成功 " + counts.saved : "保存状态")));
-
-    wrapper.appendChild(actionButton("workspace__save-status workspace__save-status--" + summaryStatus, "toggle-save-status-menu", null, "Save status", [
-      staticIconNode(summaryStatus === "failed" ? "icon-alert-circle" : (summaryStatus === "saving" ? "icon-refresh-cw" : ((summaryStatus === "pending" || summaryStatus === "idle") ? "icon-clock" : "icon-check-circle"))),
+    const regularEntry = getRegularBackupEntry();
+    const cloudEntries = getCloudBackupEntries();
+    const summary = getBackupSummary(regularEntry, cloudEntries);
+    const trigger = actionButton("workspace__save-status workspace__save-status--" + summary.status, "toggle-backup-menu", null, "Backup status", [
+      staticIconNode(statusIcon(summary.status)),
       " ",
       (function () {
         const span = document.createElement("span");
-        span.textContent = summary;
+        span.textContent = summary.label;
         return span;
       })()
-    ]));
+    ]);
+    wrapper.appendChild(trigger);
 
-    if (!uiState.saveStatusMenuOpen) return wrapper;
+    if (!uiState.backupMenuOpen) return wrapper;
 
     const menu = document.createElement("div");
-    menu.className = "save-status-menu";
-    entries.forEach(function (entry) {
-      menu.appendChild(renderSaveStatusRow(entry));
-    });
+    menu.className = "backup-menu";
+    menu.appendChild(renderBackupStatusRow(regularEntry, { action: "toggle-backups", label: "恢复" }));
+    if (uiState.backupStatusLoading) {
+      const loading = document.createElement("div");
+      loading.className = "backup-menu__message";
+      loading.textContent = "正在读取云备份状态...";
+      menu.appendChild(loading);
+    } else {
+      cloudEntries.forEach(function (entry) {
+        menu.appendChild(renderBackupStatusRow(entry, {
+          action: entry.connected ? "disconnect-cloud-backup" : "connect-cloud-backup",
+          label: entry.connected ? "断开" : "连接",
+          providerId: entry.id,
+          disabled: !entry.configured && !entry.connected,
+          extraActions: entry.connected ? [{
+            action: "toggle-cloud-backups",
+            label: "恢复",
+            providerId: entry.id,
+            providerLabel: entry.label
+          }] : []
+        }));
+      });
+    }
     wrapper.appendChild(menu);
     return wrapper;
   }
 
-  function getSaveStatusEntries() {
-    const entries = [{
-      id: "local",
-      label: "常规保存",
-      status: syncState.status === "failed" ? "failed" : (syncState.status === "saving" ? "saving" : (syncState.status === "saved" ? "saved" : "idle")),
-      detail: syncState.message || (syncState.status === "idle" ? "等待修改" : "")
-    }];
+  function getRegularBackupEntry() {
+    const last = resolveLocalLastBackup();
+    if (syncState.status === "failed") {
+      return {
+        id: "kv-history",
+        label: "常规备份",
+        status: "failed",
+        detail: syncState.message || "保存失败，未生成新备份"
+      };
+    }
+    if (syncState.status === "saving") {
+      return {
+        id: "kv-history",
+        label: "常规备份",
+        status: "saving",
+        detail: "正在保存并写入历史备份"
+      };
+    }
+    if (last) {
+      return {
+        id: "kv-history",
+        label: "常规备份",
+        status: last.status === "success" ? "saved" : "failed",
+        detail: formatCloudBackupLastBackup(last)
+      };
+    }
+    return {
+      id: "kv-history",
+      label: "常规备份",
+      status: "idle",
+      detail: "保存时自动保留最近 10 份"
+    };
+  }
 
+  function getCloudBackupEntries() {
     const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
       ? uiState.backupStatus.providers
       : [];
-    providers.filter(function (provider) {
-      return provider.connected;
-    }).forEach(function (provider) {
-      entries.push(getCloudSaveStatusEntry(provider));
-    });
-    return entries;
+    return providers.map(getCloudBackupEntry);
   }
 
-  function getCloudSaveStatusEntry(provider) {
+  function getCloudBackupEntry(provider) {
     const last = provider.lastBackup || null;
     const pendingKey = uiState.pendingBackupKey;
     const pendingKnown = pendingKey && pendingKey !== "__pending__";
     const matchesPending = pendingKnown && last && last.key === pendingKey;
-    if (pendingKey && (!pendingKnown || !matchesPending)) {
-      return {
-        id: provider.id,
-        label: provider.label || provider.id,
-        status: "saving",
-        detail: "备份中"
-      };
-    }
-    if (!last) {
-      return {
-        id: provider.id,
-        label: provider.label || provider.id,
-        status: "pending",
-        detail: "尚无备份结果"
-      };
+    let status = "idle";
+    let detail = provider.configured ? "未连接" : "未配置 OAuth";
+    if (provider.connected) {
+      status = "pending";
+      detail = "尚无云备份结果";
+      if (pendingKey && (!pendingKnown || !matchesPending)) {
+        status = "saving";
+        detail = "正在备份本次修改";
+      } else if (last) {
+        status = last.status === "success" ? "saved" : "failed";
+        detail = formatCloudBackupLastBackup(last);
+      }
     }
     return {
       id: provider.id,
       label: provider.label || provider.id,
-      status: last.status === "success" ? "saved" : "failed",
-      detail: formatBackupProviderLastBackup(last)
+      status: status,
+      detail: detail,
+      connected: Boolean(provider.connected),
+      configured: Boolean(provider.configured)
     };
   }
 
-  function renderSaveStatusRow(entry) {
-    const row = document.createElement("div");
-    row.className = "save-status-menu__row save-status-menu__row--" + entry.status;
-    row.appendChild(staticIconNode(entry.status === "failed" ? "icon-x-circle" : (entry.status === "saved" ? "icon-check-circle" : ((entry.status === "pending" || entry.status === "idle") ? "icon-clock" : "icon-refresh-cw"))));
+  function getBackupSummary(regularEntry, cloudEntries) {
+    const entries = [regularEntry].concat(cloudEntries.filter(function (entry) { return entry.connected; }));
+    if (entries.some(function (entry) { return entry.status === "failed"; })) return { status: "failed", label: "备份异常" };
+    if (entries.some(function (entry) { return entry.status === "saving"; })) return { status: "saving", label: "备份中" };
+    if (entries.some(function (entry) { return entry.status === "pending"; })) return { status: "pending", label: "待备份" };
+    if (entries.some(function (entry) { return entry.status === "saved"; })) return { status: "saved", label: "备份正常" };
+    return { status: "idle", label: "备份" };
+  }
 
-    const text = document.createElement("span");
-    text.className = "save-status-menu__text";
+  function statusIcon(status) {
+    if (status === "failed") return "icon-alert-circle";
+    if (status === "saved") return "icon-check-circle";
+    if (status === "saving") return "icon-refresh-cw";
+    return "icon-clock";
+  }
+
+  function renderBackupStatusRow(entry, actionConfig) {
+    const row = document.createElement("div");
+    row.className = "backup-menu__row backup-menu__row--" + entry.status;
+    row.appendChild(staticIconNode(entry.status === "failed" ? "icon-x-circle" : statusIcon(entry.status)));
+
+    const meta = document.createElement("div");
+    meta.className = "backup-menu__meta";
     const name = document.createElement("span");
-    name.className = "save-status-menu__name";
+    name.className = "backup-menu__name";
     name.textContent = entry.label;
     const detail = document.createElement("span");
-    detail.className = "save-status-menu__detail";
+    detail.className = "backup-menu__last backup-menu__last--" + entry.status;
     detail.textContent = entry.detail;
-    text.appendChild(name);
-    text.appendChild(detail);
-    row.appendChild(text);
+    meta.appendChild(name);
+    meta.appendChild(detail);
+    row.appendChild(meta);
+
+    if (actionConfig) {
+      const actions = document.createElement("div");
+      actions.className = "backup-menu__actions";
+      (actionConfig.extraActions || []).forEach(function (extra) {
+        actions.appendChild(createBackupRowAction(extra, "board-save-button"));
+      });
+      actions.appendChild(createBackupRowAction(actionConfig, actionConfig.action === "disconnect-cloud-backup" ? "board-cancel-button" : "board-save-button"));
+      row.appendChild(actions);
+    }
     return row;
+  }
+
+  function createBackupRowAction(actionConfig, className) {
+    const action = actionButton(
+      className,
+      actionConfig.action,
+      null,
+      "",
+      [actionConfig.label]
+    );
+    if (actionConfig.providerId) action.dataset.providerId = actionConfig.providerId;
+    if (actionConfig.providerLabel) action.dataset.providerLabel = actionConfig.providerLabel;
+    if (actionConfig.disabled) action.disabled = true;
+    return action;
+  }
+
+  function formatCloudBackupLastBackup(lastBackup) {
+    const at = (lastBackup && lastBackup.key ? backupKeyToCreatedAt(lastBackup.key) : "") || (lastBackup && lastBackup.at ? lastBackup.at : "");
+    const time = at ? formatDateTime(at) : "";
+    if (lastBackup.status === "success") return time ? "最近成功 " + time : "最近成功";
+    const error = lastBackup && lastBackup.error ? ": " + lastBackup.error : "";
+    return (time ? "最近失败 " + time : "最近失败") + error;
+  }
+
+  function backupKeyToCreatedAt(key) {
+    const raw = String(key || "").replace(/^state_backup:/, "");
+    const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/);
+    if (!match) return "";
+    return match[1] + "T" + match[2] + ":" + match[3] + ":" + match[4] + "." + match[5] + "Z";
+  }
+
+  function localLastBackupFromKey(backupKey, status) {
+    if (typeof backupKey !== "string" || !backupKey.startsWith("state_backup:")) return null;
+    const at = backupKeyToCreatedAt(backupKey);
+    if (!at) return null;
+    return {
+      status: status || "success",
+      at: at,
+      key: backupKey
+    };
+  }
+
+  function pickNewerLocalLastBackup(current, candidate) {
+    if (!candidate) return current || null;
+    if (!current) return candidate;
+    return candidate.key.localeCompare(current.key) > 0 ? candidate : current;
+  }
+
+  function resolveLocalLastBackup() {
+    let last = uiState.localLastBackup || null;
+    const pendingKey = uiState.pendingBackupKey;
+    if (pendingKey && pendingKey !== "__pending__") {
+      last = pickNewerLocalLastBackup(last, localLastBackupFromKey(pendingKey, "success"));
+    }
+    return last;
+  }
+
+  function deriveLocalLastBackup(backupsResult) {
+    const backups = backupsResult && Array.isArray(backupsResult.backups) ? backupsResult.backups : [];
+    if (!backups.length) return null;
+    const newest = backups.reduce(function (best, backup) {
+      if (!backup || typeof backup.key !== "string") return best;
+      if (!best) return backup;
+      return backup.key.localeCompare(best.key) > 0 ? backup : best;
+    }, null);
+    if (!newest) return null;
+    const at = newest.createdAt || backupKeyToCreatedAt(newest.key);
+    if (!newest.key || !at) return null;
+    return {
+      status: "success",
+      at: at,
+      key: newest.key
+    };
+  }
+
+  function setLocalLastBackupFromKey(backupKey) {
+    const next = localLastBackupFromKey(backupKey, "success");
+    if (!next) return;
+    uiState.localLastBackup = pickNewerLocalLastBackup(uiState.localLastBackup, next);
+  }
+
+  function syncLocalLastBackupFromApi(backupsResult) {
+    uiState.localLastBackup = pickNewerLocalLastBackup(
+      uiState.localLastBackup,
+      deriveLocalLastBackup(backupsResult)
+    );
+    const pendingKey = uiState.pendingBackupKey;
+    if (pendingKey && pendingKey !== "__pending__") {
+      uiState.localLastBackup = pickNewerLocalLastBackup(
+        uiState.localLastBackup,
+        localLastBackupFromKey(pendingKey, "success")
+      );
+    }
+  }
+
+  function openKvBackupsModal() {
+    if (!auth.isAdmin) return;
+    uiState.openBoardMenuId = null;
+    uiState.dataMenuOpen = false;
+    uiState.backupMenuOpen = false;
+    uiState.createBoardOpen = false;
+    uiState.backupsOpen = true;
+    uiState.backupsLoading = true;
+    uiState.backupsError = null;
+    uiState.backups = [];
+    uiState.backupsProviderId = null;
+    uiState.backupsProviderLabel = TEXT.backups;
+    render();
+    apiGet("/backups").then(function (result) {
+      uiState.backups = result && Array.isArray(result.backups) ? result.backups : [];
+      uiState.backupsLoading = false;
+      render();
+    }).catch(function () {
+      uiState.backupsLoading = false;
+      uiState.backupsError = TEXT.backupLoadFailed;
+      render();
+    });
+  }
+
+  function openCloudBackupsModal(providerId, providerLabel) {
+    if (!auth.isAdmin) return;
+    uiState.openBoardMenuId = null;
+    uiState.dataMenuOpen = false;
+    uiState.backupMenuOpen = false;
+    uiState.createBoardOpen = false;
+    uiState.backupsOpen = true;
+    uiState.backupsLoading = true;
+    uiState.backupsError = null;
+    uiState.backups = [];
+    uiState.backupsProviderId = providerId;
+    uiState.backupsProviderLabel = (providerLabel || providerId) + " 备份";
+    render();
+    apiGet("/cloud-backup/" + encodeURIComponent(providerId) + "/backups").then(function (result) {
+      uiState.backups = result && Array.isArray(result.backups) ? result.backups : [];
+      uiState.backupsLoading = false;
+      render();
+    }).catch(function () {
+      uiState.backupsLoading = false;
+      uiState.backupsError = TEXT.backupLoadFailed;
+      render();
+    });
   }
 
   function renderDataMenu() {
@@ -593,273 +795,6 @@
     text.appendChild(desc);
     button.appendChild(text);
     return button;
-  }
-
-  function renderBackupMenu() {
-    const wrapper = document.createElement("div");
-    wrapper.className = "workspace__menu";
-
-    const connectedCount = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
-      ? uiState.backupStatus.providers.filter(function (provider) { return provider.connected; }).length
-      : 0;
-    const trigger = actionButton("workspace__create-button", "toggle-backup-menu", null, "Cloud backups", [
-      staticIconNode(connectedCount > 0 ? "icon-cloud" : "icon-cloud-upload"),
-      " ",
-      (function () {
-        const span = document.createElement("span");
-        span.textContent = connectedCount > 0 ? "云备份 " + connectedCount : "云备份";
-        return span;
-      })()
-    ]);
-    wrapper.appendChild(trigger);
-
-    if (!uiState.backupMenuOpen) return wrapper;
-
-    const menu = document.createElement("div");
-    menu.className = "backup-menu";
-    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
-      ? uiState.backupStatus.providers
-      : [];
-
-    if (uiState.backupStatusLoading) {
-      const loading = document.createElement("div");
-      loading.className = "backup-menu__message";
-      loading.textContent = "Loading...";
-      menu.appendChild(loading);
-    } else {
-      providers.forEach(function (provider) {
-        menu.appendChild(renderBackupProviderRow(provider));
-      });
-    }
-
-    wrapper.appendChild(menu);
-    return wrapper;
-  }
-
-  function renderBackupProviderRow(provider) {
-    const row = document.createElement("div");
-    row.className = "backup-menu__row";
-
-    const meta = document.createElement("div");
-    meta.className = "backup-menu__meta";
-    const name = document.createElement("span");
-    name.className = "backup-menu__name";
-    name.textContent = provider.label || provider.id;
-    const state = document.createElement("span");
-    state.className = "backup-menu__state";
-    state.textContent = provider.connected ? "已连接" : (provider.configured ? "未连接" : "未配置");
-    meta.appendChild(name);
-    meta.appendChild(state);
-    if (provider.lastBackup) {
-      const last = document.createElement("span");
-      last.className = "backup-menu__last backup-menu__last--" + (provider.lastBackup.status === "success" ? "success" : "failed");
-      last.textContent = formatBackupProviderLastBackup(provider.lastBackup);
-      meta.appendChild(last);
-    }
-    row.appendChild(meta);
-
-    const action = actionButton(
-      provider.connected ? "board-cancel-button" : "board-save-button",
-      provider.connected ? "disconnect-cloud-backup" : "connect-cloud-backup",
-      null,
-      "",
-      [provider.connected ? "断开" : "连接"]
-    );
-    action.dataset.providerId = provider.id;
-    action.disabled = !provider.configured && !provider.connected;
-    row.appendChild(action);
-    return row;
-  }
-
-  function formatBackupProviderLastBackup(lastBackup) {
-    const time = lastBackup && lastBackup.at ? formatDateTime(lastBackup.at) : "";
-    if (lastBackup.status === "success") {
-      return time ? "上次成功 " + time : "上次成功";
-    }
-    const error = lastBackup && lastBackup.error ? ": " + lastBackup.error : "";
-    return (time ? "上次失败 " + time : "上次失败") + error;
-  }
-
-  function renderBackupMenuV2() {
-    const wrapper = document.createElement("div");
-    wrapper.className = "workspace__menu";
-
-    const regularEntry = getRegularBackupEntryV2();
-    const cloudEntries = getCloudBackupEntriesV2();
-    const summary = getBackupSummaryV2(regularEntry, cloudEntries);
-    const trigger = actionButton("workspace__save-status workspace__save-status--" + summary.status, "toggle-backup-menu", null, "Backup status", [
-      staticIconNode(statusIconV2(summary.status)),
-      " ",
-      (function () {
-        const span = document.createElement("span");
-        span.textContent = summary.label;
-        return span;
-      })()
-    ]);
-    wrapper.appendChild(trigger);
-
-    if (!uiState.backupMenuOpen) return wrapper;
-
-    const menu = document.createElement("div");
-    menu.className = "backup-menu backup-menu--grouped";
-    menu.appendChild(renderBackupSectionV2("常规备份", [
-      renderBackupStatusRowV2(regularEntry, { action: "toggle-backups", label: "恢复" })
-    ]));
-    if (uiState.backupStatusLoading) {
-      menu.appendChild(renderBackupSectionV2("云备份", [], "正在读取云备份状态..."));
-    } else {
-      menu.appendChild(renderBackupSectionV2("云备份", cloudEntries.map(function (entry) {
-        return renderBackupStatusRowV2(entry, {
-          action: entry.connected ? "disconnect-cloud-backup" : "connect-cloud-backup",
-          label: entry.connected ? "断开" : "连接",
-          providerId: entry.id,
-          disabled: !entry.configured && !entry.connected,
-          extraActions: entry.connected ? [{
-            action: "toggle-cloud-backups",
-            label: "恢复备份",
-            providerId: entry.id,
-            providerLabel: entry.label
-          }] : []
-        });
-      }), "未连接云备份"));
-    }
-    wrapper.appendChild(menu);
-    return wrapper;
-  }
-
-  function getRegularBackupEntryV2() {
-    const status = syncState.status === "failed"
-      ? "failed"
-      : (syncState.status === "saving" ? "saving" : (syncState.status === "saved" ? "saved" : "idle"));
-    let detail = "保存时自动保留最近 10 份";
-    if (syncState.status === "saving") detail = "正在保存并写入历史备份";
-    if (syncState.status === "failed") detail = syncState.message || "保存失败，未生成新备份";
-    if (syncState.status === "saved") detail = uiState.pendingBackupKey ? "本次修改已写入 KV 历史" : (syncState.message || detail);
-    return {
-      id: "kv-history",
-      label: "KV 历史备份",
-      status: status,
-      detail: detail
-    };
-  }
-
-  function getCloudBackupEntriesV2() {
-    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
-      ? uiState.backupStatus.providers
-      : [];
-    return providers.map(getCloudBackupEntryV2);
-  }
-
-  function getCloudBackupEntryV2(provider) {
-    const last = provider.lastBackup || null;
-    const pendingKey = uiState.pendingBackupKey;
-    const pendingKnown = pendingKey && pendingKey !== "__pending__";
-    const matchesPending = pendingKnown && last && last.key === pendingKey;
-    let status = "idle";
-    let detail = provider.configured ? "未连接" : "未配置 OAuth";
-    if (provider.connected) {
-      status = "pending";
-      detail = "尚无云备份结果";
-      if (pendingKey && (!pendingKnown || !matchesPending)) {
-        status = "saving";
-        detail = "正在备份本次修改";
-      } else if (last) {
-        status = last.status === "success" ? "saved" : "failed";
-        detail = formatCloudBackupLastBackupV2(last);
-      }
-    }
-    return {
-      id: provider.id,
-      label: provider.label || provider.id,
-      status: status,
-      detail: detail,
-      connected: Boolean(provider.connected),
-      configured: Boolean(provider.configured)
-    };
-  }
-
-  function getBackupSummaryV2(regularEntry, cloudEntries) {
-    const entries = [regularEntry].concat(cloudEntries.filter(function (entry) { return entry.connected; }));
-    if (entries.some(function (entry) { return entry.status === "failed"; })) return { status: "failed", label: "备份异常" };
-    if (entries.some(function (entry) { return entry.status === "saving"; })) return { status: "saving", label: "备份中" };
-    if (entries.some(function (entry) { return entry.status === "pending"; })) return { status: "pending", label: "待备份" };
-    if (entries.some(function (entry) { return entry.status === "saved"; })) return { status: "saved", label: "备份正常" };
-    return { status: "idle", label: "云备份" };
-  }
-
-  function statusIconV2(status) {
-    if (status === "failed") return "icon-alert-circle";
-    if (status === "saved") return "icon-check-circle";
-    if (status === "saving") return "icon-refresh-cw";
-    return "icon-clock";
-  }
-
-  function renderBackupSectionV2(title, rows, emptyText) {
-    const section = document.createElement("section");
-    section.className = "backup-menu__section";
-    const heading = document.createElement("div");
-    heading.className = "backup-menu__heading";
-    heading.textContent = title;
-    section.appendChild(heading);
-    if (rows.length) {
-      rows.forEach(function (row) { section.appendChild(row); });
-    } else {
-      const empty = document.createElement("div");
-      empty.className = "backup-menu__message";
-      empty.textContent = emptyText || "暂无状态";
-      section.appendChild(empty);
-    }
-    return section;
-  }
-
-  function renderBackupStatusRowV2(entry, actionConfig) {
-    const row = document.createElement("div");
-    row.className = "backup-menu__row backup-menu__row--" + entry.status;
-    row.appendChild(staticIconNode(entry.status === "failed" ? "icon-x-circle" : statusIconV2(entry.status)));
-
-    const meta = document.createElement("div");
-    meta.className = "backup-menu__meta";
-    const name = document.createElement("span");
-    name.className = "backup-menu__name";
-    name.textContent = entry.label;
-    const detail = document.createElement("span");
-    detail.className = "backup-menu__last backup-menu__last--" + entry.status;
-    detail.textContent = entry.detail;
-    meta.appendChild(name);
-    meta.appendChild(detail);
-    row.appendChild(meta);
-
-    if (actionConfig) {
-      const actions = document.createElement("div");
-      actions.className = "backup-menu__actions";
-      (actionConfig.extraActions || []).forEach(function (extra) {
-        actions.appendChild(createBackupRowAction(extra, "board-save-button"));
-      });
-      actions.appendChild(createBackupRowAction(actionConfig, actionConfig.action === "disconnect-cloud-backup" ? "board-cancel-button" : "board-save-button"));
-      row.appendChild(actions);
-    }
-    return row;
-  }
-
-  function createBackupRowAction(actionConfig, className) {
-      const action = actionButton(
-        className,
-        actionConfig.action,
-        null,
-        "",
-        [actionConfig.label]
-      );
-      if (actionConfig.providerId) action.dataset.providerId = actionConfig.providerId;
-      if (actionConfig.providerLabel) action.dataset.providerLabel = actionConfig.providerLabel;
-      if (actionConfig.disabled) action.disabled = true;
-      return action;
-  }
-
-  function formatCloudBackupLastBackupV2(lastBackup) {
-    const time = lastBackup && lastBackup.at ? formatDateTime(lastBackup.at) : "";
-    if (lastBackup.status === "success") return time ? "最近成功 " + time : "最近成功";
-    const error = lastBackup && lastBackup.error ? ": " + lastBackup.error : "";
-    return (time ? "最近失败 " + time : "最近失败") + error;
   }
 
   function renderBackupsModal() {
@@ -1956,7 +1891,7 @@
     right.appendChild(github);
     if (auth.isAdmin) {
       right.appendChild(renderDataMenu());
-      right.appendChild(renderBackupMenuV2());
+      right.appendChild(renderBackupMenu());
       right.appendChild(actionButton("workspace__create-button", "toggle-create-board", null, "", [
         staticIconNode("icon-plus"),
         " " + TEXT.createBoard
@@ -2842,10 +2777,9 @@
         uiState.openBoardMenuId = null;
         render();
       }
-      if ((uiState.dataMenuOpen || uiState.backupMenuOpen || uiState.saveStatusMenuOpen) && !event.target.closest(".workspace__menu")) {
+      if ((uiState.dataMenuOpen || uiState.backupMenuOpen) && !event.target.closest(".workspace__menu")) {
         uiState.dataMenuOpen = false;
         uiState.backupMenuOpen = false;
-        uiState.saveStatusMenuOpen = false;
         render();
       }
       return;
@@ -2903,29 +2837,7 @@
     }
 
     if (action === "toggle-backups") {
-      if (!auth.isAdmin) {
-        return;
-      }
-      uiState.openBoardMenuId = null;
-      uiState.dataMenuOpen = false;
-      uiState.backupMenuOpen = false;
-      uiState.saveStatusMenuOpen = false;
-      uiState.createBoardOpen = false;
-      uiState.backupsOpen = true;
-      uiState.backupsLoading = true;
-      uiState.backupsError = null;
-      uiState.backupsProviderId = null;
-      uiState.backupsProviderLabel = TEXT.backups;
-      render();
-      apiGet("/backups").then(function (result) {
-        uiState.backups = result && Array.isArray(result.backups) ? result.backups : [];
-        uiState.backupsLoading = false;
-        render();
-      }).catch(function () {
-        uiState.backupsLoading = false;
-        uiState.backupsError = TEXT.backupLoadFailed;
-        render();
-      });
+      openKvBackupsModal();
       return;
     }
 
@@ -2935,26 +2847,7 @@
       }
       const providerId = button.getAttribute("data-provider-id");
       if (!providerId) return;
-      uiState.openBoardMenuId = null;
-      uiState.dataMenuOpen = false;
-      uiState.backupMenuOpen = false;
-      uiState.saveStatusMenuOpen = false;
-      uiState.createBoardOpen = false;
-      uiState.backupsOpen = true;
-      uiState.backupsLoading = true;
-      uiState.backupsError = null;
-      uiState.backupsProviderId = providerId;
-      uiState.backupsProviderLabel = (button.getAttribute("data-provider-label") || providerId) + " 备份";
-      render();
-      apiGet("/cloud-backup/" + encodeURIComponent(providerId) + "/backups").then(function (result) {
-        uiState.backups = result && Array.isArray(result.backups) ? result.backups : [];
-        uiState.backupsLoading = false;
-        render();
-      }).catch(function () {
-        uiState.backupsLoading = false;
-        uiState.backupsError = TEXT.backupLoadFailed;
-        render();
-      });
+      openCloudBackupsModal(providerId, button.getAttribute("data-provider-label"));
       return;
     }
 
@@ -3015,7 +2908,6 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
-      uiState.saveStatusMenuOpen = false;
       exportFullBackup();
       render();
       return;
@@ -3027,7 +2919,6 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
-      uiState.saveStatusMenuOpen = false;
       pickFullBackupFile();
       render();
       return;
@@ -3039,7 +2930,6 @@
       }
       uiState.openBoardMenuId = null;
       uiState.backupMenuOpen = false;
-      uiState.saveStatusMenuOpen = false;
       uiState.dataMenuOpen = !uiState.dataMenuOpen;
       render();
       return;
@@ -3051,25 +2941,9 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
-      uiState.saveStatusMenuOpen = false;
       uiState.backupMenuOpen = !uiState.backupMenuOpen;
       render();
       if (uiState.backupMenuOpen) {
-        loadBackupStatus();
-      }
-      return;
-    }
-
-    if (action === "toggle-save-status-menu") {
-      if (!auth.isAdmin) {
-        return;
-      }
-      uiState.openBoardMenuId = null;
-      uiState.dataMenuOpen = false;
-      uiState.backupMenuOpen = false;
-      uiState.saveStatusMenuOpen = !uiState.saveStatusMenuOpen;
-      render();
-      if (uiState.saveStatusMenuOpen) {
         loadBackupStatus();
       }
       return;
@@ -3276,6 +3150,7 @@
         auth.isAdmin = true;
         auth.csrfToken = result && typeof result.csrfToken === "string" ? result.csrfToken : null;
         uiState.backupStatus = null;
+        uiState.localLastBackup = null;
         uiState.loginOpen = false;
         uiState.loginError = null;
         loadServerBoardState().catch(function () {}).finally(function () {
