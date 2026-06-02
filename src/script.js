@@ -9,6 +9,7 @@
   const BOARD_WIDTH = 250;
   const BOARD_GAP = 10;
   const MIN_TWO_COLUMN_WIDTH = BOARD_WIDTH * 2 + BOARD_GAP;
+  const SINGLE_COLUMN_SIDE_GUTTER = 16;
   const BOARD_HEADER_HEIGHT = 24;
   const BOARD_CHROME_HEIGHT = 40;
   const BOARD_LIST_MIN_HEIGHT = 64;
@@ -1723,12 +1724,20 @@
     return Math.max(2, Math.floor((containerWidth + BOARD_GAP) / (BOARD_WIDTH + BOARD_GAP)));
   }
 
-  function getColumnWidth(columns, contentWidth) {
+  function getColumnWidth(columns, contentWidth, sideGutter) {
     if (columns === 1) {
-      return Math.max(0, contentWidth);
+      return Math.max(0, contentWidth - sideGutter * 2);
     }
 
     return BOARD_WIDTH;
+  }
+
+  function getLayoutSideGutter(columns, contentWidth) {
+    if (columns !== 1) {
+      return 0;
+    }
+
+    return Math.min(SINGLE_COLUMN_SIDE_GUTTER, Math.floor(contentWidth / 2));
   }
 
   function createColumnBuckets(entries, columns) {
@@ -1815,9 +1824,10 @@
     const columns = dragging && dragging.metrics
       ? dragging.metrics.columns
       : getColumnCount(contentWidth);
+    const sideGutter = getLayoutSideGutter(columns, contentWidth);
     const columnWidth = dragging && dragging.metrics
       ? dragging.metrics.columnWidth
-      : getColumnWidth(columns, contentWidth);
+      : getColumnWidth(columns, contentWidth, sideGutter);
     const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * BOARD_GAP;
     const heights = Array(columns).fill(0);
     const positions = [];
@@ -1851,7 +1861,8 @@
       positions: positions,
       width: actualWidth,
       height: Math.max(0, Math.max.apply(null, heights) - BOARD_GAP),
-      columns: columns
+      columns: columns,
+      sideGutter: sideGutter
     };
   }
 
@@ -2071,8 +2082,7 @@
       return;
     }
 
-    wall.style.width = masonryLayout.width + "px";
-    wall.style.height = masonryLayout.height + "px";
+    applyBoardWallLayoutStyles(wall);
 
     masonryLayout.positions.forEach(function (entry) {
       if (entry.type === "placeholder") {
@@ -2097,6 +2107,14 @@
     });
   }
 
+  function applyBoardWallLayoutStyles(wall) {
+    const sideGutter = masonryLayout.sideGutter || 0;
+    wall.style.width = masonryLayout.width + "px";
+    wall.style.height = masonryLayout.height + "px";
+    wall.style.marginLeft = sideGutter ? sideGutter + "px" : "";
+    wall.style.marginRight = sideGutter ? sideGutter + "px" : "";
+  }
+
   function scheduleRowDragLayoutSync() {
     if (uiState.rowDragLayoutFrame) {
       return;
@@ -2117,8 +2135,7 @@
 
     const wall = app.querySelector(".board-wall");
     if (wall) {
-      wall.style.width = masonryLayout.width + "px";
-      wall.style.height = masonryLayout.height + "px";
+      applyBoardWallLayoutStyles(wall);
       wall.replaceChildren(renderBoardLayer());
       syncBoardWallLayout();
     }
@@ -2616,8 +2633,7 @@
       return;
     }
 
-    wall.style.width = masonryLayout.width + "px";
-    wall.style.height = masonryLayout.height + "px";
+    applyBoardWallLayoutStyles(wall);
 
     masonryLayout.positions.forEach(function (entry) {
       if (entry.type !== "board" || entry.boardId === resizing.boardId) {
