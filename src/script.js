@@ -2129,6 +2129,21 @@
     }
   }
 
+  function rerenderBoardInPlace(boardId) {
+    const board = findBoard(boardId);
+    const slot = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]');
+    if (!board || !slot) {
+      rerenderBoardWall(false);
+      return;
+    }
+
+    const scrollState = captureScrollState();
+    slot.className = "board-slot" + (uiState.openBoardMenuId === boardId ? " has-open-menu" : "");
+    slot.replaceChildren(renderBoard(board));
+    syncBoardWallLayout();
+    restoreScrollState(scrollState);
+  }
+
   function render() {
     const previousRects = captureBoardRects();
     const scrollState = captureScrollState();
@@ -2276,7 +2291,7 @@
     if (auth.isAdmin) {
       saveBoards();
     }
-    rerenderBoardWall(false);
+    rerenderBoardInPlace(boardId);
   }
 
   function clearRowDropIndicators() {
