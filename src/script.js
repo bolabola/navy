@@ -8,7 +8,7 @@
   const DEFAULT_NEW_BOARD_HEIGHT = 240;
   const BOARD_WIDTH = 250;
   const BOARD_GAP = 10;
-  const MOBILE_BREAKPOINT = 900;
+  const MIN_TWO_COLUMN_WIDTH = BOARD_WIDTH * 2 + BOARD_GAP;
   const BOARD_HEADER_HEIGHT = 24;
   const BOARD_CHROME_HEIGHT = 40;
   const BOARD_LIST_MIN_HEIGHT = 64;
@@ -1707,8 +1707,19 @@
   }
 
   function getColumnCount(containerWidth) {
-    const minColumnWidth = window.innerWidth <= MOBILE_BREAKPOINT ? 220 : BOARD_WIDTH;
-    return Math.max(1, Math.floor((containerWidth + BOARD_GAP) / (minColumnWidth + BOARD_GAP)));
+    if (containerWidth < MIN_TWO_COLUMN_WIDTH) {
+      return 1;
+    }
+
+    return Math.max(2, Math.floor((containerWidth + BOARD_GAP) / (BOARD_WIDTH + BOARD_GAP)));
+  }
+
+  function getColumnWidth(columns, contentWidth) {
+    if (columns === 1) {
+      return Math.max(0, contentWidth);
+    }
+
+    return BOARD_WIDTH;
   }
 
   function createColumnBuckets(entries, columns) {
@@ -1797,7 +1808,7 @@
       : getColumnCount(contentWidth);
     const columnWidth = dragging && dragging.metrics
       ? dragging.metrics.columnWidth
-      : (columns === 1 ? Math.min(BOARD_WIDTH, contentWidth) : BOARD_WIDTH);
+      : getColumnWidth(columns, contentWidth);
     const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * BOARD_GAP;
     const heights = Array(columns).fill(0);
     const positions = [];
