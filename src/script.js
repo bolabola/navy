@@ -346,7 +346,7 @@
 
   function startPendingCloudBackup(backupKey) {
     uiState.pendingBackupKey = backupKey || "__pending__";
-    render();
+    updateBackupMenu();
   }
 
   function clearPendingCloudBackup() {
@@ -355,7 +355,7 @@
       window.clearTimeout(uiState.backupStatusPollTimer);
       uiState.backupStatusPollTimer = null;
     }
-    render();
+    updateBackupMenu();
   }
 
   function handleSaveConflict() {
@@ -370,7 +370,16 @@
   }
 
   function updateSyncIndicator() {
-    render();
+    updateBackupMenu();
+  }
+
+  function updateBackupMenu() {
+    const trigger = app.querySelector(".workspace__save-status");
+    const wrapper = trigger ? trigger.closest(".workspace__menu") : null;
+    if (!wrapper) {
+      return;
+    }
+    wrapper.replaceWith(renderBackupMenu());
   }
 
   function loadBackupStatus() {
@@ -391,7 +400,7 @@
       uiState.backupStatusRequest = null;
       uiState.backupStatusLoading = false;
       updatePendingCloudBackupState();
-      render();
+      updateBackupMenu();
     });
     return uiState.backupStatusRequest;
   }
@@ -417,7 +426,7 @@
       loadBackupStatus().finally(function () {
         if (!uiState.pendingBackupKey || uiState.pendingBackupKey !== backupKey || isPendingCloudBackupResolved()) {
           updatePendingCloudBackupState();
-          render();
+          updateBackupMenu();
           return;
         }
         if (attempt < 8) {
@@ -2111,6 +2120,7 @@
       wall.style.width = masonryLayout.width + "px";
       wall.style.height = masonryLayout.height + "px";
       wall.replaceChildren(renderBoardLayer());
+      syncBoardWallLayout();
     }
 
     restoreScrollState(scrollState);
@@ -2161,6 +2171,10 @@
 
   function captureScrollState() {
     const state = {
+      page: {
+        left: window.scrollX || window.pageXOffset || 0,
+        top: window.scrollY || window.pageYOffset || 0
+      },
       wall: null,
       lists: {}
     };
@@ -2195,6 +2209,9 @@
         list.scrollTop = saved.top;
       }
     });
+    if (state.page) {
+      window.scrollTo(state.page.left, state.page.top);
+    }
   }
 
   function estimateBoardHeight(board) {
@@ -2259,7 +2276,7 @@
     if (auth.isAdmin) {
       saveBoards();
     }
-    render();
+    rerenderBoardWall(false);
   }
 
   function clearRowDropIndicators() {
