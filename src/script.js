@@ -1740,13 +1740,34 @@
     return Math.min(SINGLE_COLUMN_SIDE_GUTTER, Math.floor(contentWidth / 2));
   }
 
+  function shouldUseStoredColumns(entries, columns) {
+    if (columns <= 1 || entries.length <= 1) {
+      return true;
+    }
+
+    const storedColumns = entries
+      .filter(function (entry) {
+        return Number.isInteger(entry.column);
+      })
+      .map(function (entry) {
+        return Math.min(Math.max(entry.column, 0), columns - 1);
+      });
+
+    if (storedColumns.length !== entries.length) {
+      return false;
+    }
+
+    return new Set(storedColumns).size > 1;
+  }
+
   function createColumnBuckets(entries, columns) {
     const buckets = Array.from({ length: columns }, function () {
       return [];
     });
+    const useStoredColumns = shouldUseStoredColumns(entries, columns);
 
     entries.forEach(function (entry, index) {
-      const targetColumn = Number.isInteger(entry.column)
+      const targetColumn = useStoredColumns && Number.isInteger(entry.column)
         ? Math.min(Math.max(entry.column, 0), columns - 1)
         : index % columns;
       buckets[targetColumn].push(entry);
