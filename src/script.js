@@ -73,6 +73,8 @@
     urlCount: "个网址",
     expand: "展开",
     collapse: "折叠",
+    expandAll: "全部恢复",
+    collapseAll: "全部折叠",
     moveBoard: "拖拽 Board",
     toggleView: "显示模式",
     resize: "拖动调整高度",
@@ -1064,6 +1066,33 @@
     return button;
   }
 
+  function shouldCollapseAllBoards() {
+    return boards.some(function (board) {
+      return !board.collapsed;
+    });
+  }
+
+  function getAllCollapseButtonLabel() {
+    return shouldCollapseAllBoards() ? TEXT.collapseAll : TEXT.expandAll;
+  }
+
+  function getAllCollapseButtonIcon() {
+    return shouldCollapseAllBoards() ? "icon-chevrons-up" : "icon-chevrons-down";
+  }
+
+  function syncAllCollapseButton() {
+    const button = app.querySelector('[data-action="toggle-all-collapse"]');
+    if (!button) {
+      return;
+    }
+
+    const label = getAllCollapseButtonLabel();
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.disabled = boards.length === 0;
+    button.replaceChildren(staticIconNode(getAllCollapseButtonIcon()));
+  }
+
   function createModalHeader(title, closeAction) {
     const header = document.createElement("div");
     header.className = "modal-panel__header";
@@ -1932,6 +1961,12 @@
 
     const right = document.createElement("div");
     right.className = "workspace__navbar-right";
+    const collapseAll = actionButton("workspace__collapse-all-button", "toggle-all-collapse", null, getAllCollapseButtonLabel(), [
+      staticIconNode(getAllCollapseButtonIcon())
+    ]);
+    collapseAll.setAttribute("aria-label", getAllCollapseButtonLabel());
+    collapseAll.disabled = boards.length === 0;
+    right.appendChild(collapseAll);
     const github = document.createElement("a");
     github.className = "workspace__github-link";
     github.href = GITHUB_URL;
@@ -2330,6 +2365,29 @@
       saveBoards();
     }
     rerenderBoardInPlace(boardId);
+  }
+
+  function setAllBoardsCollapsed(collapsed) {
+    if (!boards.length || boards.every(function (board) {
+      return board.collapsed === collapsed;
+    })) {
+      return;
+    }
+
+    if (collapsed) {
+      uiState.openAddBoardId = null;
+      uiState.editBoardId = null;
+    }
+    uiState.openBoardMenuId = null;
+
+    boards = boards.map(function (board) {
+      return Object.assign({}, board, { collapsed: collapsed });
+    });
+    if (auth.isAdmin) {
+      saveBoards();
+    }
+    rerenderBoardWall(false);
+    syncAllCollapseButton();
   }
 
   function clearRowDropIndicators() {
@@ -3026,6 +3084,11 @@
       if (uiState.backupMenuOpen) {
         loadBackupStatus();
       }
+      return;
+    }
+
+    if (action === "toggle-all-collapse") {
+      setAllBoardsCollapsed(shouldCollapseAllBoards());
       return;
     }
 

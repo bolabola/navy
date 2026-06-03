@@ -104,10 +104,12 @@ a {
   flex-shrink: 0;
 }
 
+.workspace__collapse-all-button,
 .workspace__create-button,
 .workspace__github-link {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   border: 0;
   border-radius: 999px;
@@ -643,6 +645,17 @@ a {
   font-size: 14px !important;
   line-height: 1 !important;
   vertical-align: middle;
+}
+
+.workspace__collapse-all-button {
+  width: 32px;
+  min-width: 32px;
+  padding: 6px;
+}
+
+.workspace__collapse-all-button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .board-card__title {
@@ -1487,6 +1500,7 @@ body {
   box-shadow: none;
 }
 
+.workspace__collapse-all-button,
 .workspace__create-button,
 .workspace__github-link {
   border-radius: 3px;
@@ -1495,6 +1509,7 @@ body {
   box-shadow: none;
 }
 
+.workspace__collapse-all-button:hover,
 .workspace__create-button:hover,
 .workspace__github-link:hover,
 .workspace__auth-button:hover {
