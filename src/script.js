@@ -73,7 +73,7 @@
     urlCount: "个网址",
     expand: "展开",
     collapse: "折叠",
-    expandAll: "全部恢复",
+    expandAll: "恢复状态",
     collapseAll: "全部折叠",
     moveBoard: "拖拽 Board",
     toggleView: "显示模式",
@@ -137,7 +137,8 @@
     backupsError: null,
     backups: [],
     backupsProviderId: null,
-    backupsProviderLabel: ""
+    backupsProviderLabel: "",
+    allCollapseSnapshot: null
   };
 
   const auth = {
@@ -1067,6 +1068,10 @@
   }
 
   function shouldCollapseAllBoards() {
+    if (uiState.allCollapseSnapshot) {
+      return false;
+    }
+
     return boards.some(function (board) {
       return !board.collapsed;
     });
@@ -1090,7 +1095,7 @@
     button.title = label;
     button.setAttribute("aria-label", label);
     button.disabled = boards.length === 0;
-    button.replaceChildren(staticIconNode(getAllCollapseButtonIcon()));
+    button.replaceChildren(staticIconNode(getAllCollapseButtonIcon()), document.createTextNode(label));
   }
 
   function createModalHeader(title, closeAction) {
@@ -1962,7 +1967,8 @@
     const right = document.createElement("div");
     right.className = "workspace__navbar-right";
     const collapseAll = actionButton("workspace__collapse-all-button", "toggle-all-collapse", null, getAllCollapseButtonLabel(), [
-      staticIconNode(getAllCollapseButtonIcon())
+      staticIconNode(getAllCollapseButtonIcon()),
+      getAllCollapseButtonLabel()
     ]);
     collapseAll.setAttribute("aria-label", getAllCollapseButtonLabel());
     collapseAll.disabled = boards.length === 0;
@@ -2367,21 +2373,56 @@
     rerenderBoardInPlace(boardId);
   }
 
-  function setAllBoardsCollapsed(collapsed) {
-    if (!boards.length || boards.every(function (board) {
-      return board.collapsed === collapsed;
-    })) {
+  function rememberAllCollapseSnapshot() {
+    uiState.allCollapseSnapshot = boards.map(function (board) {
+      return {
+        id: board.id,
+        collapsed: Boolean(board.collapsed)
+      };
+    });
+  }
+
+  function restoreAllCollapseSnapshot() {
+    const snapshot = uiState.allCollapseSnapshot;
+    uiState.allCollapseSnapshot = null;
+    if (!snapshot) {
       return;
     }
 
-    if (collapsed) {
-      uiState.openAddBoardId = null;
-      uiState.editBoardId = null;
-    }
+    const collapsedById = new Map(snapshot.map(function (entry) {
+      return [entry.id, entry.collapsed];
+    }));
+
     uiState.openBoardMenuId = null;
+    uiState.openAddBoardId = null;
+    uiState.editBoardId = null;
 
     boards = boards.map(function (board) {
-      return Object.assign({}, board, { collapsed: collapsed });
+      if (!collapsedById.has(board.id)) {
+        return board;
+      }
+
+      return Object.assign({}, board, { collapsed: collapsedById.get(board.id) });
+    });
+    if (auth.isAdmin) {
+      saveBoards();
+    }
+    rerenderBoardWall(false);
+    syncAllCollapseButton();
+  }
+
+  function collapseAllBoards() {
+    if (!boards.length || !shouldCollapseAllBoards()) {
+      return;
+    }
+
+    rememberAllCollapseSnapshot();
+    uiState.openBoardMenuId = null;
+    uiState.openAddBoardId = null;
+    uiState.editBoardId = null;
+
+    boards = boards.map(function (board) {
+      return Object.assign({}, board, { collapsed: true });
     });
     if (auth.isAdmin) {
       saveBoards();
@@ -3088,7 +3129,11 @@
     }
 
     if (action === "toggle-all-collapse") {
-      setAllBoardsCollapsed(shouldCollapseAllBoards());
+      if (uiState.allCollapseSnapshot) {
+        restoreAllCollapseSnapshot();
+      } else {
+        collapseAllBoards();
+      }
       return;
     }
 

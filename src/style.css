@@ -648,9 +648,9 @@ a {
 }
 
 .workspace__collapse-all-button {
-  width: 32px;
-  min-width: 32px;
-  padding: 6px;
+  min-width: max-content;
+  padding: 6px 10px;
+  white-space: nowrap;
 }
 
 .workspace__collapse-all-button:disabled {
