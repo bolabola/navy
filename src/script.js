@@ -33,6 +33,9 @@
   const ICON_NAME_RE = /^[a-z0-9-]+$/;
   const ICON_PICKER_OVERFLOW_LIMIT = 200;
   const IMPORT_MAX_URLS = 100;
+  const BOOKMARK_IMPORT_MAX_BOARDS = 100;
+  const BOOKMARK_IMPORT_MAX_ITEMS_PER_BOARD = 100;
+  const BOOKMARK_IMPORT_MAX_TABS_PER_BOARD = 24;
   const URL_TITLE_BATCH_SIZE = 30;
   const FULL_BACKUP_SCHEMA = "board-trello-v1";
   const URL_EXTRACT_RE = /https?:\/\/[^\s<>"'`]+/gi;
@@ -515,6 +518,7 @@
         }));
       });
     }
+    menu.appendChild(workspaceMenuItem("import-bookmarks-html", "icon-bookmark", "导入收藏 HTML", "从浏览器导出的书签文件创建 boards"));
     wrapper.appendChild(menu);
     return wrapper;
   }
@@ -3501,6 +3505,17 @@
       return;
     }
 
+    if (action === "import-bookmarks-html") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
+      pickBookmarksHtmlFile();
+      render();
+      return;
+    }
+
     if (action === "toggle-data-menu") {
       if (!auth.isAdmin) {
         return;
@@ -4060,6 +4075,22 @@
     setTimeout(function () { input.remove(); }, 0);
   }
 
+  function pickBookmarksHtmlFile() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".html,.htm,text/html";
+    input.style.display = "none";
+    input.addEventListener("change", function () {
+      const file = input.files && input.files[0];
+      if (file) {
+        handleBookmarksHtmlImport(file);
+      }
+    });
+    document.body.appendChild(input);
+    input.click();
+    setTimeout(function () { input.remove(); }, 0);
+  }
+
   function exportFullBackup() {
     const payload = {
       schema: FULL_BACKUP_SCHEMA,
@@ -4143,6 +4174,229 @@
       throw new Error("Invalid backup");
     }
     return normalizeBoards(source);
+  }
+
+  function handleBookmarksHtmlImport(file) {
+    const reader = new FileReader();
+    reader.onerror = function () {
+      window.alert("导入收藏 HTML 失败。");
+    };
+    reader.onload = function () {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        const tree = parseBookmarksHtml(text);
+        const foundCount = countBookmarkBranchLinks(tree);
+        const importedBoards = buildBookmarkImportBoards(tree);
+        const importedCount = importedBoards.reduce(function (count, board) {
+          return count + board.items.length;
+        }, 0);
+        if (!importedBoards.length || importedCount === 0) {
+          if (foundCount > 0 && boards.length >= BOOKMARK_IMPORT_MAX_BOARDS) {
+            window.alert("当前 board 数量已达到上限，无法继续导入。");
+            return;
+          }
+          window.alert("收藏 HTML 里没找到可导入的网址。");
+          return;
+        }
+        boards = boards.concat(importedBoards);
+        uiState.openBoardMenuId = null;
+        uiState.openAddBoardId = null;
+        uiState.editBoardId = null;
+        uiState.editItemId = null;
+        saveBoards();
+        render();
+        window.alert("已导入 " + importedBoards.length + " 个 board，" + importedCount + " 个网址。"
+          + (foundCount > importedCount ? " 当前每个 board 最多保存 100 个网址，已自动截断。" : ""));
+      } catch (error) {
+        window.alert("导入收藏 HTML 失败。");
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  function parseBookmarksHtml(text) {
+    const doc = new DOMParser().parseFromString(text, "text/html");
+    const rootDl = doc.querySelector("dl");
+    if (!rootDl) {
+      return { links: [], folders: [] };
+    }
+    return parseBookmarkDl(rootDl);
+  }
+
+  function parseBookmarkDl(dl) {
+    const branch = { links: [], folders: [] };
+    let pendingFolder = null;
+    Array.from(dl.children).forEach(function (child) {
+      const tag = child.tagName;
+      if (tag === "DT") {
+        const folderTitle = directChildTag(child, "H3");
+        const link = directChildTag(child, "A");
+        if (folderTitle) {
+          pendingFolder = {
+            title: normalizeBookmarkTitle(folderTitle.textContent) || "未命名文件夹",
+            links: [],
+            folders: []
+          };
+          branch.folders.push(pendingFolder);
+          const nestedDl = directChildTag(child, "DL");
+          if (nestedDl) {
+            mergeBookmarkBranch(pendingFolder, parseBookmarkDl(nestedDl));
+            pendingFolder = null;
+          }
+          return;
+        }
+        if (link) {
+          const item = readBookmarkLink(link);
+          if (item) branch.links.push(item);
+        }
+        return;
+      }
+      if (tag === "DL") {
+        const parsed = parseBookmarkDl(child);
+        if (pendingFolder) {
+          mergeBookmarkBranch(pendingFolder, parsed);
+          pendingFolder = null;
+        } else {
+          mergeBookmarkBranch(branch, parsed);
+        }
+      }
+    });
+    return branch;
+  }
+
+  function directChildTag(node, tagName) {
+    const wanted = String(tagName || "").toUpperCase();
+    return Array.from(node.children).find(function (child) {
+      return child.tagName === wanted;
+    }) || null;
+  }
+
+  function mergeBookmarkBranch(target, source) {
+    target.links = target.links.concat(source.links || []);
+    target.folders = target.folders.concat(source.folders || []);
+  }
+
+  function readBookmarkLink(anchor) {
+    const rawUrl = anchor.getAttribute("href") || "";
+    let url;
+    try {
+      url = normalizeUrl(rawUrl);
+    } catch (error) {
+      return null;
+    }
+    return {
+      title: normalizeBookmarkTitle(anchor.textContent) || displayName(url, ""),
+      url: url
+    };
+  }
+
+  function normalizeBookmarkTitle(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function buildBookmarkImportBoards(tree) {
+    const result = [];
+    const usedTitles = new Set(boards.map(function (board) {
+      return String(board.title || "").trim().toLowerCase();
+    }));
+
+    if (tree.links && tree.links.length && boards.length + result.length < BOOKMARK_IMPORT_MAX_BOARDS) {
+      const bookmarkBar = createBookmarkBoard("书签栏", tree.links, [], usedTitles, result.length);
+      if (bookmarkBar) result.push(bookmarkBar);
+    }
+
+    (tree.folders || []).forEach(function (folder) {
+      if (boards.length + result.length >= BOOKMARK_IMPORT_MAX_BOARDS) return;
+      const board = createBookmarkBoard(folder.title, folder.links, folder.folders, usedTitles, result.length);
+      if (board) result.push(board);
+    });
+
+    return result;
+  }
+
+  function createBookmarkBoard(title, directLinks, childFolders, usedTitles, importIndex) {
+    const tabs = [{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }];
+    const items = [];
+    appendBookmarkItems(items, directLinks || [], DEFAULT_TAB_ID);
+
+    const usedTabNames = new Set([DEFAULT_TAB_NAME.toLowerCase()]);
+    (childFolders || []).forEach(function (folder) {
+      if (items.length >= BOOKMARK_IMPORT_MAX_ITEMS_PER_BOARD || tabs.length >= BOOKMARK_IMPORT_MAX_TABS_PER_BOARD) return;
+      const links = collectBookmarkLinks(folder);
+      if (!links.length) return;
+      const tab = {
+        id: uid("tab"),
+        name: uniqueBookmarkName(folder.title, usedTabNames, BOARD_TAB_NAME_MAX_LENGTH)
+      };
+      const before = items.length;
+      appendBookmarkItems(items, links, tab.id);
+      if (items.length === before) return;
+      tabs.push(tab);
+    });
+
+    if (!items.length) return null;
+
+    return {
+      id: uid("board"),
+      title: uniqueBookmarkName(title || "书签", usedTitles, 80),
+      accent: BOARD_ACCENTS[(boards.length + importIndex) % BOARD_ACCENTS.length],
+      icon: "bookmark",
+      height: DEFAULT_NEW_BOARD_HEIGHT,
+      collapsed: false,
+      column: getImportBoardColumn(importIndex),
+      displayMode: "list",
+      tabs: tabs,
+      activeTabId: items.some(function (item) { return item.tabId === DEFAULT_TAB_ID; }) ? DEFAULT_TAB_ID : tabs[1].id,
+      items: items
+    };
+  }
+
+  function createBookmarkItem(link, tabId) {
+    return {
+      id: uid("item"),
+      name: link.title || displayName(link.url, ""),
+      url: link.url,
+      tabId: tabId
+    };
+  }
+
+  function appendBookmarkItems(items, links, tabId) {
+    for (let index = 0; index < links.length && items.length < BOOKMARK_IMPORT_MAX_ITEMS_PER_BOARD; index += 1) {
+      items.push(createBookmarkItem(links[index], tabId));
+    }
+  }
+
+  function collectBookmarkLinks(folder) {
+    let links = (folder && folder.links) ? folder.links.slice() : [];
+    (folder && folder.folders ? folder.folders : []).forEach(function (child) {
+      links = links.concat(collectBookmarkLinks(child));
+    });
+    return links;
+  }
+
+  function countBookmarkBranchLinks(branch) {
+    return (branch && branch.links ? branch.links.length : 0)
+      + (branch && branch.folders ? branch.folders : []).reduce(function (count, folder) {
+        return count + countBookmarkBranchLinks(folder);
+      }, 0);
+  }
+
+  function uniqueBookmarkName(rawName, usedNames, maxLength) {
+    const base = normalizeBookmarkTitle(rawName).slice(0, maxLength || 80) || "未命名";
+    let candidate = base;
+    let index = 2;
+    while (usedNames.has(candidate.toLowerCase())) {
+      const suffix = " " + index;
+      candidate = base.slice(0, Math.max(1, (maxLength || 80) - suffix.length)) + suffix;
+      index += 1;
+    }
+    usedNames.add(candidate.toLowerCase());
+    return candidate;
+  }
+
+  function getImportBoardColumn(importIndex) {
+    const columns = masonryLayout.columns;
+    return columns && columns > 0 ? (boards.length + importIndex) % columns : null;
   }
 
   function handleImportFile(boardId, file) {
