@@ -1681,12 +1681,6 @@
     name.className = "link-row__name";
     name.textContent = urlOnly ? displayUrlWithoutProtocol(url) : title;
     text.appendChild(name);
-    if (!iconOnly && !urlOnly && item.description) {
-      const desc = document.createElement("span");
-      desc.className = "link-row__description";
-      desc.textContent = item.description;
-      text.appendChild(desc);
-    }
     anchor.appendChild(text);
     row.appendChild(anchor);
 
@@ -1716,7 +1710,14 @@
 
     const row = document.createElement("div");
     row.className = "item-edit-form__row";
-    row.appendChild(renderIconPickerWidget("icon", item.icon || "link"));
+    const iconPicker = renderIconPickerWidget("icon", item.icon || "link");
+    if (!item.icon) {
+      const current = iconPicker.querySelector('[data-role="icon-picker-current"]');
+      const iconInput = iconPicker.querySelector('input[name="icon"]');
+      if (iconInput) iconInput.value = "";
+      if (current) current.replaceChildren(faviconPreviewNode(item.url));
+    }
+    row.appendChild(iconPicker);
     const iconMode = document.createElement("input");
     iconMode.type = "hidden";
     iconMode.name = "itemIconMode";
