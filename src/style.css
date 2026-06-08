@@ -1017,6 +1017,14 @@ body.is-board-dragging {
   line-height: 1 !important;
 }
 
+.icon-picker-trigger__favicon,
+.icon-picker-trigger__icon svg {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
 .icon-picker-trigger__caret {
   font-size: 14px !important;
   line-height: 1 !important;

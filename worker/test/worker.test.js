@@ -838,6 +838,8 @@ test("logout clears cookie", async () => {
 
 test("url titles returns title and description metadata", async () => {
   const previousFetch = globalThis.fetch;
+  const previousAbortSignalTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = undefined;
   globalThis.fetch = async () => new Response(
     "<!doctype html><html><head><title>Example &amp; Tools</title><meta name=\"description\" content=\"Helpful board links &amp; references\"></head><body></body></html>",
     { headers: { "Content-Type": "text/html; charset=utf-8" } }
@@ -859,6 +861,7 @@ test("url titles returns title and description metadata", async () => {
     }]);
   } finally {
     globalThis.fetch = previousFetch;
+    AbortSignal.timeout = previousAbortSignalTimeout;
   }
 });
 

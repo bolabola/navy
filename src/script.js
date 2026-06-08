@@ -1348,6 +1348,22 @@
     loadFaviconDomain(domain, false, 0);
   }
 
+  function faviconPreviewNode(url) {
+    const domain = faviconDomain(url);
+    if (isGithubDomain(domain)) {
+      return githubIconNode();
+    }
+    const img = document.createElement("img");
+    img.className = "icon-picker-trigger__favicon";
+    img.alt = "";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.dataset.faviconDomain = domain;
+    const cached = faviconCache.get(domain);
+    img.src = typeof cached === "string" ? cached : faviconUrlForDomain(domain, false);
+    return img;
+  }
+
   function nextBoardAccent() {
     return BOARD_ACCENTS[boards.length % BOARD_ACCENTS.length];
   }
@@ -3796,9 +3812,10 @@
       const mode = form.querySelector('input[name="itemIconMode"]');
       const icon = form.querySelector('input[name="icon"]');
       const current = form.querySelector('[data-role="icon-picker-current"]');
+      const urlInput = form.querySelector('input[name="url"]');
       if (mode) mode.value = "favicon";
       if (icon) icon.value = "";
-      if (current) current.replaceChildren(staticIconNode("icon-globe"));
+      if (current) current.replaceChildren(faviconPreviewNode(urlInput ? urlInput.value : ""));
       return;
     }
 

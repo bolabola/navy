@@ -240,7 +240,8 @@ async function fetchMetadata(rawUrl: string): Promise<{ title: string | null; de
         if (!value) continue;
         total += value.byteLength;
         buf += decoder.decode(value, { stream: true });
-        if (/<\/title>/i.test(buf) && /<meta\b[^>]+(?:name|property)\s*=\s*["'](?:description|og:description|twitter:description)["']/i.test(buf)) break;
+        if (/(?:<\/title>|<meta\b[^>]+(?:name|property)\s*=\s*["'](?:og:title|twitter:title)["'])/i.test(buf)
+          && /<meta\b[^>]+(?:name|property)\s*=\s*["'](?:description|og:description|twitter:description)["']/i.test(buf)) break;
       }
     } finally {
       try { await reader.cancel(); } catch {}
@@ -248,7 +249,7 @@ async function fetchMetadata(rawUrl: string): Promise<{ title: string | null; de
     buf += decoder.decode();
 
     const m = buf.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const title = m ? decodeHtmlEntities(m[1]).replace(/\s+/g, " ").trim() : "";
+    const title = (m ? decodeHtmlEntities(m[1]).replace(/\s+/g, " ").trim() : "") || extractMetaValue(buf, ["og:title", "twitter:title"]);
     const description = extractMetaDescription(buf);
     return {
       title: title || null,
@@ -260,12 +261,17 @@ async function fetchMetadata(rawUrl: string): Promise<{ title: string | null; de
 }
 
 function extractMetaDescription(html: string): string | null {
+  return extractMetaValue(html, ["description", "og:description", "twitter:description"]);
+}
+
+function extractMetaValue(html: string, names: string[]): string | null {
   const metaRe = /<meta\b[^>]*>/gi;
   let match: RegExpExecArray | null;
+  const normalizedNames = new Set(names.map((name) => name.toLowerCase()));
   while ((match = metaRe.exec(html))) {
     const tag = match[0];
     const name = readHtmlAttribute(tag, "name") || readHtmlAttribute(tag, "property");
-    if (!name || !/^(description|og:description|twitter:description)$/i.test(name.trim())) continue;
+    if (!name || !normalizedNames.has(name.trim().toLowerCase())) continue;
     const content = readHtmlAttribute(tag, "content");
     if (!content) continue;
     const value = decodeHtmlEntities(content).replace(/\s+/g, " ").trim();
@@ -301,15 +307,22 @@ async function fetchFollowingSafeRedirects(rawUrl: string): Promise<Response> {
       throw new Error("Unsafe URL");
     }
 
-    const res = await fetch(currentUrl, {
-      method: "GET",
-      redirect: "manual",
-      signal: AbortSignal.timeout(URL_TITLES_TIMEOUT_MS),
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; BoardTrelloBot/1.0)",
-        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"
-      }
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), URL_TITLES_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(currentUrl, {
+        method: "GET",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; BoardTrelloBot/1.0)",
+          "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"
+        }
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (![301, 302, 303, 307, 308].includes(res.status)) {
       return res;
