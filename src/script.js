@@ -1961,6 +1961,11 @@
     title.className = "board-card__title";
     title.textContent = board.title;
     titleWrap.appendChild(title);
+    const count = document.createElement("span");
+    count.className = "board-card__count";
+    count.textContent = String(Array.isArray(board.items) ? board.items.length : 0);
+    count.title = String(Array.isArray(board.items) ? board.items.length : 0) + TEXT.urlCount;
+    titleWrap.appendChild(count);
     header.appendChild(titleWrap);
 
     const actions = document.createElement("div");
