@@ -4220,7 +4220,30 @@
     if (!rootDl) {
       return { links: [], folders: [] };
     }
-    return parseBookmarkDl(rootDl);
+    return unwrapBrowserBookmarkRoot(parseBookmarkDl(rootDl));
+  }
+
+  function unwrapBrowserBookmarkRoot(tree) {
+    const folders = tree && Array.isArray(tree.folders) ? tree.folders : [];
+    const bookmarkBar = folders.find(function (folder) {
+      return isBookmarkBarFolderName(folder.title);
+    });
+    if (!bookmarkBar) return tree;
+    return {
+      links: (tree.links || []).concat(bookmarkBar.links || []),
+      folders: (bookmarkBar.folders || []).concat(folders.filter(function (folder) {
+        return folder !== bookmarkBar;
+      }))
+    };
+  }
+
+  function isBookmarkBarFolderName(name) {
+    const normalized = normalizeBookmarkTitle(name).toLowerCase();
+    return normalized === "书签栏"
+      || normalized === "收藏夹栏"
+      || normalized === "bookmarks bar"
+      || normalized === "bookmarks toolbar"
+      || normalized === "favorites bar";
   }
 
   function parseBookmarkDl(dl) {
