@@ -25,6 +25,7 @@
   const DEFAULT_TAB_ID = "default";
   const DEFAULT_TAB_NAME = "默认";
   const BOARD_TAB_NAME_MAX_LENGTH = 40;
+  const BOARD_ITEM_NAME_MAX_LENGTH = 200;
   const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
   const FAVICON_RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];
   const BOARD_ACCENTS = ["#0079bf", "#42526e", "#00a3bf", "#5aac44", "#eb5a46", "#89609e", "#ff9f1a"];
@@ -1058,7 +1059,7 @@
       const tabId = typeof item.tabId === "string" && tabIds.has(item.tabId) ? item.tabId : DEFAULT_TAB_ID;
       return {
         id: typeof item.id === "string" && item.id.trim() ? item.id : uid("item"),
-        name: typeof item.name === "string" ? item.name : "",
+        name: typeof item.name === "string" ? normalizeItemName(item.name) : "",
         url: typeof item.url === "string" ? item.url : "",
         icon: typeof item.icon === "string" && item.icon.trim() && ICON_NAME_RE.test(item.icon.trim()) ? normalizeIconName(item.icon) : "",
         description: typeof item.description === "string" ? item.description.slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH) : "",
@@ -1210,7 +1211,7 @@
   }
 
   function displayName(url, customName) {
-    const name = String(customName || "").trim();
+    const name = normalizeItemName(customName);
     if (name) {
       return name;
     }
@@ -1218,9 +1219,9 @@
     try {
       const hostname = new URL(toExternalUrl(url)).hostname.replace(/^www\./i, "");
       const firstPart = hostname.split(".")[0];
-      return firstPart ? firstPart.charAt(0).toUpperCase() + firstPart.slice(1) : hostname;
+      return normalizeItemName(firstPart ? firstPart.charAt(0).toUpperCase() + firstPart.slice(1) : hostname);
     } catch (error) {
-      return url;
+      return normalizeItemName(url);
     }
   }
 
@@ -1739,6 +1740,7 @@
     title.type = "text";
     title.name = "name";
     title.placeholder = "标题";
+    title.maxLength = BOARD_ITEM_NAME_MAX_LENGTH;
     title.value = item.name || "";
     row.appendChild(title);
     form.appendChild(row);
@@ -1918,6 +1920,7 @@
     name.type = "text";
     name.name = "name";
     name.placeholder = TEXT.enterName;
+    name.maxLength = BOARD_ITEM_NAME_MAX_LENGTH;
     form.appendChild(name);
 
     const actions = document.createElement("div");
@@ -3859,7 +3862,7 @@
       apiSend("/url-titles", "POST", { urls: [url] }).then(function (results) {
         const meta = Array.isArray(results) ? results[0] : null;
         if (nameInput && meta && typeof meta.title === "string" && meta.title.trim()) {
-          nameInput.value = meta.title.trim();
+          nameInput.value = normalizeItemName(meta.title);
         }
         if (descInput && meta && typeof meta.description === "string" && meta.description.trim()) {
           descInput.value = meta.description.trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
@@ -4313,13 +4316,17 @@
       return null;
     }
     return {
-      title: normalizeBookmarkTitle(anchor.textContent) || displayName(url, ""),
+      title: normalizeItemName(anchor.textContent) || displayName(url, ""),
       url: url
     };
   }
 
   function normalizeBookmarkTitle(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function normalizeItemName(value) {
+    return String(value || "").replace(/\s+/g, " ").trim().slice(0, BOARD_ITEM_NAME_MAX_LENGTH);
   }
 
   function buildBookmarkImportBoards(tree) {
@@ -4436,7 +4443,7 @@
   function createBookmarkItem(link, tabId) {
     return {
       id: uid("item"),
-      name: link.title || displayName(link.url, ""),
+      name: normalizeItemName(link.title) || displayName(link.url, ""),
       url: link.url,
       tabId: tabId
     };
@@ -4511,7 +4518,7 @@
           } catch (e) {
             normalized = entry && entry.url;
           }
-          const title = entry && typeof entry.title === "string" ? entry.title.trim() : "";
+          const title = entry && typeof entry.title === "string" ? normalizeItemName(entry.title) : "";
           const description = entry && typeof entry.description === "string" ? entry.description.trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH) : "";
           return {
             id: uid("item"),
