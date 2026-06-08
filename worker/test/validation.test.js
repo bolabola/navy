@@ -53,14 +53,22 @@ test("validateBoardState enforces board limit", () => {
   assert.equal(validateBoardState(Array.from({ length: 101 }, (_, i) => ({ ...validBoard, id: "b-" + i }))), "Too many boards");
 });
 
-test("validateBoardState enforces board item limit", () => {
+test("validateBoardState enforces board tab and item limits", () => {
   assert.equal(
-    validateBoardState([{ ...validBoard, items: Array.from({ length: 100 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" + i })) }]),
+    validateBoardState([{ ...validBoard, activeTabId: "t-0", tabs: Array.from({ length: 100 }, (_, i) => ({ id: "t-" + i, name: "Tab " + i })), items: [] }]),
     null
   );
   assert.equal(
-    validateBoardState([{ ...validBoard, items: Array.from({ length: 101 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" + i })) }]),
-    "Too many board items"
+    validateBoardState([{ ...validBoard, activeTabId: "t-0", tabs: Array.from({ length: 101 }, (_, i) => ({ id: "t-" + i, name: "Tab " + i })), items: [] }]),
+    "Too many board tabs"
+  );
+  assert.equal(
+    validateBoardState([{ ...validBoard, items: Array.from({ length: 500 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" + i })) }]),
+    null
+  );
+  assert.equal(
+    validateBoardState([{ ...validBoard, items: Array.from({ length: 501 }, (_, i) => ({ id: "i-" + i, name: "", url: "https://example.com/" + i })) }]),
+    "Too many board tab items"
   );
 });
 

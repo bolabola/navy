@@ -34,8 +34,8 @@
   const ICON_PICKER_OVERFLOW_LIMIT = 200;
   const IMPORT_MAX_URLS = 100;
   const BOOKMARK_IMPORT_MAX_BOARDS = 100;
-  const BOOKMARK_IMPORT_MAX_ITEMS_PER_BOARD = 100;
-  const BOOKMARK_IMPORT_MAX_TABS_PER_BOARD = 24;
+  const BOOKMARK_IMPORT_MAX_ITEMS_PER_TAB = 500;
+  const BOOKMARK_IMPORT_MAX_TABS_PER_BOARD = 100;
   const URL_TITLE_BATCH_SIZE = 30;
   const FULL_BACKUP_SCHEMA = "board-trello-v1";
   const URL_EXTRACT_RE = /https?:\/\/[^\s<>"'`]+/gi;
@@ -4206,7 +4206,7 @@
         saveBoards();
         render();
         window.alert("已导入 " + importedBoards.length + " 个 board，" + importedCount + " 个网址。"
-          + (foundCount > importedCount ? " 当前每个 board 最多保存 100 个网址，已自动截断。" : ""));
+          + (foundCount > importedCount ? " 当前最多保存 100 个 board，已自动截断。" : ""));
       } catch (error) {
         window.alert("导入收藏 HTML 失败。");
       }
@@ -4300,42 +4300,96 @@
       return String(board.title || "").trim().toLowerCase();
     }));
 
-    if (tree.links && tree.links.length && boards.length + result.length < BOOKMARK_IMPORT_MAX_BOARDS) {
-      const bookmarkBar = createBookmarkBoard("书签栏", tree.links, [], usedTitles, result.length);
-      if (bookmarkBar) result.push(bookmarkBar);
+    if (tree.links && tree.links.length) {
+      appendBookmarkBoards(result, "书签栏", tree.links, [], usedTitles);
     }
 
     (tree.folders || []).forEach(function (folder) {
       if (boards.length + result.length >= BOOKMARK_IMPORT_MAX_BOARDS) return;
-      const board = createBookmarkBoard(folder.title, folder.links, folder.folders, usedTitles, result.length);
-      if (board) result.push(board);
+      appendBookmarkBoards(result, folder.title, folder.links, folder.folders, usedTitles);
     });
 
     return result;
   }
 
-  function createBookmarkBoard(title, directLinks, childFolders, usedTitles, importIndex) {
-    const tabs = [{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }];
-    const items = [];
-    appendBookmarkItems(items, directLinks || [], DEFAULT_TAB_ID);
+  function appendBookmarkBoards(result, title, directLinks, childFolders, usedTitles) {
+    const tabSpecs = buildBookmarkTabSpecs(directLinks, childFolders);
+    let draft = createBookmarkBoardDraft();
 
-    const usedTabNames = new Set([DEFAULT_TAB_NAME.toLowerCase()]);
-    (childFolders || []).forEach(function (folder) {
-      if (items.length >= BOOKMARK_IMPORT_MAX_ITEMS_PER_BOARD || tabs.length >= BOOKMARK_IMPORT_MAX_TABS_PER_BOARD) return;
-      const links = collectBookmarkLinks(folder);
-      if (!links.length) return;
-      const tab = {
-        id: uid("tab"),
-        name: uniqueBookmarkName(folder.title, usedTabNames, BOARD_TAB_NAME_MAX_LENGTH)
-      };
-      const before = items.length;
-      appendBookmarkItems(items, links, tab.id);
-      if (items.length === before) return;
-      tabs.push(tab);
+    function flushDraft() {
+      if (!draft.items.length || boards.length + result.length >= BOOKMARK_IMPORT_MAX_BOARDS) return;
+      result.push(materializeBookmarkBoard(title, draft, usedTitles, result.length));
+      draft = createBookmarkBoardDraft();
+    }
+
+    tabSpecs.forEach(function (spec) {
+      if (boards.length + result.length >= BOOKMARK_IMPORT_MAX_BOARDS) return;
+      if (!canAddBookmarkTabSpec(draft, spec)) {
+        flushDraft();
+      }
+      if (!canAddBookmarkTabSpec(draft, spec)) return;
+      addBookmarkTabSpec(draft, spec);
     });
 
-    if (!items.length) return null;
+    flushDraft();
+  }
 
+  function buildBookmarkTabSpecs(directLinks, childFolders) {
+    const specs = [];
+    chunkBookmarkLinks(directLinks || []).forEach(function (chunk) {
+      specs.push({ name: DEFAULT_TAB_NAME, links: chunk, isDefault: true });
+    });
+    (childFolders || []).forEach(function (folder, folderIndex) {
+      const links = collectBookmarkLinks(folder);
+      if (!links.length) return;
+      chunkBookmarkLinks(links).forEach(function (chunk) {
+        specs.push({ name: folder.title, links: chunk, isDefault: false, key: "folder-" + folderIndex });
+      });
+    });
+    return specs;
+  }
+
+  function chunkBookmarkLinks(links) {
+    const chunks = [];
+    for (let index = 0; index < links.length; index += BOOKMARK_IMPORT_MAX_ITEMS_PER_TAB) {
+      chunks.push(links.slice(index, index + BOOKMARK_IMPORT_MAX_ITEMS_PER_TAB));
+    }
+    return chunks;
+  }
+
+  function createBookmarkBoardDraft() {
+    return {
+      tabs: [{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }],
+      items: [],
+      defaultUsed: false,
+      usedTabKeys: new Set(),
+      usedTabNames: new Set([DEFAULT_TAB_NAME.toLowerCase()])
+    };
+  }
+
+  function canAddBookmarkTabSpec(draft, spec) {
+    if (!spec || !spec.links || !spec.links.length) return false;
+    if (spec.isDefault) return !draft.defaultUsed;
+    if (draft.usedTabKeys.has(spec.key)) return false;
+    return draft.tabs.length < BOOKMARK_IMPORT_MAX_TABS_PER_BOARD;
+  }
+
+  function addBookmarkTabSpec(draft, spec) {
+    if (spec.isDefault) {
+      appendBookmarkItems(draft.items, spec.links, DEFAULT_TAB_ID);
+      draft.defaultUsed = true;
+      return;
+    }
+    const tab = {
+      id: uid("tab"),
+      name: uniqueBookmarkName(spec.name, draft.usedTabNames, BOARD_TAB_NAME_MAX_LENGTH)
+    };
+    draft.tabs.push(tab);
+    draft.usedTabKeys.add(spec.key);
+    appendBookmarkItems(draft.items, spec.links, tab.id);
+  }
+
+  function materializeBookmarkBoard(title, draft, usedTitles, importIndex) {
     return {
       id: uid("board"),
       title: uniqueBookmarkName(title || "书签", usedTitles, 80),
@@ -4345,9 +4399,9 @@
       collapsed: false,
       column: getImportBoardColumn(importIndex),
       displayMode: "list",
-      tabs: tabs,
-      activeTabId: items.some(function (item) { return item.tabId === DEFAULT_TAB_ID; }) ? DEFAULT_TAB_ID : tabs[1].id,
-      items: items
+      tabs: draft.tabs,
+      activeTabId: draft.defaultUsed ? DEFAULT_TAB_ID : draft.tabs[1].id,
+      items: draft.items
     };
   }
 
@@ -4361,7 +4415,7 @@
   }
 
   function appendBookmarkItems(items, links, tabId) {
-    for (let index = 0; index < links.length && items.length < BOOKMARK_IMPORT_MAX_ITEMS_PER_BOARD; index += 1) {
+    for (let index = 0; index < links.length; index += 1) {
       items.push(createBookmarkItem(links[index], tabId));
     }
   }

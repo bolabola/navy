@@ -1,6 +1,7 @@
 const BOARD_MAX_COUNT = 100;
-const BOARD_MAX_ITEMS = 100;
-const BOARD_MAX_TABS = 24;
+const BOARD_MAX_TABS = 100;
+const BOARD_MAX_ITEMS_PER_TAB = 500;
+const BOARD_MAX_ITEMS = BOARD_MAX_TABS * BOARD_MAX_ITEMS_PER_TAB;
 const BOARD_ID_MAX_LENGTH = 128;
 const BOARD_TITLE_MAX_LENGTH = 120;
 const BOARD_ICON_MAX_LENGTH = 64;
@@ -86,9 +87,15 @@ function validateBoard(value: unknown): string | null {
 
   const items = Array.isArray(board.items) ? board.items : [];
   if (items.length > BOARD_MAX_ITEMS) return "Too many board items";
+  const tabItemCounts = new Map<string, number>();
   for (const item of items) {
     const error = validateBoardItem(item, tabIds);
     if (error) return error;
+    const itemTabId = (item as BoardItem).tabId;
+    const tabId = typeof itemTabId === "string" ? itemTabId : "default";
+    const count = (tabItemCounts.get(tabId) || 0) + 1;
+    if (count > BOARD_MAX_ITEMS_PER_TAB) return "Too many board tab items";
+    tabItemCounts.set(tabId, count);
   }
 
   return null;
