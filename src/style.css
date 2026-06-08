@@ -9,6 +9,8 @@
   --white: #ffffff;
   --hover: rgba(9, 30, 66, 0.08);
   --hover-strong: rgba(9, 30, 66, 0.14);
+  --item-highlight-overlay: rgba(255, 255, 255, 0.88);
+  --item-highlight-hover-overlay: rgba(255, 255, 255, 0.78);
 }
 
 * {
@@ -1676,13 +1678,22 @@ body {
 
 .link-row {
   border-radius: 4px;
-  background: transparent;
-  box-shadow: none;
+  background:
+    linear-gradient(var(--item-highlight-overlay), var(--item-highlight-overlay)),
+    var(--board-accent, #0079bf);
+  box-shadow: inset 0 0 0 1px rgba(9, 30, 66, 0.05);
 }
 
 .link-row:hover {
-  background: transparent;
-  box-shadow: none;
+  background:
+    linear-gradient(var(--item-highlight-hover-overlay), var(--item-highlight-hover-overlay)),
+    var(--board-accent, #0079bf);
+  box-shadow: inset 0 0 0 1px rgba(9, 30, 66, 0.08);
+}
+
+.link-row.is-dragging:hover {
+  background: rgba(255, 255, 255, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .link-row__anchor {
