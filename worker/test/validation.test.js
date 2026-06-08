@@ -12,15 +12,21 @@ const validBoard = {
   collapsed: false,
   column: null,
   displayMode: "list",
+  tabs: [
+    { id: "default", name: "默认" },
+    { id: "tab-mev", name: "MEV" }
+  ],
+  activeTabId: "default",
   items: [
-    { id: "item-1", name: "OpenAI", url: "https://openai.com/" },
-    { id: "item-2", name: "", url: "github.com" }
+    { id: "item-1", name: "OpenAI", url: "https://openai.com/", tabId: "default" },
+    { id: "item-2", name: "", url: "github.com", tabId: "tab-mev" }
   ]
 };
 
 test("validateBoardState accepts a valid board payload", () => {
   assert.equal(validateBoardState([validBoard]), null);
   assert.equal(validateBoardState([{ ...validBoard, displayMode: "urls" }]), null);
+  assert.equal(validateBoardState([{ ...validBoard, tabs: undefined, activeTabId: undefined, items: validBoard.items.map(({ tabId, ...item }) => item) }]), null);
 });
 
 test("validateBoardState rejects invalid board shape", () => {
@@ -28,6 +34,10 @@ test("validateBoardState rejects invalid board shape", () => {
   assert.equal(validateBoardState([{ ...validBoard, id: "" }]), "Invalid board id");
   assert.equal(validateBoardState([{ ...validBoard, accent: "blue" }]), "Invalid board accent");
   assert.equal(validateBoardState([{ ...validBoard, displayMode: "grid" }]), "Invalid board display mode");
+  assert.equal(validateBoardState([{ ...validBoard, tabs: "MEV" }]), "Invalid board tabs");
+  assert.equal(validateBoardState([{ ...validBoard, activeTabId: "missing" }]), "Invalid board active tab");
+  assert.equal(validateBoardState([{ ...validBoard, tabs: [{ id: "default", name: "" }] }]), "Invalid board tab name");
+  assert.equal(validateBoardState([{ ...validBoard, items: [{ id: "item-1", name: "Bad tab", url: "https://example.com", tabId: "missing" }] }]), "Invalid item tab");
 });
 
 test("validateBoardState rejects invalid item URLs", () => {

@@ -18,8 +18,12 @@
   const BOARD_COLLAPSED_HEIGHT = 34;
   const BOARD_META_FORM_HEIGHT = 96;
   const BOARD_ADD_FORM_HEIGHT = 104;
+  const BOARD_TABS_HEIGHT = 34;
   const BOARD_ICON_TILE_SIZE = 26;
   const BOARD_ICON_TILE_GAP = 4;
+  const DEFAULT_TAB_ID = "default";
+  const DEFAULT_TAB_NAME = "默认";
+  const BOARD_TAB_NAME_MAX_LENGTH = 40;
   const FAVICON_RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];
   const BOARD_ACCENTS = ["#0079bf", "#42526e", "#00a3bf", "#5aac44", "#eb5a46", "#89609e", "#ff9f1a"];
   const DEFAULT_BOARD_ICONS = ["layout-grid", "zap", "code", "sparkles", "wrench", "file-text"];
@@ -966,6 +970,7 @@
 
   function normalizeBoards(sourceBoards) {
     return sourceBoards.map(function (board) {
+      const tabs = normalizeBoardTabs(board.tabs);
       return {
         id: board.id,
         title: board.title,
@@ -975,7 +980,9 @@
         collapsed: Boolean(board.collapsed),
         column: Number.isInteger(board.column) ? board.column : null,
         displayMode: normalizeDisplayMode(board.displayMode),
-        items: normalizeBoardItems(board.items)
+        tabs: tabs,
+        activeTabId: normalizeActiveTabId(board.activeTabId, tabs),
+        items: normalizeBoardItems(board.items, tabs)
       };
     });
   }
@@ -996,13 +1003,57 @@
     return "icon-layout-grid";
   }
 
-  function normalizeBoardItems(sourceItems) {
+  function normalizeBoardTabs(sourceTabs) {
+    const tabs = [];
+    const seen = new Set();
+
+    function pushTab(id, name) {
+      const tabId = typeof id === "string" && id.trim() ? id.trim() : uid("tab");
+      if (seen.has(tabId)) return;
+      seen.add(tabId);
+      tabs.push({
+        id: tabId,
+        name: typeof name === "string" && name.trim() ? name.trim().slice(0, BOARD_TAB_NAME_MAX_LENGTH) : DEFAULT_TAB_NAME
+      });
+    }
+
+    if (Array.isArray(sourceTabs)) {
+      sourceTabs.forEach(function (tab) {
+        if (!tab || typeof tab !== "object") return;
+        pushTab(tab.id, tab.name);
+      });
+    }
+
+    if (!seen.has(DEFAULT_TAB_ID)) {
+      tabs.unshift({ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME });
+      seen.add(DEFAULT_TAB_ID);
+    }
+
+    if (!tabs.length) {
+      tabs.push({ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME });
+    }
+
+    return tabs;
+  }
+
+  function normalizeActiveTabId(activeTabId, tabs) {
+    const list = Array.isArray(tabs) && tabs.length ? tabs : [{ id: DEFAULT_TAB_ID }];
+    const requested = typeof activeTabId === "string" ? activeTabId : "";
+    return list.some(function (tab) { return tab.id === requested; }) ? requested : list[0].id;
+  }
+
+  function normalizeBoardItems(sourceItems, tabs) {
     if (!Array.isArray(sourceItems)) return [];
+    const tabIds = new Set((Array.isArray(tabs) ? tabs : []).map(function (tab) {
+      return tab.id;
+    }));
     return sourceItems.map(function (item) {
+      const tabId = typeof item.tabId === "string" && tabIds.has(item.tabId) ? item.tabId : DEFAULT_TAB_ID;
       return {
         id: typeof item.id === "string" && item.id.trim() ? item.id : uid("item"),
         name: typeof item.name === "string" ? item.name : "",
-        url: typeof item.url === "string" ? item.url : ""
+        url: typeof item.url === "string" ? item.url : "",
+        tabId: tabId
       };
     });
   }
@@ -1306,6 +1357,41 @@
     });
   }
 
+  function getBoardTabs(board) {
+    return Array.isArray(board && board.tabs) && board.tabs.length
+      ? board.tabs
+      : [{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }];
+  }
+
+  function getBoardActiveTabId(board) {
+    const tabs = getBoardTabs(board);
+    return normalizeActiveTabId(board && board.activeTabId, tabs);
+  }
+
+  function getBoardActiveTab(board) {
+    const tabs = getBoardTabs(board);
+    const activeTabId = getBoardActiveTabId(board);
+    return tabs.find(function (tab) {
+      return tab.id === activeTabId;
+    }) || tabs[0];
+  }
+
+  function getBoardItemsForTab(board, tabId) {
+    const activeTabId = tabId || getBoardActiveTabId(board);
+    return (Array.isArray(board && board.items) ? board.items : []).filter(function (item) {
+      return (item.tabId || DEFAULT_TAB_ID) === activeTabId;
+    });
+  }
+
+  function getBoardItemsForActiveTab(board) {
+    return getBoardItemsForTab(board, getBoardActiveTabId(board));
+  }
+
+  function shouldShowBoardTabs(board) {
+    const tabs = getBoardTabs(board);
+    return auth.isAdmin || tabs.length > 1;
+  }
+
   function captureBoardRects() {
     const rects = new Map();
     app.querySelectorAll(".board-card[data-board-id]").forEach(function (node) {
@@ -1524,6 +1610,7 @@
     row.dataset.role = "link-row";
     row.dataset.boardId = boardId;
     row.dataset.itemId = item.id;
+    row.dataset.tabId = item.tabId || DEFAULT_TAB_ID;
     if (auth.isAdmin) row.draggable = true;
 
     if (!iconOnly && auth.isAdmin) {
@@ -1593,6 +1680,11 @@
     }
 
     menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
+    menu.appendChild(menuItem("add-board-tab", "icon-plus", "新增子 tab"));
+    menu.appendChild(menuItem("rename-board-tab", "icon-pencil-line", "重命名当前 tab"));
+    if (getBoardActiveTabId(board) !== DEFAULT_TAB_ID) {
+      menu.appendChild(menuItem("delete-board-tab", "icon-trash", "删除当前 tab", true));
+    }
     menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
     menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
     menu.appendChild(menuItem("delete-board", "icon-trash-2", TEXT.deleteBoard, true));
@@ -1628,6 +1720,35 @@
     actions.appendChild(actionButton("board-cancel-button", "cancel-edit-board", board.id, "", [TEXT.cancel]));
     form.appendChild(actions);
     return form;
+  }
+
+  function renderBoardTabs(board) {
+    const tabs = getBoardTabs(board);
+    const activeTabId = getBoardActiveTabId(board);
+    const wrapper = document.createElement("div");
+    wrapper.className = "board-tabs";
+
+    const list = document.createElement("div");
+    list.className = "board-tabs__list";
+    tabs.forEach(function (tab) {
+      const button = actionButton("board-tab" + (tab.id === activeTabId ? " is-active" : ""), "select-board-tab", board.id, tab.name, [
+        tab.name
+      ]);
+      button.dataset.tabId = tab.id;
+      button.setAttribute("aria-pressed", tab.id === activeTabId ? "true" : "false");
+      list.appendChild(button);
+    });
+    wrapper.appendChild(list);
+
+    if (auth.isAdmin) {
+      const add = actionButton("board-tabs__add", "add-board-tab", board.id, "新增子 tab", [
+        staticIconNode("icon-plus")
+      ]);
+      add.setAttribute("aria-label", "新增子 tab");
+      wrapper.appendChild(add);
+    }
+
+    return wrapper;
   }
 
   function renderAddForm(boardId) {
@@ -1671,6 +1792,8 @@
     const menuOpen = uiState.openBoardMenuId === board.id;
     const iconMode = board.displayMode === "icons";
     const urlMode = board.displayMode === "urls";
+    const activeTabId = getBoardActiveTabId(board);
+    const visibleItems = getBoardItemsForTab(board, activeTabId);
     const card = document.createElement("article");
     card.className = "board-card" + (board.collapsed ? " is-collapsed" : "") + (menuOpen ? " has-open-menu" : "") + (extraClass ? " " + extraClass : "");
     card.dataset.boardId = board.id;
@@ -1719,6 +1842,7 @@
     if (editOpen) card.appendChild(renderEditBoardForm(board));
 
     if (!board.collapsed) {
+      if (shouldShowBoardTabs(board)) card.appendChild(renderBoardTabs(board));
       if (addOpen) card.appendChild(renderAddForm(board.id));
 
       const body = document.createElement("div");
@@ -1727,8 +1851,9 @@
       list.className = "board-list" + (iconMode ? " board-list--icons" : "") + (urlMode ? " board-list--urls" : "");
       list.dataset.role = "board-list";
       list.dataset.boardId = board.id;
-      if (board.items.length) {
-        board.items.forEach(function (item) {
+      list.dataset.tabId = activeTabId;
+      if (visibleItems.length) {
+        visibleItems.forEach(function (item) {
           list.appendChild(renderLinkRow(board.id, item, board.displayMode, editOpen));
         });
       } else {
@@ -2357,15 +2482,17 @@
       return BOARD_COLLAPSED_HEIGHT;
     }
 
+    const activeItems = getBoardItemsForActiveTab(board);
     const contentHeight = board.displayMode === "icons"
-      ? estimateIconGridHeight(board.items.length)
-      : (board.items.length
-          ? board.items.length * BOARD_ROW_HEIGHT + Math.max(0, board.items.length - 1) * BOARD_ROW_GAP
+      ? estimateIconGridHeight(activeItems.length)
+      : (activeItems.length
+          ? activeItems.length * BOARD_ROW_HEIGHT + Math.max(0, activeItems.length - 1) * BOARD_ROW_GAP
           : BOARD_LIST_MIN_HEIGHT);
     const listHeight = Math.max(BOARD_LIST_MIN_HEIGHT, Math.min(clampHeight(board.height), contentHeight));
     const metaHeight = uiState.editBoardId === board.id ? BOARD_META_FORM_HEIGHT : 0;
     const addHeight = uiState.openAddBoardId === board.id ? BOARD_ADD_FORM_HEIGHT : 0;
-    return BOARD_HEADER_HEIGHT + BOARD_CHROME_HEIGHT + listHeight + metaHeight + addHeight;
+    const tabsHeight = shouldShowBoardTabs(board) ? BOARD_TABS_HEIGHT : 0;
+    return BOARD_HEADER_HEIGHT + BOARD_CHROME_HEIGHT + tabsHeight + listHeight + metaHeight + addHeight;
   }
 
   function estimateIconGridHeight(itemCount) {
@@ -2411,6 +2538,65 @@
       saveBoards();
     }
     rerenderBoardInPlace(boardId);
+  }
+
+  function promptTabName(message, value) {
+    const result = window.prompt(message, value || "");
+    if (result == null) return null;
+    const name = result.trim();
+    return name ? name.slice(0, BOARD_TAB_NAME_MAX_LENGTH) : null;
+  }
+
+  function addBoardTab(boardId) {
+    const name = promptTabName("子 tab 名称", "");
+    if (!name) return;
+    mutateBoard(boardId, function (board) {
+      const tab = { id: uid("tab"), name: name };
+      return Object.assign({}, board, {
+        tabs: getBoardTabs(board).concat(tab),
+        activeTabId: tab.id,
+        collapsed: false
+      });
+    });
+  }
+
+  function renameActiveBoardTab(boardId) {
+    const board = findBoard(boardId);
+    const activeTab = getBoardActiveTab(board);
+    if (!board || !activeTab) return;
+    const name = promptTabName("子 tab 名称", activeTab.name);
+    if (!name) return;
+    mutateBoard(boardId, function (entry) {
+      return Object.assign({}, entry, {
+        tabs: getBoardTabs(entry).map(function (tab) {
+          return tab.id === activeTab.id ? Object.assign({}, tab, { name: name }) : tab;
+        })
+      });
+    });
+  }
+
+  function deleteActiveBoardTab(boardId) {
+    const board = findBoard(boardId);
+    const activeTabId = getBoardActiveTabId(board);
+    if (!board) return;
+    if (activeTabId === DEFAULT_TAB_ID) {
+      window.alert("默认 tab 不能删除。");
+      return;
+    }
+    if (!window.confirm("删除当前 tab？里面的 item 会移动到默认 tab。")) {
+      return;
+    }
+    mutateBoard(boardId, function (entry) {
+      return Object.assign({}, entry, {
+        tabs: getBoardTabs(entry).filter(function (tab) {
+          return tab.id !== activeTabId;
+        }),
+        activeTabId: DEFAULT_TAB_ID,
+        items: entry.items.map(function (item) {
+          return item.tabId === activeTabId ? Object.assign({}, item, { tabId: DEFAULT_TAB_ID }) : item;
+        })
+      });
+    });
   }
 
   function rememberAllCollapseSnapshot() {
@@ -2486,6 +2672,7 @@
       }
       uiState.draggingRow.targetBoardId = null;
       uiState.draggingRow.targetItemId = null;
+      uiState.draggingRow.targetTabId = null;
     }
   }
 
@@ -2504,10 +2691,19 @@
       return null;
     }
 
-    const index = board.items.findIndex(function (entry) {
+    const item = board.items.find(function (entry) {
       return entry.id === itemId;
     });
-    const nextItem = index >= 0 ? board.items[index + 1] : null;
+    if (!item) {
+      return null;
+    }
+
+    const tabId = item.tabId || DEFAULT_TAB_ID;
+    const tabItems = getBoardItemsForTab(board, tabId);
+    const index = tabItems.findIndex(function (entry) {
+      return entry.id === itemId;
+    });
+    const nextItem = index >= 0 ? tabItems[index + 1] : null;
     return nextItem ? nextItem.id : null;
   }
 
@@ -2526,18 +2722,30 @@
     return placeholder;
   }
 
-  function isOriginalRowDropTarget(boardId, itemId) {
+  function isOriginalRowDropTarget(boardId, itemId, tabId) {
     return uiState.draggingRow &&
       boardId === uiState.draggingRow.boardId &&
+      tabId === uiState.draggingRow.sourceTabId &&
       itemId === uiState.draggingRow.sourceNextItemId;
   }
 
-  function moveItem(fromBoardId, itemId, toBoardId, beforeItemId) {
-    if (!fromBoardId || !itemId || !toBoardId) {
-      return;
+  function getItemInsertIndex(items, beforeItemId, tabId) {
+    if (beforeItemId) {
+      const beforeIndex = items.findIndex(function (entry) { return entry.id === beforeItemId; });
+      if (beforeIndex >= 0) return beforeIndex;
     }
 
-    if (fromBoardId === toBoardId && (beforeItemId === itemId || isOriginalRowDropTarget(toBoardId, beforeItemId))) {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      if ((items[index].tabId || DEFAULT_TAB_ID) === tabId) {
+        return index + 1;
+      }
+    }
+
+    return items.length;
+  }
+
+  function moveItem(fromBoardId, itemId, toBoardId, beforeItemId, toTabId) {
+    if (!fromBoardId || !itemId || !toBoardId) {
       return;
     }
 
@@ -2546,6 +2754,14 @@
       return entry.id === itemId;
     });
     if (!item) {
+      return;
+    }
+    const sourceTabId = item.tabId || DEFAULT_TAB_ID;
+    const targetBoard = findBoard(toBoardId);
+    const targetTabId = normalizeActiveTabId(toTabId || getBoardActiveTabId(targetBoard), getBoardTabs(targetBoard));
+    const itemForTarget = Object.assign({}, item, { tabId: targetTabId });
+
+    if (fromBoardId === toBoardId && sourceTabId === targetTabId && (beforeItemId === itemId || isOriginalRowDropTarget(toBoardId, beforeItemId, targetTabId))) {
       return;
     }
 
@@ -2558,10 +2774,8 @@
         const items = board.items.filter(function (entry) {
           return entry.id !== itemId;
         });
-        const index = beforeItemId
-          ? Math.max(items.findIndex(function (entry) { return entry.id === beforeItemId; }), 0)
-          : items.length;
-        items.splice(index, 0, item);
+        const index = getItemInsertIndex(items, beforeItemId, targetTabId);
+        items.splice(index, 0, itemForTarget);
         return Object.assign({}, board, { items: items });
       });
 
@@ -2581,10 +2795,8 @@
 
       if (board.id === toBoardId) {
         const items = board.items.slice();
-        const index = beforeItemId
-          ? Math.max(items.findIndex(function (entry) { return entry.id === beforeItemId; }), 0)
-          : items.length;
-        items.splice(index, 0, item);
+        const index = getItemInsertIndex(items, beforeItemId, targetTabId);
+        items.splice(index, 0, itemForTarget);
         return Object.assign({}, board, { items: items });
       }
 
@@ -2595,21 +2807,22 @@
     render();
   }
 
-  function markRowDropTarget(boardId, itemId) {
+  function markRowDropTarget(boardId, itemId, tabId) {
     if (!uiState.draggingRow) {
       return;
     }
 
-    if (uiState.draggingRow.targetBoardId === boardId && uiState.draggingRow.targetItemId === itemId) {
+    if (uiState.draggingRow.targetBoardId === boardId && uiState.draggingRow.targetItemId === itemId && uiState.draggingRow.targetTabId === tabId) {
       return;
     }
 
     clearRowDropIndicators();
     uiState.draggingRow.targetBoardId = boardId;
     uiState.draggingRow.targetItemId = itemId;
+    uiState.draggingRow.targetTabId = tabId;
 
     const dragged = app.querySelector('[data-role="link-row"][data-item-id="' + cssEscape(uiState.draggingRow.itemId) + '"]');
-    const originalTarget = isOriginalRowDropTarget(boardId, itemId);
+    const originalTarget = isOriginalRowDropTarget(boardId, itemId, tabId);
     if (dragged) {
       dragged.classList.add(originalTarget ? "is-dragging" : "is-drag-collapsed");
     }
@@ -2619,7 +2832,7 @@
       return;
     }
 
-    const list = app.querySelector('.board-list[data-board-id="' + cssEscape(boardId) + '"]');
+    const list = app.querySelector('.board-list[data-board-id="' + cssEscape(boardId) + '"][data-tab-id="' + cssEscape(tabId) + '"]');
     if (!list) {
       return;
     }
@@ -2714,12 +2927,14 @@
     if (list.classList.contains("board-list--icons")) {
       return {
         boardId: list.getAttribute("data-board-id"),
+        tabId: list.getAttribute("data-tab-id") || DEFAULT_TAB_ID,
         itemId: getIconModeBeforeItemId(list, event.clientX, event.clientY)
       };
     }
 
     return {
       boardId: list.getAttribute("data-board-id"),
+      tabId: list.getAttribute("data-tab-id") || DEFAULT_TAB_ID,
       itemId: getListModeBeforeItemId(list, event.clientY)
     };
   }
@@ -3231,6 +3446,42 @@
       return;
     }
 
+    if (action === "select-board-tab") {
+      const tabId = button.getAttribute("data-tab-id");
+      if (!boardId || !tabId) return;
+      uiState.openBoardMenuId = null;
+      uiState.openAddBoardId = null;
+      mutateBoardUiPreference(boardId, function (board) {
+        return Object.assign({}, board, {
+          activeTabId: normalizeActiveTabId(tabId, getBoardTabs(board))
+        });
+      });
+      return;
+    }
+
+    if (action === "add-board-tab") {
+      if (!auth.isAdmin || !boardId) return;
+      uiState.openBoardMenuId = null;
+      uiState.openAddBoardId = null;
+      addBoardTab(boardId);
+      return;
+    }
+
+    if (action === "rename-board-tab") {
+      if (!auth.isAdmin || !boardId) return;
+      uiState.openBoardMenuId = null;
+      renameActiveBoardTab(boardId);
+      return;
+    }
+
+    if (action === "delete-board-tab") {
+      if (!auth.isAdmin || !boardId) return;
+      uiState.openBoardMenuId = null;
+      uiState.openAddBoardId = null;
+      deleteActiveBoardTab(boardId);
+      return;
+    }
+
     if (action === "toggle-edit-board") {
       uiState.openBoardMenuId = null;
       if (uiState.openAddBoardId === boardId) {
@@ -3425,6 +3676,8 @@
         collapsed: false,
         column: getNextBoardColumn(masonryLayout.columns),
         displayMode: "list",
+        tabs: [{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }],
+        activeTabId: DEFAULT_TAB_ID,
         items: []
       });
 
@@ -3482,7 +3735,8 @@
     const item = {
       id: uid("item"),
       name: displayName(url, rawName),
-      url: url
+      url: url,
+      tabId: getBoardActiveTabId(findBoard(boardId))
     };
 
     uiState.openAddBoardId = null;
@@ -3639,6 +3893,7 @@
       render();
 
       fetchUrlTitlesInBatches(urls).then(function (list) {
+        const tabId = getBoardActiveTabId(findBoard(boardId));
         const items = list.map(function (entry) {
           let normalized;
           try {
@@ -3650,7 +3905,8 @@
           return {
             id: uid("item"),
             name: title || displayName(normalized, ""),
-            url: normalized
+            url: normalized,
+            tabId: tabId
           };
         }).filter(function (item) { return Boolean(item.url); });
 
@@ -3729,17 +3985,20 @@
     const iconMode = row.classList.contains("link-row--icon-only");
     const boardId = row.getAttribute("data-board-id");
     const itemId = row.getAttribute("data-item-id");
+    const sourceTabId = row.getAttribute("data-tab-id") || DEFAULT_TAB_ID;
     const sourceNextItemId = getNextItemIdAfter(boardId, itemId);
     const sourceRect = row.getBoundingClientRect();
 
     uiState.draggingRow = {
       boardId: boardId,
       itemId: itemId,
+      sourceTabId: sourceTabId,
       sourceNextItemId: sourceNextItemId,
       sourceWidth: sourceRect.width,
       sourceHeight: sourceRect.height,
       targetBoardId: boardId,
       targetItemId: sourceNextItemId,
+      targetTabId: sourceTabId,
       dragImageNode: null
     };
 
@@ -3769,7 +4028,7 @@
     const target = getRowDropTarget(event);
     if (target) {
       event.preventDefault();
-      markRowDropTarget(target.boardId, target.itemId);
+      markRowDropTarget(target.boardId, target.itemId, target.tabId);
     }
   });
 
@@ -3785,7 +4044,8 @@
         uiState.draggingRow.boardId,
         uiState.draggingRow.itemId,
         target.boardId,
-        target.itemId
+        target.itemId,
+        target.tabId
       );
       finishRowDrag();
       uiState.draggingRow = null;
