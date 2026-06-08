@@ -1453,36 +1453,42 @@ body.is-resizing {
   vertical-align: middle;
 }
 
-/* CodePen Trello board style: https://codepen.io/GeorgePark/pen/bLLzJK */
+/* Compact start.me-inspired board style */
 :root {
-  --bg-top: #0079bf;
-  --bg-bottom: #0079bf;
-  --panel: #e2e4e6;
-  --panel-border: rgba(0, 0, 0, 0.12);
-  --text: #17394d;
-  --muted: #6b778c;
-  --soft: #cfd3d8;
+  --bg-top: #eef2f7;
+  --bg-bottom: #dfe7f1;
+  --panel: rgba(255, 255, 255, 0.92);
+  --panel-border: rgba(20, 38, 63, 0.10);
+  --text: #333333;
+  --muted: #7a7a7a;
+  --soft: #d8dee8;
   --white: #ffffff;
-  --hover: rgba(9, 30, 66, 0.08);
-  --hover-strong: rgba(9, 30, 66, 0.16);
+  --hover: rgba(0, 0, 0, 0.05);
+  --hover-strong: rgba(0, 0, 0, 0.10);
 }
 
 body {
-  background: #0079bf;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.15;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.26)),
+    linear-gradient(135deg, var(--bg-top), var(--bg-bottom));
 }
 
 .workspace {
-  gap: 8px;
-  padding: 0 8px 8px;
+  gap: 10px;
+  padding: 0 10px 10px;
 }
 
 .workspace__navbar {
-  height: 40px;
-  margin: 0 -8px;
+  height: 38px;
+  margin: 0 -10px;
   border-radius: 0;
-  padding: 0 8px;
-  background: rgba(0, 0, 0, 0.15);
-  box-shadow: none;
+  padding: 0 10px;
+  color: #2f3b4c;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 0 rgba(20, 38, 63, 0.08);
   backdrop-filter: none;
 }
 
@@ -1491,30 +1497,37 @@ body {
 }
 
 .workspace__navbar-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
+.workspace__guest-notice {
+  color: #697586;
+  font-size: 11px;
+}
+
 .workspace__auth-button {
-  background: rgba(255, 255, 255, 0.22);
+  color: #344054;
+  background: rgba(31, 41, 55, 0.08);
   box-shadow: none;
 }
 
 .workspace__collapse-all-button,
 .workspace__create-button,
 .workspace__github-link {
-  border-radius: 3px;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.24);
+  border-radius: 4px;
+  color: #344054;
+  background: rgba(31, 41, 55, 0.08);
   box-shadow: none;
+  font-size: 11px;
 }
 
 .workspace__collapse-all-button:hover,
 .workspace__create-button:hover,
 .workspace__github-link:hover,
 .workspace__auth-button:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.32);
+  color: #111827;
+  background: rgba(31, 41, 55, 0.13);
 }
 
 .workspace__content {
@@ -1522,7 +1535,7 @@ body {
 }
 
 .board-wall-scroll {
-  padding: 4px 0 8px;
+  padding: 2px 0 8px;
 }
 
 .board-wall-scroll::-webkit-scrollbar,
@@ -1546,47 +1559,63 @@ body {
 }
 
 .board-card {
-  border-radius: 3px;
-  padding: 8px;
-  background: #e2e4e6;
-  box-shadow: none;
+  border-radius: 4px;
+  padding: 7px;
+  background: var(--panel);
+  box-shadow:
+    0 1px 2px rgba(20, 38, 63, 0.08),
+    0 0 0 1px var(--panel-border);
 }
 
 .board-card--placeholder {
-  border: 2px dashed rgba(255, 255, 255, 0.55);
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.18);
+  border: 2px dashed rgba(20, 38, 63, 0.18);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.46);
 }
 
 .board-card__header {
-  min-height: 28px;
-  padding: 0 0 7px;
+  min-height: 22px;
+  padding: 0 0 5px;
+}
+
+.board-card__title-wrap {
+  gap: 5px;
 }
 
 .board-card__glyph {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: #7a7a7a;
   background: transparent;
 }
 
+.board-card__glyph i[class^="icon-"] {
+  font-size: 12px !important;
+}
+
 .board-card__title {
-  color: #17394d;
-  font-size: 14px;
+  color: #333333;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 34px;
 }
 
 .board-icon-button {
-  width: 26px;
-  height: 26px;
-  border-radius: 3px;
-  color: #6b778c;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: #697586;
 }
 
 .board-icon-button:hover,
 .board-icon-button.is-active {
-  color: #17394d;
-  background: rgba(9, 30, 66, 0.08);
+  color: #263244;
+  background: rgba(31, 41, 55, 0.07);
+}
+
+.board-icon-button i[class^="icon-"] {
+  font-size: 12px !important;
 }
 
 .board-card__body {
@@ -1594,95 +1623,120 @@ body {
 }
 
 .board-list {
-  gap: 7px;
+  gap: 3px;
   padding-right: 0;
 }
 
 .board-empty {
   border: 0;
-  border-radius: 3px;
-  padding: 9px;
-  color: #6b778c;
-  background: rgba(9, 30, 66, 0.06);
-  font-size: 12px;
+  border-radius: 4px;
+  padding: 8px;
+  color: #697586;
+  background: rgba(31, 41, 55, 0.05);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .link-row {
-  border-radius: 3px;
-  background: #ffffff;
-  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25);
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .link-row:hover {
-  background: #f4f5f7;
+  background: transparent;
+  box-shadow: none;
 }
 
 .link-row__anchor {
-  min-height: 30px;
-  padding: 6px 8px 6px 24px;
+  gap: 6px;
+  min-height: 24px;
+  padding: 1px 6px;
 }
 
 .link-row__name {
-  color: #17394d;
-  font-size: 13px;
+  color: #333333;
+  font-size: 14px;
   font-weight: 400;
+  line-height: 22px;
 }
 
 .link-row__grab {
-  opacity: 0.55;
+  left: 0;
+  width: 4px;
+  height: 11px;
+  opacity: 0.28;
+  background-size: 4px 4px;
+}
+
+.link-row__icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.link-row__icon--github {
+  color: #24292f;
+  background: transparent;
+}
+
+.link-row__fallback {
+  font-size: 10px;
 }
 
 .link-row--icon-only {
-  width: 30px;
-  height: 30px;
-  border-radius: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
 }
 
 .link-row--icon-only .link-row__anchor {
-  min-height: 30px;
+  min-height: 26px;
 }
 
 .link-row-placeholder {
-  min-height: 30px;
+  min-height: 22px;
   border: 2px dashed rgba(9, 30, 66, 0.18);
-  border-radius: 3px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.38);
 }
 
 .link-row-placeholder--icon {
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
-  border-radius: 3px;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border-radius: 4px;
 }
 
 .board-actions-menu,
 .board-meta-form--inline,
 .board-add-form--floating,
 .modal-panel {
-  border-radius: 3px;
+  border-radius: 4px;
   background: #ffffff;
   box-shadow:
-    0 8px 16px rgba(9, 30, 66, 0.18),
-    0 0 0 1px rgba(9, 30, 66, 0.08);
+    0 8px 16px rgba(20, 38, 63, 0.12),
+    0 0 0 1px rgba(20, 38, 63, 0.08);
 }
 
 .board-meta-form--inline,
 .board-add-form--floating {
-  margin-top: 12px;
-  margin-bottom: 7px;
+  margin-top: 8px;
+  margin-bottom: 5px;
 }
 
 .board-meta-form__title-input,
 .board-add-form input,
 .login-form input[type="password"],
 .icon-picker-search {
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .board-save-button,
 .board-cancel-button {
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .board-save-button {
