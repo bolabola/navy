@@ -18,7 +18,7 @@ const validBoard = {
   ],
   activeTabId: "default",
   items: [
-    { id: "item-1", name: "OpenAI", url: "https://openai.com/", tabId: "default" },
+    { id: "item-1", name: "OpenAI", url: "https://openai.com/", icon: "sparkles", description: "AI tools", tabId: "default" },
     { id: "item-2", name: "", url: "github.com", tabId: "tab-mev" }
   ]
 };
@@ -38,6 +38,8 @@ test("validateBoardState rejects invalid board shape", () => {
   assert.equal(validateBoardState([{ ...validBoard, activeTabId: "missing" }]), "Invalid board active tab");
   assert.equal(validateBoardState([{ ...validBoard, tabs: [{ id: "default", name: "" }] }]), "Invalid board tab name");
   assert.equal(validateBoardState([{ ...validBoard, items: [{ id: "item-1", name: "Bad tab", url: "https://example.com", tabId: "missing" }] }]), "Invalid item tab");
+  assert.equal(validateBoardState([{ ...validBoard, items: [{ id: "item-1", name: "Bad icon", url: "https://example.com", icon: "bad icon" }] }]), "Invalid item icon");
+  assert.equal(validateBoardState([{ ...validBoard, items: [{ id: "item-1", name: "Long desc", url: "https://example.com", description: "x".repeat(301) }] }]), "Invalid item description");
 });
 
 test("validateBoardState rejects invalid item URLs", () => {

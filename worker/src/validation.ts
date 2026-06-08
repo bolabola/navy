@@ -6,6 +6,7 @@ const BOARD_TITLE_MAX_LENGTH = 120;
 const BOARD_ICON_MAX_LENGTH = 64;
 const BOARD_TAB_NAME_MAX_LENGTH = 40;
 const BOARD_ITEM_NAME_MAX_LENGTH = 200;
+const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
 const BOARD_URL_MAX_LENGTH = 2048;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const ICON_NAME_RE = /^[a-z0-9-]+$/;
@@ -14,6 +15,8 @@ interface BoardItem {
   id?: unknown;
   name?: unknown;
   url?: unknown;
+  icon?: unknown;
+  description?: unknown;
   tabId?: unknown;
 }
 
@@ -108,6 +111,8 @@ function validateBoardItem(value: unknown, tabIds: Set<string>): string | null {
   if (!isNonEmptyString(item.id, BOARD_ID_MAX_LENGTH)) return "Invalid item id";
   if (typeof item.name !== "string" || item.name.length > BOARD_ITEM_NAME_MAX_LENGTH) return "Invalid item name";
   if (typeof item.url !== "string" || !isStoredUrlAllowed(item.url)) return "Invalid item URL";
+  if (item.icon !== undefined && (typeof item.icon !== "string" || item.icon.length > BOARD_ICON_MAX_LENGTH || (item.icon.length > 0 && !ICON_NAME_RE.test(item.icon)))) return "Invalid item icon";
+  if (item.description !== undefined && (typeof item.description !== "string" || item.description.length > BOARD_ITEM_DESCRIPTION_MAX_LENGTH)) return "Invalid item description";
   if (item.tabId !== undefined && (typeof item.tabId !== "string" || item.tabId.length > BOARD_ID_MAX_LENGTH)) return "Invalid item tab";
   if (typeof item.tabId === "string" && tabIds.size > 0 && !tabIds.has(item.tabId)) return "Invalid item tab";
 

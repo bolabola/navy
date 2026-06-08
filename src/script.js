@@ -16,14 +16,16 @@
   const BOARD_ROW_HEIGHT = 24;
   const BOARD_ROW_GAP = 3;
   const BOARD_COLLAPSED_HEIGHT = 34;
-  const BOARD_META_FORM_HEIGHT = 96;
+  const BOARD_META_FORM_HEIGHT = 132;
   const BOARD_ADD_FORM_HEIGHT = 104;
   const BOARD_TABS_HEIGHT = 34;
+  const BOARD_ITEM_EDIT_FORM_EXTRA_HEIGHT = 110;
   const BOARD_ICON_TILE_SIZE = 26;
   const BOARD_ICON_TILE_GAP = 4;
   const DEFAULT_TAB_ID = "default";
   const DEFAULT_TAB_NAME = "默认";
   const BOARD_TAB_NAME_MAX_LENGTH = 40;
+  const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
   const FAVICON_RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];
   const BOARD_ACCENTS = ["#0079bf", "#42526e", "#00a3bf", "#5aac44", "#eb5a46", "#89609e", "#ff9f1a"];
   const DEFAULT_BOARD_ICONS = ["layout-grid", "zap", "code", "sparkles", "wrench", "file-text"];
@@ -126,6 +128,7 @@
     boardDragFrame: null,
     resizeFrame: null,
     rowDragLayoutFrame: null,
+    editItemId: null,
     loginOpen: false,
     loginError: null,
     importingBoardId: null,
@@ -1053,6 +1056,8 @@
         id: typeof item.id === "string" && item.id.trim() ? item.id : uid("item"),
         name: typeof item.name === "string" ? item.name : "",
         url: typeof item.url === "string" ? item.url : "",
+        icon: typeof item.icon === "string" && item.icon.trim() && ICON_NAME_RE.test(item.icon.trim()) ? normalizeIconName(item.icon) : "",
+        description: typeof item.description === "string" ? item.description.slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH) : "",
         tabId: tabId
       };
     });
@@ -1389,7 +1394,7 @@
 
   function shouldShowBoardTabs(board) {
     const tabs = getBoardTabs(board);
-    return auth.isAdmin || tabs.length > 1;
+    return tabs.length > 1;
   }
 
   function captureBoardRects() {
@@ -1629,9 +1634,11 @@
 
     if (!urlOnly) {
       const icon = document.createElement("span");
-      icon.className = "link-row__icon";
+      icon.className = "link-row__icon" + (item.icon ? " link-row__icon--custom" : "");
       const domain = faviconDomain(item.url);
-      if (isGithubDomain(domain)) {
+      if (item.icon) {
+        icon.appendChild(iconNode(item.icon));
+      } else if (isGithubDomain(domain)) {
         icon.classList.add("link-row__icon--github");
         icon.appendChild(githubIconNode());
       } else {
@@ -1650,20 +1657,86 @@
       anchor.appendChild(icon);
     }
 
+    const text = document.createElement("span");
+    text.className = "link-row__text";
     const name = document.createElement("span");
     name.className = "link-row__name";
     name.textContent = urlOnly ? displayUrlWithoutProtocol(url) : title;
-    anchor.appendChild(name);
+    text.appendChild(name);
+    if (!iconOnly && !urlOnly && item.description) {
+      const desc = document.createElement("span");
+      desc.className = "link-row__description";
+      desc.textContent = item.description;
+      text.appendChild(desc);
+    }
+    anchor.appendChild(text);
     row.appendChild(anchor);
 
     if (showDelete) {
+      const actions = document.createElement("div");
+      actions.className = "link-row__actions";
+      const edit = actionButton("link-row__edit", "edit-item", boardId, "编辑", [staticIconNode("icon-pencil")]);
+      edit.dataset.itemId = item.id;
+      edit.setAttribute("aria-label", "编辑");
+      actions.appendChild(edit);
       const del = actionButton("link-row__delete", "delete-item", boardId, "删除", [staticIconNode("icon-x")]);
       del.dataset.itemId = item.id;
       del.setAttribute("aria-label", "删除");
-      row.appendChild(del);
+      actions.appendChild(del);
+      row.appendChild(actions);
     }
 
     return row;
+  }
+
+  function renderItemEditForm(boardId, item) {
+    const form = document.createElement("form");
+    form.className = "item-edit-form";
+    form.dataset.role = "item-edit-form";
+    form.dataset.boardId = boardId;
+    form.dataset.itemId = item.id;
+
+    const row = document.createElement("div");
+    row.className = "item-edit-form__row";
+    row.appendChild(renderIconPickerWidget("icon", item.icon || "link"));
+
+    const title = document.createElement("input");
+    title.type = "text";
+    title.name = "name";
+    title.placeholder = "标题";
+    title.value = item.name || "";
+    row.appendChild(title);
+    form.appendChild(row);
+
+    const url = document.createElement("input");
+    url.type = "text";
+    url.name = "url";
+    url.inputMode = "url";
+    url.autocapitalize = "off";
+    url.autocomplete = "off";
+    url.spellcheck = false;
+    url.placeholder = TEXT.enterUrl;
+    url.value = item.url || "";
+    url.required = true;
+    form.appendChild(url);
+
+    const desc = document.createElement("textarea");
+    desc.name = "description";
+    desc.placeholder = "描述";
+    desc.maxLength = BOARD_ITEM_DESCRIPTION_MAX_LENGTH;
+    desc.value = item.description || "";
+    form.appendChild(desc);
+
+    const actions = document.createElement("div");
+    actions.className = "item-edit-form__actions";
+    const save = document.createElement("button");
+    save.className = "board-save-button";
+    save.type = "submit";
+    save.textContent = TEXT.save;
+    actions.appendChild(save);
+    actions.appendChild(actionButton("board-cancel-button", "cancel-edit-item", boardId, "", [TEXT.cancel]));
+    form.appendChild(actions);
+    return form;
   }
 
   function renderBoardActionsMenu(board) {
@@ -1680,11 +1753,6 @@
     }
 
     menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
-    menu.appendChild(menuItem("add-board-tab", "icon-plus", "新增子 tab"));
-    menu.appendChild(menuItem("rename-board-tab", "icon-pencil-line", "重命名当前 tab"));
-    if (getBoardActiveTabId(board) !== DEFAULT_TAB_ID) {
-      menu.appendChild(menuItem("delete-board-tab", "icon-trash", "删除当前 tab", true));
-    }
     menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
     menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
     menu.appendChild(menuItem("delete-board", "icon-trash-2", TEXT.deleteBoard, true));
@@ -1709,6 +1777,36 @@
     title.required = true;
     row.appendChild(title);
     form.appendChild(row);
+
+    const tabs = getBoardTabs(board);
+    const activeTabId = getBoardActiveTabId(board);
+    const tabTools = document.createElement("div");
+    tabTools.className = "board-meta-form__tabs";
+    const tabLabel = document.createElement("span");
+    tabLabel.className = "board-meta-form__label";
+    tabLabel.textContent = "子 tab";
+    tabTools.appendChild(tabLabel);
+
+    const tabList = document.createElement("div");
+    tabList.className = "board-meta-form__tab-list";
+    tabs.forEach(function (tab) {
+      const tabButton = actionButton("board-meta-form__tab" + (tab.id === activeTabId ? " is-active" : ""), "select-board-tab", board.id, tab.name, [
+        tab.name
+      ]);
+      tabButton.dataset.tabId = tab.id;
+      tabList.appendChild(tabButton);
+    });
+    tabTools.appendChild(tabList);
+
+    const tabActions = document.createElement("div");
+    tabActions.className = "board-meta-form__tab-actions";
+    tabActions.appendChild(actionButton("board-icon-button", "add-board-tab", board.id, "新增子 tab", [staticIconNode("icon-plus")]));
+    tabActions.appendChild(actionButton("board-icon-button", "rename-board-tab", board.id, "重命名当前 tab", [staticIconNode("icon-pencil-line")]));
+    const deleteTab = actionButton("board-icon-button", "delete-board-tab", board.id, "删除当前 tab", [staticIconNode("icon-trash")]);
+    deleteTab.disabled = activeTabId === DEFAULT_TAB_ID;
+    tabActions.appendChild(deleteTab);
+    tabTools.appendChild(tabActions);
+    form.appendChild(tabTools);
 
     const actions = document.createElement("div");
     actions.className = "board-meta-form__actions";
@@ -1739,14 +1837,6 @@
       list.appendChild(button);
     });
     wrapper.appendChild(list);
-
-    if (auth.isAdmin) {
-      const add = actionButton("board-tabs__add", "add-board-tab", board.id, "新增子 tab", [
-        staticIconNode("icon-plus")
-      ]);
-      add.setAttribute("aria-label", "新增子 tab");
-      wrapper.appendChild(add);
-    }
 
     return wrapper;
   }
@@ -1854,7 +1944,11 @@
       list.dataset.tabId = activeTabId;
       if (visibleItems.length) {
         visibleItems.forEach(function (item) {
-          list.appendChild(renderLinkRow(board.id, item, board.displayMode, editOpen));
+          if (editOpen && uiState.editItemId === item.id) {
+            list.appendChild(renderItemEditForm(board.id, item));
+          } else {
+            list.appendChild(renderLinkRow(board.id, item, board.displayMode, editOpen));
+          }
         });
       } else {
         const empty = document.createElement("div");
@@ -2488,7 +2582,10 @@
       : (activeItems.length
           ? activeItems.length * BOARD_ROW_HEIGHT + Math.max(0, activeItems.length - 1) * BOARD_ROW_GAP
           : BOARD_LIST_MIN_HEIGHT);
-    const listHeight = Math.max(BOARD_LIST_MIN_HEIGHT, Math.min(clampHeight(board.height), contentHeight));
+    const editedItemHeight = uiState.editItemId && activeItems.some(function (item) {
+      return item.id === uiState.editItemId;
+    }) ? BOARD_ITEM_EDIT_FORM_EXTRA_HEIGHT : 0;
+    const listHeight = Math.max(BOARD_LIST_MIN_HEIGHT, Math.min(clampHeight(board.height), contentHeight + editedItemHeight));
     const metaHeight = uiState.editBoardId === board.id ? BOARD_META_FORM_HEIGHT : 0;
     const addHeight = uiState.openAddBoardId === board.id ? BOARD_ADD_FORM_HEIGHT : 0;
     const tabsHeight = shouldShowBoardTabs(board) ? BOARD_TABS_HEIGHT : 0;
@@ -3451,6 +3548,7 @@
       if (!boardId || !tabId) return;
       uiState.openBoardMenuId = null;
       uiState.openAddBoardId = null;
+      uiState.editItemId = null;
       mutateBoardUiPreference(boardId, function (board) {
         return Object.assign({}, board, {
           activeTabId: normalizeActiveTabId(tabId, getBoardTabs(board))
@@ -3463,6 +3561,7 @@
       if (!auth.isAdmin || !boardId) return;
       uiState.openBoardMenuId = null;
       uiState.openAddBoardId = null;
+      uiState.editItemId = null;
       addBoardTab(boardId);
       return;
     }
@@ -3470,6 +3569,7 @@
     if (action === "rename-board-tab") {
       if (!auth.isAdmin || !boardId) return;
       uiState.openBoardMenuId = null;
+      uiState.editItemId = null;
       renameActiveBoardTab(boardId);
       return;
     }
@@ -3478,6 +3578,7 @@
       if (!auth.isAdmin || !boardId) return;
       uiState.openBoardMenuId = null;
       uiState.openAddBoardId = null;
+      uiState.editItemId = null;
       deleteActiveBoardTab(boardId);
       return;
     }
@@ -3487,6 +3588,7 @@
       if (uiState.openAddBoardId === boardId) {
         uiState.openAddBoardId = null;
       }
+      uiState.editItemId = null;
       uiState.editBoardId = uiState.editBoardId === boardId ? null : boardId;
       render();
       if (uiState.editBoardId === boardId) {
@@ -3501,6 +3603,7 @@
 
     if (action === "cancel-edit-board") {
       uiState.editBoardId = null;
+      uiState.editItemId = null;
       render();
       return;
     }
@@ -3533,6 +3636,7 @@
 
     if (action === "toggle-add") {
       uiState.openBoardMenuId = null;
+      uiState.editItemId = null;
       if (uiState.editBoardId === boardId) {
         uiState.editBoardId = null;
       }
@@ -3614,6 +3718,9 @@
       if (!boardId || !itemId) {
         return;
       }
+      if (uiState.editItemId === itemId) {
+        uiState.editItemId = null;
+      }
       mutateBoard(boardId, function (board) {
         return Object.assign({}, board, {
           items: board.items.filter(function (entry) {
@@ -3621,6 +3728,33 @@
           })
         });
       });
+      return;
+    }
+
+    if (action === "edit-item") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      const itemId = button.getAttribute("data-item-id");
+      if (!boardId || !itemId) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      uiState.openAddBoardId = null;
+      uiState.editBoardId = boardId;
+      uiState.editItemId = itemId;
+      render();
+      const input = app.querySelector('.item-edit-form[data-item-id="' + cssEscape(itemId) + '"] input[name="name"]');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+      return;
+    }
+
+    if (action === "cancel-edit-item") {
+      uiState.editItemId = null;
+      render();
       return;
     }
   });
@@ -3710,6 +3844,47 @@
       });
       saveBoards();
       render();
+      return;
+    }
+
+    const itemEditForm = event.target.closest('[data-role="item-edit-form"]');
+    if (itemEditForm) {
+      event.preventDefault();
+
+      const boardId = itemEditForm.getAttribute("data-board-id");
+      const itemId = itemEditForm.getAttribute("data-item-id");
+      const formData = new FormData(itemEditForm);
+      const rawUrl = formData.get("url");
+      const rawName = formData.get("name");
+      const rawIcon = String(formData.get("icon") || "").trim();
+      const description = String(formData.get("description") || "").trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
+      if (!boardId || !itemId) {
+        return;
+      }
+
+      let url;
+      try {
+        url = normalizeUrl(rawUrl);
+      } catch (error) {
+        window.alert(TEXT.invalidUrl);
+        return;
+      }
+
+      uiState.editItemId = null;
+      mutateBoard(boardId, function (board) {
+        return Object.assign({}, board, {
+          items: board.items.map(function (item) {
+            return item.id === itemId
+              ? Object.assign({}, item, {
+                  name: displayName(url, rawName),
+                  url: url,
+                  icon: ICON_NAME_RE.test(rawIcon) ? normalizeIconName(rawIcon) : item.icon,
+                  description: description
+                })
+              : item;
+          })
+        });
+      });
       return;
     }
 
