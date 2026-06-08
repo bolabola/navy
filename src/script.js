@@ -1579,6 +1579,8 @@
         event.preventDefault();
         const safe = normalizeIconName(item.getAttribute("data-name"));
         valueInput.value = safe;
+        const itemIconMode = picker.closest('[data-role="item-edit-form"]')?.querySelector('input[name="itemIconMode"]');
+        if (itemIconMode) itemIconMode.value = "custom";
         currentSpan.replaceChildren(iconNode(safe));
         grid.querySelectorAll(".icon-picker-grid__item.is-selected").forEach(function (el) {
           el.classList.remove("is-selected");
@@ -1699,6 +1701,18 @@
     const row = document.createElement("div");
     row.className = "item-edit-form__row";
     row.appendChild(renderIconPickerWidget("icon", item.icon || "link"));
+    const iconMode = document.createElement("input");
+    iconMode.type = "hidden";
+    iconMode.name = "itemIconMode";
+    iconMode.value = item.icon ? "custom" : "favicon";
+    row.appendChild(iconMode);
+
+    const resetIcon = actionButton("item-edit-form__icon-reset", "reset-item-icon", boardId, "恢复 favicon", [
+      staticIconNode("icon-rotate-ccw")
+    ]);
+    resetIcon.dataset.itemId = item.id;
+    resetIcon.setAttribute("aria-label", "恢复 favicon");
+    row.appendChild(resetIcon);
 
     const title = document.createElement("input");
     title.type = "text";
@@ -1729,6 +1743,12 @@
 
     const actions = document.createElement("div");
     actions.className = "item-edit-form__actions";
+    const autofill = actionButton("board-cancel-button", "autofill-item-meta", boardId, "自动获取标题和描述", [
+      staticIconNode("icon-sparkles"),
+      " 自动获取"
+    ]);
+    autofill.dataset.itemId = item.id;
+    actions.appendChild(autofill);
     const save = document.createElement("button");
     save.className = "board-save-button";
     save.type = "submit";
@@ -1798,10 +1818,25 @@
     });
     tabTools.appendChild(tabList);
 
+    const activeTabName = document.createElement("input");
+    activeTabName.className = "board-meta-form__tab-input";
+    activeTabName.type = "text";
+    activeTabName.name = "activeTabName";
+    activeTabName.maxLength = BOARD_TAB_NAME_MAX_LENGTH;
+    activeTabName.value = getBoardActiveTab(board).name;
+    activeTabName.placeholder = "当前 tab 名称";
+    tabTools.appendChild(activeTabName);
+
     const tabActions = document.createElement("div");
     tabActions.className = "board-meta-form__tab-actions";
+    const newTab = document.createElement("input");
+    newTab.className = "board-meta-form__tab-new";
+    newTab.type = "text";
+    newTab.name = "newTabName";
+    newTab.maxLength = BOARD_TAB_NAME_MAX_LENGTH;
+    newTab.placeholder = "新 tab";
+    tabActions.appendChild(newTab);
     tabActions.appendChild(actionButton("board-icon-button", "add-board-tab", board.id, "新增子 tab", [staticIconNode("icon-plus")]));
-    tabActions.appendChild(actionButton("board-icon-button", "rename-board-tab", board.id, "重命名当前 tab", [staticIconNode("icon-pencil-line")]));
     const deleteTab = actionButton("board-icon-button", "delete-board-tab", board.id, "删除当前 tab", [staticIconNode("icon-trash")]);
     deleteTab.disabled = activeTabId === DEFAULT_TAB_ID;
     tabActions.appendChild(deleteTab);
@@ -2637,15 +2672,8 @@
     rerenderBoardInPlace(boardId);
   }
 
-  function promptTabName(message, value) {
-    const result = window.prompt(message, value || "");
-    if (result == null) return null;
-    const name = result.trim();
-    return name ? name.slice(0, BOARD_TAB_NAME_MAX_LENGTH) : null;
-  }
-
-  function addBoardTab(boardId) {
-    const name = promptTabName("子 tab 名称", "");
+  function addBoardTab(boardId, rawName) {
+    const name = String(rawName || "").trim().slice(0, BOARD_TAB_NAME_MAX_LENGTH);
     if (!name) return;
     mutateBoard(boardId, function (board) {
       const tab = { id: uid("tab"), name: name };
@@ -2657,11 +2685,11 @@
     });
   }
 
-  function renameActiveBoardTab(boardId) {
+  function renameActiveBoardTab(boardId, rawName) {
     const board = findBoard(boardId);
     const activeTab = getBoardActiveTab(board);
     if (!board || !activeTab) return;
-    const name = promptTabName("子 tab 名称", activeTab.name);
+    const name = String(rawName || "").trim().slice(0, BOARD_TAB_NAME_MAX_LENGTH);
     if (!name) return;
     mutateBoard(boardId, function (entry) {
       return Object.assign({}, entry, {
@@ -3562,7 +3590,8 @@
       uiState.openBoardMenuId = null;
       uiState.openAddBoardId = null;
       uiState.editItemId = null;
-      addBoardTab(boardId);
+      const input = app.querySelector('.board-meta-form[data-board-id="' + cssEscape(boardId) + '"] input[name="newTabName"]');
+      addBoardTab(boardId, input ? input.value : "");
       return;
     }
 
@@ -3570,7 +3599,8 @@
       if (!auth.isAdmin || !boardId) return;
       uiState.openBoardMenuId = null;
       uiState.editItemId = null;
-      renameActiveBoardTab(boardId);
+      const input = app.querySelector('.board-meta-form[data-board-id="' + cssEscape(boardId) + '"] input[name="activeTabName"]');
+      renameActiveBoardTab(boardId, input ? input.value : "");
       return;
     }
 
@@ -3757,6 +3787,52 @@
       render();
       return;
     }
+
+    if (action === "reset-item-icon") {
+      if (!auth.isAdmin) return;
+      const itemId = button.getAttribute("data-item-id");
+      const form = itemId ? app.querySelector('.item-edit-form[data-item-id="' + cssEscape(itemId) + '"]') : null;
+      if (!form) return;
+      const mode = form.querySelector('input[name="itemIconMode"]');
+      const icon = form.querySelector('input[name="icon"]');
+      const current = form.querySelector('[data-role="icon-picker-current"]');
+      if (mode) mode.value = "favicon";
+      if (icon) icon.value = "";
+      if (current) current.replaceChildren(staticIconNode("icon-globe"));
+      return;
+    }
+
+    if (action === "autofill-item-meta") {
+      if (!auth.isAdmin) return;
+      const itemId = button.getAttribute("data-item-id");
+      const form = itemId ? app.querySelector('.item-edit-form[data-item-id="' + cssEscape(itemId) + '"]') : null;
+      if (!form) return;
+      const urlInput = form.querySelector('input[name="url"]');
+      const nameInput = form.querySelector('input[name="name"]');
+      const descInput = form.querySelector('textarea[name="description"]');
+      let url;
+      try {
+        url = normalizeUrl(urlInput && urlInput.value);
+      } catch (error) {
+        window.alert(TEXT.invalidUrl);
+        return;
+      }
+      button.disabled = true;
+      apiSend("/url-titles", "POST", { urls: [url] }).then(function (results) {
+        const meta = Array.isArray(results) ? results[0] : null;
+        if (nameInput && meta && typeof meta.title === "string" && meta.title.trim()) {
+          nameInput.value = meta.title.trim();
+        }
+        if (descInput && meta && typeof meta.description === "string" && meta.description.trim()) {
+          descInput.value = meta.description.trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
+        }
+      }).catch(function () {
+        window.alert(TEXT.importFailed);
+      }).finally(function () {
+        button.disabled = false;
+      });
+      return;
+    }
   });
 
   app.addEventListener("submit", function (event) {
@@ -3829,6 +3905,7 @@
       const formData = new FormData(editBoardForm);
       const title = String(formData.get("title") || "").trim();
       const icon = String(formData.get("icon") || "").trim();
+      const activeTabName = String(formData.get("activeTabName") || "").trim().slice(0, BOARD_TAB_NAME_MAX_LENGTH);
       if (!boardId || !title) {
         return;
       }
@@ -3838,7 +3915,10 @@
         return board.id === boardId
           ? Object.assign({}, board, {
           title: title,
-          icon: ICON_NAME_RE.test(icon) ? normalizeIconName(icon) : board.icon
+          icon: ICON_NAME_RE.test(icon) ? normalizeIconName(icon) : board.icon,
+          tabs: activeTabName ? getBoardTabs(board).map(function (tab) {
+            return tab.id === getBoardActiveTabId(board) ? Object.assign({}, tab, { name: activeTabName }) : tab;
+          }) : getBoardTabs(board)
             })
           : board;
       });
@@ -3857,6 +3937,7 @@
       const rawUrl = formData.get("url");
       const rawName = formData.get("name");
       const rawIcon = String(formData.get("icon") || "").trim();
+      const iconMode = String(formData.get("itemIconMode") || "custom");
       const description = String(formData.get("description") || "").trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
       if (!boardId || !itemId) {
         return;
@@ -3878,7 +3959,7 @@
               ? Object.assign({}, item, {
                   name: displayName(url, rawName),
                   url: url,
-                  icon: ICON_NAME_RE.test(rawIcon) ? normalizeIconName(rawIcon) : item.icon,
+                  icon: iconMode === "favicon" ? "" : (ICON_NAME_RE.test(rawIcon) ? normalizeIconName(rawIcon) : item.icon),
                   description: description
                 })
               : item;
@@ -4077,10 +4158,12 @@
             normalized = entry && entry.url;
           }
           const title = entry && typeof entry.title === "string" ? entry.title.trim() : "";
+          const description = entry && typeof entry.description === "string" ? entry.description.trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH) : "";
           return {
             id: uid("item"),
             name: title || displayName(normalized, ""),
             url: normalized,
+            description: description,
             tabId: tabId
           };
         }).filter(function (item) { return Boolean(item.url); });

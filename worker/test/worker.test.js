@@ -836,6 +836,32 @@ test("logout clears cookie", async () => {
   assert.equal(res.headers.get("Cache-Control"), "no-store");
 });
 
+test("url titles returns title and description metadata", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(
+    "<!doctype html><html><head><title>Example &amp; Tools</title><meta name=\"description\" content=\"Helpful board links &amp; references\"></head><body></body></html>",
+    { headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
+
+  try {
+    const env = createEnv();
+    const { cookie, csrfToken } = await login(env);
+    const res = await worker.fetch(new Request("https://example.com/api/url-titles", {
+      method: "POST",
+      headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ urls: ["https://example.com/tools"] })
+    }), env);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), [{
+      url: "https://example.com/tools",
+      title: "Example & Tools",
+      description: "Helpful board links & references"
+    }]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("favicon rejects malformed domains", async () => {
   const env = createEnv();
   const res = await worker.fetch(new Request("https://example.com/api/favicon?d=localhost"), env);

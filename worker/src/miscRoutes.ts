@@ -217,17 +217,17 @@ export async function handleUrlTitles(request: Request, env: Env): Promise<Respo
     safeUrls.push(u);
   }
 
-  const titles = await runWithConcurrency(safeUrls, URL_TITLES_CONCURRENCY, fetchTitle);
-  const result = safeUrls.map((url, i) => ({ url, title: titles[i] }));
+  const metadata = await runWithConcurrency(safeUrls, URL_TITLES_CONCURRENCY, fetchMetadata);
+  const result = safeUrls.map((url, i) => ({ url, title: metadata[i]?.title || null, description: metadata[i]?.description || null }));
   return jsonResponse(JSON.stringify(result), 200, { "Cache-Control": "no-store" });
 }
 
-async function fetchTitle(rawUrl: string): Promise<string | null> {
+async function fetchMetadata(rawUrl: string): Promise<{ title: string | null; description: string | null }> {
   try {
     const res = await fetchFollowingSafeRedirects(rawUrl);
-    if (!res.ok || !res.body) return null;
+    if (!res.ok || !res.body) return { title: null, description: null };
     const ctype = (res.headers.get("Content-Type") || "").toLowerCase();
-    if (ctype && !ctype.includes("html") && !ctype.includes("xml") && !ctype.includes("text")) return null;
+    if (ctype && !ctype.includes("html") && !ctype.includes("xml") && !ctype.includes("text")) return { title: null, description: null };
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder("utf-8", { fatal: false, ignoreBOM: false });
@@ -240,7 +240,7 @@ async function fetchTitle(rawUrl: string): Promise<string | null> {
         if (!value) continue;
         total += value.byteLength;
         buf += decoder.decode(value, { stream: true });
-        if (/<\/title>/i.test(buf)) break;
+        if (/<\/title>/i.test(buf) && /<meta\b[^>]+(?:name|property)\s*=\s*["'](?:description|og:description|twitter:description)["']/i.test(buf)) break;
       }
     } finally {
       try { await reader.cancel(); } catch {}
@@ -248,12 +248,30 @@ async function fetchTitle(rawUrl: string): Promise<string | null> {
     buf += decoder.decode();
 
     const m = buf.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    if (!m) return null;
-    const title = decodeHtmlEntities(m[1]).replace(/\s+/g, " ").trim();
-    return title || null;
+    const title = m ? decodeHtmlEntities(m[1]).replace(/\s+/g, " ").trim() : "";
+    const description = extractMetaDescription(buf);
+    return {
+      title: title || null,
+      description: description || null
+    };
   } catch {
-    return null;
+    return { title: null, description: null };
   }
+}
+
+function extractMetaDescription(html: string): string | null {
+  const metaRe = /<meta\b[^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = metaRe.exec(html))) {
+    const tag = match[0];
+    const name = readHtmlAttribute(tag, "name") || readHtmlAttribute(tag, "property");
+    if (!name || !/^(description|og:description|twitter:description)$/i.test(name.trim())) continue;
+    const content = readHtmlAttribute(tag, "content");
+    if (!content) continue;
+    const value = decodeHtmlEntities(content).replace(/\s+/g, " ").trim();
+    if (value) return value;
+  }
+  return null;
 }
 
 async function readTextBody(res: Response, byteCap: number): Promise<string> {
