@@ -2630,9 +2630,71 @@
       updateBoardOverflowIndicators(app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]'));
       return;
     }
-    mutateBoard(boardId, function (entry) {
-      return Object.assign({}, entry, { height: nextHeight });
+    updateBoardHeightInPlace(boardId, nextHeight);
+  }
+
+  function updateBoardHeightInPlace(boardId, height) {
+    const nextHeight = clampHeight(height);
+    boards = boards.map(function (board) {
+      return board.id === boardId ? Object.assign({}, board, { height: nextHeight }) : board;
     });
+    saveBoards();
+
+    const slot = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]');
+    const card = slot ? slot.querySelector(".board-card") : null;
+    if (!slot || !card) {
+      render();
+      return;
+    }
+
+    card.style.setProperty("--list-height", nextHeight + "px");
+    syncBoardWallLayout();
+    updateBoardOverflowIndicators(slot);
+  }
+
+  function updateBoardCountInPlace(slot, board) {
+    const count = slot ? slot.querySelector(".board-card__count") : null;
+    if (!count || !board) {
+      return;
+    }
+    const itemCount = Array.isArray(board.items) ? board.items.length : 0;
+    count.textContent = String(itemCount);
+    count.title = String(itemCount) + TEXT.urlCount;
+  }
+
+  function removeBoardItemInPlace(boardId, itemId) {
+    let nextBoard = null;
+    boards = boards.map(function (board) {
+      if (board.id !== boardId) return board;
+      nextBoard = Object.assign({}, board, {
+        items: board.items.filter(function (entry) {
+          return entry.id !== itemId;
+        })
+      });
+      return nextBoard;
+    });
+    saveBoards();
+
+    const slot = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]');
+    const list = slot ? slot.querySelector('[data-role="board-list"]') : null;
+    const itemNode = slot ? slot.querySelector('[data-item-id="' + cssEscape(itemId) + '"]') : null;
+    if (!slot || !list || !itemNode || !nextBoard) {
+      rerenderBoardInPlace(boardId);
+      return;
+    }
+
+    itemNode.remove();
+    updateBoardCountInPlace(slot, nextBoard);
+
+    if (!list.querySelector('[data-role="link-row"], [data-role="item-edit-form"]')) {
+      const empty = document.createElement("div");
+      empty.className = "board-empty";
+      empty.textContent = TEXT.empty;
+      list.appendChild(empty);
+    }
+
+    syncBoardWallLayout();
+    updateBoardOverflowIndicators(slot);
   }
 
   function estimateBoardHeight(board) {
@@ -3205,9 +3267,7 @@
       }
     }
 
-    mutateBoard(payload.boardId, function (board) {
-      return Object.assign({}, board, { height: payload.nextHeight });
-    });
+    updateBoardHeightInPlace(payload.boardId, payload.nextHeight);
   }
 
   function getBoardDropPositionFromPoint(clientX, clientY) {
@@ -3795,13 +3855,7 @@
       if (uiState.editItemId === itemId) {
         uiState.editItemId = null;
       }
-      mutateBoard(boardId, function (board) {
-        return Object.assign({}, board, {
-          items: board.items.filter(function (entry) {
-            return entry.id !== itemId;
-          })
-        });
-      });
+      removeBoardItemInPlace(boardId, itemId);
       return;
     }
 
