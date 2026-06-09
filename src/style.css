@@ -539,14 +539,12 @@ a {
   min-height: 0;
 }
 
-.board-wall-scroll::-webkit-scrollbar,
-.board-list::-webkit-scrollbar {
+.board-wall-scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
-.board-wall-scroll::-webkit-scrollbar-thumb,
-.board-list::-webkit-scrollbar-thumb {
+.board-wall-scroll::-webkit-scrollbar-thumb {
   background: rgba(9, 30, 66, 0.22);
   border-radius: 999px;
 }
@@ -979,7 +977,7 @@ body.is-board-dragging {
   min-height: 64px;
   max-height: var(--list-height);
   padding-right: 2px;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .board-list--icons {
@@ -1249,6 +1247,9 @@ body.is-board-dragging {
 
 .board-resize-handle {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 12px;
   margin-top: 4px;
   cursor: ns-resize;
@@ -1271,6 +1272,47 @@ body.is-board-dragging {
 .board-resize-handle:hover::before {
   width: 62px;
   background: rgba(66, 82, 110, 0.62);
+}
+
+.board-card.has-hidden-items .board-card__body {
+  position: relative;
+}
+
+.board-card.has-hidden-items .board-card__body::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(226, 228, 230, 0), rgba(226, 228, 230, 0.92));
+}
+
+.board-hidden-count {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  border-radius: 999px;
+  min-width: 30px;
+  height: 18px;
+  padding: 0 8px;
+  color: #0c66e4;
+  background: #e9f2ff;
+  box-shadow: 0 0 0 1px rgba(12, 102, 228, 0.22);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.board-hidden-count[hidden] {
+  display: none;
+}
+
+.board-hidden-count:hover {
+  color: #0747a6;
+  background: #d8eaff;
 }
 
 .board-card.is-collapsed .board-card__meta,
@@ -1538,22 +1580,19 @@ body {
   padding: 2px 0 8px;
 }
 
-.board-wall-scroll::-webkit-scrollbar,
-.board-list::-webkit-scrollbar {
+.board-wall-scroll::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
 
-.board-wall-scroll::-webkit-scrollbar-thumb,
-.board-list::-webkit-scrollbar-thumb {
+.board-wall-scroll::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   background: rgba(107, 119, 140, 0.35);
   background-clip: padding-box;
   border-radius: 999px;
 }
 
-.board-wall-scroll::-webkit-scrollbar-thumb:hover,
-.board-list::-webkit-scrollbar-thumb:hover {
+.board-wall-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(107, 119, 140, 0.55);
   background-clip: padding-box;
 }

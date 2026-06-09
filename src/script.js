@@ -78,6 +78,7 @@
     moveBoard: "拖拽 Board",
     toggleView: "显示模式",
     resize: "拖动调整高度",
+    hiddenItems: "还有 {count} 个未显示，点击展开",
     invalidUrl: "请输入有效的网址。",
     login: "登录",
     logout: "退出",
@@ -1744,6 +1745,10 @@
       resize.dataset.role = "resize-handle";
       resize.dataset.boardId = board.id;
       resize.title = TEXT.resize;
+      const hiddenCount = actionButton("board-hidden-count", "expand-board-to-fit", board.id, "", []);
+      hiddenCount.dataset.role = "hidden-count";
+      hiddenCount.hidden = true;
+      resize.appendChild(hiddenCount);
       card.appendChild(resize);
     }
 
@@ -2202,6 +2207,7 @@
       syncBoardWallLayout();
     }
 
+    updateBoardOverflowIndicators();
     restoreScrollState(scrollState);
     if (useFlip) {
       animateBoardFlip(previousRects);
@@ -2220,6 +2226,7 @@
     slot.className = "board-slot" + (uiState.openBoardMenuId === boardId ? " has-open-menu" : "");
     slot.replaceChildren(renderBoard(board));
     syncBoardWallLayout();
+    updateBoardOverflowIndicators(slot);
     restoreScrollState(scrollState);
   }
 
@@ -2258,6 +2265,7 @@
     if (!uiState.boardDragging) {
       syncBoardWallLayout();
     }
+    updateBoardOverflowIndicators();
     animateBoardFlip(previousRects);
     bindIconPickers(app);
     restoreScrollState(scrollState);
@@ -2269,8 +2277,7 @@
         left: window.scrollX || window.pageXOffset || 0,
         top: window.scrollY || window.pageYOffset || 0
       },
-      wall: null,
-      lists: {}
+      wall: null
     };
     const wall = app.querySelector(".board-wall-scroll");
     if (wall) {
@@ -2279,12 +2286,6 @@
         top: wall.scrollTop
       };
     }
-    app.querySelectorAll('.board-list[data-board-id]').forEach(function (list) {
-      state.lists[list.getAttribute("data-board-id")] = {
-        left: list.scrollLeft,
-        top: list.scrollTop
-      };
-    });
     return state;
   }
 
@@ -2295,17 +2296,56 @@
       wall.scrollLeft = state.wall.left;
       wall.scrollTop = state.wall.top;
     }
-    Object.keys(state.lists || {}).forEach(function (boardId) {
-      const list = app.querySelector('.board-list[data-board-id="' + cssEscape(boardId) + '"]');
-      const saved = state.lists[boardId];
-      if (list && saved) {
-        list.scrollLeft = saved.left;
-        list.scrollTop = saved.top;
-      }
-    });
     if (state.page) {
       window.scrollTo(state.page.left, state.page.top);
     }
+  }
+
+  function updateBoardOverflowIndicators(scope) {
+    const root = scope || app;
+    const slots = root.matches && root.matches('.board-slot[data-board-id]')
+      ? [root]
+      : Array.from(root.querySelectorAll('.board-slot[data-board-id]'));
+    slots.forEach(function (slot) {
+      const card = slot.querySelector(".board-card");
+      const list = slot.querySelector('[data-role="board-list"]');
+      const badge = slot.querySelector('[data-role="hidden-count"]');
+      if (!card || !list || !badge) {
+        return;
+      }
+
+      const listRect = list.getBoundingClientRect();
+      const hiddenCount = Array.from(list.querySelectorAll('[data-role="link-row"]')).filter(function (row) {
+        const rowRect = row.getBoundingClientRect();
+        return rowRect.bottom > listRect.bottom + 1;
+      }).length;
+
+      card.classList.toggle("has-hidden-items", hiddenCount > 0);
+      badge.hidden = hiddenCount === 0;
+      if (hiddenCount > 0) {
+        const label = TEXT.hiddenItems.replace("{count}", String(hiddenCount));
+        badge.textContent = "+" + hiddenCount;
+        badge.title = label;
+        badge.setAttribute("aria-label", label);
+      } else {
+        badge.textContent = "";
+        badge.removeAttribute("title");
+        badge.removeAttribute("aria-label");
+      }
+    });
+  }
+
+  function expandBoardToFit(boardId) {
+    const board = findBoard(boardId);
+    if (!board || board.collapsed) {
+      return;
+    }
+
+    const list = app.querySelector('.board-list[data-board-id="' + cssEscape(boardId) + '"]');
+    const nextHeight = clampHeight(Math.max(BOARD_LIST_MIN_HEIGHT, Math.ceil(list ? list.scrollHeight : board.height)));
+    mutateBoard(boardId, function (entry) {
+      return Object.assign({}, entry, { height: nextHeight });
+    });
   }
 
   function estimateBoardHeight(board) {
@@ -2723,6 +2763,7 @@
     if (card) {
       card.style.setProperty("--list-height", uiState.resizing.nextHeight + "px");
       uiState.resizing.heightMap[uiState.resizing.boardId] = card.getBoundingClientRect().height;
+      updateBoardOverflowIndicators(card.closest(".board-slot") || card);
     }
     scheduleResizeLayoutSync();
   }
@@ -3231,6 +3272,11 @@
       mutateBoardUiPreference(boardId, function (board) {
         return Object.assign({}, board, { collapsed: !board.collapsed });
       });
+      return;
+    }
+
+    if (action === "expand-board-to-fit") {
+      expandBoardToFit(boardId);
       return;
     }
 
@@ -3752,6 +3798,10 @@
   });
 
   app.addEventListener("pointerdown", function (event) {
+    if (event.target.closest("[data-action]")) {
+      return;
+    }
+
     const resizeHandle = event.target.closest('[data-role="resize-handle"]');
     if (resizeHandle) {
       beginResize(resizeHandle.getAttribute("data-board-id"), resizeHandle, event);
