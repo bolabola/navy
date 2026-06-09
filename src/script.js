@@ -1708,11 +1708,29 @@
   }
 
   function renderItemEditForm(boardId, item) {
+    item = item || {};
     const form = document.createElement("form");
     form.className = "item-edit-form";
+    if (!item.id) {
+      form.className = "item-edit-form board-add-form--floating";
+    }
     form.dataset.role = "item-edit-form";
     form.dataset.boardId = boardId;
-    form.dataset.itemId = item.id;
+    if (item.id) {
+      form.dataset.itemId = item.id;
+    }
+
+    const url = document.createElement("input");
+    url.type = "text";
+    url.name = "url";
+    url.inputMode = "url";
+    url.autocapitalize = "off";
+    url.autocomplete = "off";
+    url.spellcheck = false;
+    url.placeholder = TEXT.enterUrl;
+    url.value = item.url || "";
+    url.required = true;
+    form.appendChild(url);
 
     const row = document.createElement("div");
     row.className = "item-edit-form__row";
@@ -1733,7 +1751,9 @@
     const resetIcon = actionButton("item-edit-form__icon-reset", "reset-item-icon", boardId, "恢复 favicon", [
       staticIconNode("icon-rotate-ccw")
     ]);
-    resetIcon.dataset.itemId = item.id;
+    if (item.id) {
+      resetIcon.dataset.itemId = item.id;
+    }
     resetIcon.setAttribute("aria-label", "恢复 favicon");
     row.appendChild(resetIcon);
 
@@ -1745,18 +1765,6 @@
     title.value = item.name || "";
     row.appendChild(title);
     form.appendChild(row);
-
-    const url = document.createElement("input");
-    url.type = "text";
-    url.name = "url";
-    url.inputMode = "url";
-    url.autocapitalize = "off";
-    url.autocomplete = "off";
-    url.spellcheck = false;
-    url.placeholder = TEXT.enterUrl;
-    url.value = item.url || "";
-    url.required = true;
-    form.appendChild(url);
 
     const desc = document.createElement("textarea");
     desc.name = "description";
@@ -1771,14 +1779,17 @@
       staticIconNode("icon-sparkles"),
       " 自动获取"
     ]);
-    autofill.dataset.itemId = item.id;
+    if (item.id) {
+      autofill.dataset.itemId = item.id;
+    }
     actions.appendChild(autofill);
     const save = document.createElement("button");
     save.className = "board-save-button";
     save.type = "submit";
     save.textContent = TEXT.save;
     actions.appendChild(save);
-    actions.appendChild(actionButton("board-cancel-button", "cancel-edit-item", boardId, "", [TEXT.cancel]));
+    const cancelAction = item.id ? "cancel-edit-item" : "cancel-add";
+    actions.appendChild(actionButton("board-cancel-button", cancelAction, boardId, "", [TEXT.cancel]));
     form.appendChild(actions);
     return form;
   }
@@ -1900,42 +1911,6 @@
     return wrapper;
   }
 
-  function renderAddForm(boardId) {
-    const form = document.createElement("form");
-    form.className = "board-add-form board-add-form--floating";
-    form.dataset.role = "add-form";
-    form.dataset.boardId = boardId;
-
-    const url = document.createElement("input");
-    url.type = "text";
-    url.name = "url";
-    url.inputMode = "url";
-    url.autocapitalize = "off";
-    url.autocomplete = "off";
-    url.spellcheck = false;
-    url.placeholder = TEXT.enterUrl;
-    url.required = true;
-    form.appendChild(url);
-
-    const name = document.createElement("input");
-    name.type = "text";
-    name.name = "name";
-    name.placeholder = TEXT.enterName;
-    name.maxLength = BOARD_ITEM_NAME_MAX_LENGTH;
-    form.appendChild(name);
-
-    const actions = document.createElement("div");
-    actions.className = "board-add-form__actions";
-    const save = document.createElement("button");
-    save.className = "board-save-button";
-    save.type = "submit";
-    save.textContent = TEXT.save;
-    actions.appendChild(save);
-    actions.appendChild(actionButton("board-cancel-button", "cancel-add", boardId, "", [TEXT.cancel]));
-    form.appendChild(actions);
-    return form;
-  }
-
   function renderBoard(board, extraClass) {
     const addOpen = uiState.openAddBoardId === board.id;
     const editOpen = uiState.editBoardId === board.id;
@@ -1998,7 +1973,7 @@
 
     if (!board.collapsed) {
       if (shouldShowBoardTabs(board)) card.appendChild(renderBoardTabs(board));
-      if (addOpen) card.appendChild(renderAddForm(board.id));
+      if (addOpen) card.appendChild(renderItemEditForm(board.id));
 
       const body = document.createElement("div");
       body.className = "board-card__body";
@@ -3808,7 +3783,7 @@
       uiState.openAddBoardId = uiState.openAddBoardId === boardId ? null : boardId;
       saveBoards();
       render();
-      const input = app.querySelector('.board-add-form[data-board-id="' + cssEscape(boardId) + '"] input[name="url"]');
+      const input = app.querySelector('.board-add-form--floating[data-board-id="' + cssEscape(boardId) + '"] input[name="url"]');
       if (input) {
         input.focus();
       }
@@ -3913,8 +3888,7 @@
 
     if (action === "reset-item-icon") {
       if (!auth.isAdmin) return;
-      const itemId = button.getAttribute("data-item-id");
-      const form = itemId ? app.querySelector('.item-edit-form[data-item-id="' + cssEscape(itemId) + '"]') : null;
+      const form = button.closest('[data-role="item-edit-form"]');
       if (!form) return;
       const mode = form.querySelector('input[name="itemIconMode"]');
       const icon = form.querySelector('input[name="icon"]');
@@ -3928,8 +3902,7 @@
 
     if (action === "autofill-item-meta") {
       if (!auth.isAdmin) return;
-      const itemId = button.getAttribute("data-item-id");
-      const form = itemId ? app.querySelector('.item-edit-form[data-item-id="' + cssEscape(itemId) + '"]') : null;
+      const form = button.closest('[data-role="item-edit-form"]');
       if (!form) return;
       const urlInput = form.querySelector('input[name="url"]');
       const nameInput = form.querySelector('input[name="name"]');
@@ -4052,78 +4025,63 @@
     }
 
     const itemEditForm = event.target.closest('[data-role="item-edit-form"]');
-    if (itemEditForm) {
-      event.preventDefault();
+      if (itemEditForm) {
+        event.preventDefault();
 
-      const boardId = itemEditForm.getAttribute("data-board-id");
-      const itemId = itemEditForm.getAttribute("data-item-id");
-      const formData = new FormData(itemEditForm);
-      const rawUrl = formData.get("url");
-      const rawName = formData.get("name");
-      const rawIcon = String(formData.get("icon") || "").trim();
-      const iconMode = String(formData.get("itemIconMode") || "custom");
-      const description = String(formData.get("description") || "").trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
-      if (!boardId || !itemId) {
+        const boardId = itemEditForm.getAttribute("data-board-id");
+        const itemId = itemEditForm.getAttribute("data-item-id");
+        const formData = new FormData(itemEditForm);
+        const rawUrl = formData.get("url");
+        const rawName = formData.get("name");
+        const rawIcon = String(formData.get("icon") || "").trim();
+        const iconMode = String(formData.get("itemIconMode") || "custom");
+        const description = String(formData.get("description") || "").trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
+        if (!boardId) {
+          return;
+        }
+
+        let url;
+        try {
+          url = normalizeUrl(rawUrl);
+        } catch (error) {
+          window.alert(TEXT.invalidUrl);
+          return;
+        }
+
+        if (itemId) {
+          uiState.editItemId = null;
+          mutateBoard(boardId, function (board) {
+            return Object.assign({}, board, {
+              items: board.items.map(function (item) {
+                return item.id === itemId
+                  ? Object.assign({}, item, {
+                      name: displayName(url, rawName),
+                      url: url,
+                      icon: iconMode === "favicon" ? "" : (ICON_NAME_RE.test(rawIcon) ? normalizeIconName(rawIcon) : item.icon),
+                      description: description
+                    })
+                  : item;
+              })
+            });
+          });
+        } else {
+          const item = {
+            id: uid("item"),
+            name: displayName(url, rawName),
+            url: url,
+            icon: iconMode === "favicon" ? "" : (ICON_NAME_RE.test(rawIcon) ? normalizeIconName(rawIcon) : ""),
+            description: description,
+            tabId: getBoardActiveTabId(findBoard(boardId))
+          };
+
+          uiState.openAddBoardId = null;
+
+          mutateBoard(boardId, function (board) {
+            return Object.assign({}, board, { items: board.items.concat(item) });
+          });
+        }
         return;
       }
-
-      let url;
-      try {
-        url = normalizeUrl(rawUrl);
-      } catch (error) {
-        window.alert(TEXT.invalidUrl);
-        return;
-      }
-
-      uiState.editItemId = null;
-      mutateBoard(boardId, function (board) {
-        return Object.assign({}, board, {
-          items: board.items.map(function (item) {
-            return item.id === itemId
-              ? Object.assign({}, item, {
-                  name: displayName(url, rawName),
-                  url: url,
-                  icon: iconMode === "favicon" ? "" : (ICON_NAME_RE.test(rawIcon) ? normalizeIconName(rawIcon) : item.icon),
-                  description: description
-                })
-              : item;
-          })
-        });
-      });
-      return;
-    }
-
-    const addForm = event.target.closest('[data-role="add-form"]');
-    if (!addForm) {
-      return;
-    }
-
-    event.preventDefault();
-    const boardId = addForm.getAttribute("data-board-id");
-    const formData = new FormData(addForm);
-    const rawUrl = formData.get("url");
-    const rawName = formData.get("name");
-
-    let url;
-    try {
-      url = normalizeUrl(rawUrl);
-    } catch (error) {
-      window.alert(TEXT.invalidUrl);
-      return;
-    }
-
-    const item = {
-      id: uid("item"),
-      name: displayName(url, rawName),
-      url: url,
-      tabId: getBoardActiveTabId(findBoard(boardId))
-    };
-
-    uiState.openAddBoardId = null;
-
-    mutateBoard(boardId, function (board) {
-      return Object.assign({}, board, { items: board.items.concat(item) });
-    });
   });
 
   function openLinkInBackground(url) {
