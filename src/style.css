@@ -1594,6 +1594,37 @@ body.is-board-dragging {
   background: rgba(9, 30, 66, 0.06);
 }
 
+.board-shrink-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 14px;
+  border: 0;
+  border-radius: 3px;
+  padding: 0;
+  color: rgba(66, 82, 110, 0.66);
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.board-shrink-button[hidden] {
+  display: none;
+}
+
+.board-shrink-button i[class^="icon-"] {
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+.board-shrink-button:hover {
+  color: #172b4d;
+  background: rgba(9, 30, 66, 0.06);
+}
+
 .board-card.is-collapsed .board-card__meta,
 .board-card.is-collapsed .board-card__body,
 .board-card.is-collapsed .board-list,

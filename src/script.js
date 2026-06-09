@@ -88,6 +88,7 @@
     moveBoard: "拖拽 Board",
     toggleView: "显示模式",
     resize: "拖动调整高度",
+    shrinkBoard: "收缩到最小高度",
     hiddenItems: "还有 {count} 个未显示，点击展开",
     invalidUrl: "请输入有效的网址。",
     login: "登录",
@@ -2028,6 +2029,13 @@
       resize.dataset.role = "resize-handle";
       resize.dataset.boardId = board.id;
       resize.title = TEXT.resize;
+      const shrink = actionButton("board-shrink-button", "shrink-board-to-min", board.id, TEXT.shrinkBoard, [
+        staticIconNode("icon-chevrons-up")
+      ]);
+      shrink.dataset.role = "shrink-height";
+      shrink.hidden = Number(board.height) <= MIN_BOARD_HEIGHT + 1;
+      shrink.setAttribute("aria-label", TEXT.shrinkBoard);
+      resize.appendChild(shrink);
       const hiddenCount = actionButton("board-hidden-count", "expand-board-to-fit", board.id, "", []);
       hiddenCount.dataset.role = "hidden-count";
       hiddenCount.hidden = true;
@@ -2648,8 +2656,17 @@
     }
 
     card.style.setProperty("--list-height", nextHeight + "px");
+    updateBoardResizeControls(slot, nextHeight);
     syncBoardWallLayout();
     updateBoardOverflowIndicators(slot);
+  }
+
+  function updateBoardResizeControls(slot, height) {
+    const shrink = slot ? slot.querySelector('[data-role="shrink-height"]') : null;
+    if (!shrink) {
+      return;
+    }
+    shrink.hidden = Number(height) <= MIN_BOARD_HEIGHT + 1;
   }
 
   function updateBoardCountInPlace(slot, board) {
@@ -3197,6 +3214,7 @@
     const card = app.querySelector('.board-slot[data-board-id="' + cssEscape(uiState.resizing.boardId) + '"] .board-card');
     if (card) {
       card.style.setProperty("--list-height", uiState.resizing.nextHeight + "px");
+      updateBoardResizeControls(card.closest(".board-slot"), uiState.resizing.nextHeight);
       uiState.resizing.heightMap[uiState.resizing.boardId] = card.getBoundingClientRect().height;
       updateBoardOverflowIndicators(card.closest(".board-slot") || card);
     }
@@ -3765,6 +3783,13 @@
 
     if (action === "expand-board-to-fit") {
       expandBoardToFit(boardId);
+      return;
+    }
+
+    if (action === "shrink-board-to-min") {
+      if (boardId) {
+        updateBoardHeightInPlace(boardId, MIN_BOARD_HEIGHT);
+      }
       return;
     }
 
