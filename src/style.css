@@ -1250,7 +1250,8 @@ body.is-board-dragging {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 12px;
+  gap: 6px;
+  height: 16px;
   margin-top: 4px;
   cursor: ns-resize;
   touch-action: none;
@@ -1258,20 +1259,17 @@ body.is-board-dragging {
 
 .board-resize-handle::before {
   content: "";
-  position: absolute;
-  right: 50%;
-  bottom: 2px;
-  width: 48px;
+  flex: 0 0 auto;
+  width: 46px;
   height: 3px;
-  transform: translateX(50%);
   border-radius: 999px;
-  background: rgba(107, 119, 140, 0.45);
+  background: rgba(107, 119, 140, 0.38);
   transition: background-color 0.15s ease, width 0.15s ease;
 }
 
 .board-resize-handle:hover::before {
-  width: 62px;
-  background: rgba(66, 82, 110, 0.62);
+  width: 54px;
+  background: rgba(66, 82, 110, 0.54);
 }
 
 .board-card.has-hidden-items .board-card__body {
@@ -1293,16 +1291,16 @@ body.is-board-dragging {
   position: relative;
   z-index: 1;
   border: 0;
-  border-radius: 999px;
-  min-width: 24px;
-  height: 16px;
-  padding: 0 6px;
-  color: rgba(66, 82, 110, 0.82);
-  background: rgba(255, 255, 255, 0.38);
-  box-shadow: inset 0 0 0 1px rgba(107, 119, 140, 0.18);
+  border-radius: 3px;
+  min-width: 0;
+  height: 14px;
+  padding: 0 2px;
+  color: rgba(66, 82, 110, 0.72);
+  background: transparent;
+  box-shadow: none;
   font-size: 10px;
   font-weight: 700;
-  line-height: 16px;
+  line-height: 14px;
   cursor: pointer;
 }
 
@@ -1312,7 +1310,7 @@ body.is-board-dragging {
 
 .board-hidden-count:hover {
   color: #172b4d;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(9, 30, 66, 0.06);
 }
 
 .board-card.is-collapsed .board-card__meta,
@@ -1799,11 +1797,10 @@ body {
 }
 
 .board-resize-handle {
-  height: 10px;
+  height: 14px;
 }
 
 .board-resize-handle::before {
-  bottom: 2px;
   height: 3px;
   background: rgba(107, 119, 140, 0.35);
 }
