@@ -1,5 +1,8 @@
 (function () {
   const STORAGE_KEY = "trello-nav-board-state-v4";
+  const THEME_STORAGE_KEY = "trello-nav-theme-v1";
+  const THEME_LIGHT = "light";
+  const THEME_DARK = "dark";
   const API_BASE = "/api";
   const GITHUB_URL = "https://github.com/bolabola/navy";
   const SAVE_DEBOUNCE_MS = 500;
@@ -58,6 +61,8 @@
   let allLucideIcons = [];
   const faviconCache = new Map();
   const app = document.getElementById("app");
+  let currentTheme = readThemePreference();
+  applyTheme(currentTheme);
 
   const TEXT = {
     common: "常用",
@@ -1161,6 +1166,46 @@
     button.replaceChildren(staticIconNode(getAllCollapseButtonIcon()), document.createTextNode(label));
   }
 
+  function readThemePreference() {
+    try {
+      return window.localStorage.getItem(THEME_STORAGE_KEY) === THEME_DARK ? THEME_DARK : THEME_LIGHT;
+    } catch (error) {
+      return THEME_LIGHT;
+    }
+  }
+
+  function saveThemePreference(theme) {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (error) {
+      // localStorage may be unavailable in private mode.
+    }
+  }
+
+  function applyTheme(theme) {
+    document.body.classList.toggle("is-dark-theme", theme === THEME_DARK);
+  }
+
+  function getThemeToggleLabel() {
+    return currentTheme === THEME_DARK ? "切换浅色主题" : "切换暗色主题";
+  }
+
+  function syncThemeToggleButton(button) {
+    if (!button) return;
+    const isDark = currentTheme === THEME_DARK;
+    const label = getThemeToggleLabel();
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", isDark ? "true" : "false");
+    button.replaceChildren(staticIconNode(isDark ? "icon-sun" : "icon-moon"));
+  }
+
+  function renderThemeToggleButton() {
+    const button = actionButton("workspace__theme-button", "toggle-theme", null, getThemeToggleLabel(), []);
+    syncThemeToggleButton(button);
+    return button;
+  }
+
   function createModalHeader(title, closeAction) {
     const header = document.createElement("div");
     header.className = "modal-panel__header";
@@ -2253,6 +2298,7 @@
     github.setAttribute("aria-label", "GitHub");
     github.appendChild(githubIconNode());
     right.appendChild(github);
+    right.appendChild(renderThemeToggleButton());
     if (auth.isAdmin) {
       right.appendChild(renderDataMenu());
       right.appendChild(renderBackupMenu());
@@ -3447,6 +3493,14 @@
 
     const action = button.getAttribute("data-action");
     const boardId = button.getAttribute("data-board-id");
+
+    if (action === "toggle-theme") {
+      currentTheme = currentTheme === THEME_DARK ? THEME_LIGHT : THEME_DARK;
+      applyTheme(currentTheme);
+      saveThemePreference(currentTheme);
+      syncThemeToggleButton(button);
+      return;
+    }
 
     if (action === "toggle-auth") {
       if (auth.isAdmin) {
