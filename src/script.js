@@ -2567,6 +2567,18 @@
     }
   }
 
+  function focusField(field, selectText) {
+    if (!field) return;
+    try {
+      field.focus({ preventScroll: true });
+    } catch (error) {
+      field.focus();
+    }
+    if (selectText && typeof field.select === "function") {
+      field.select();
+    }
+  }
+
   function updateBoardOverflowIndicators(scope) {
     const root = scope || app;
     const slots = root.matches && root.matches('.board-slot[data-board-id]')
@@ -2746,7 +2758,7 @@
       return board.id === boardId ? updater(board) : board;
     });
     saveBoards();
-    render();
+    rerenderBoardInPlace(boardId);
   }
 
   function mutateBoardUiPreference(boardId, updater) {
@@ -2992,7 +3004,7 @@
       });
 
       saveBoards();
-      render();
+      rerenderBoardInPlace(fromBoardId);
       return;
     }
 
@@ -3016,7 +3028,8 @@
     });
 
     saveBoards();
-    render();
+    rerenderBoardInPlace(fromBoardId);
+    rerenderBoardInPlace(toBoardId);
   }
 
   function markRowDropTarget(boardId, itemId, tabId) {
@@ -3420,8 +3433,9 @@
         closeAllIconPickers(app);
       }
       if (uiState.openBoardMenuId && !event.target.closest(".board-actions-menu")) {
+        const previousBoardMenuId = uiState.openBoardMenuId;
         uiState.openBoardMenuId = null;
-        render();
+        rerenderBoardInPlace(previousBoardMenuId);
       }
       if ((uiState.dataMenuOpen || uiState.backupMenuOpen) && !event.target.closest(".workspace__menu")) {
         uiState.dataMenuOpen = false;
@@ -3451,9 +3465,7 @@
         render();
         if (uiState.loginOpen) {
           const input = app.querySelector('[data-role="login-form"] input[name="password"]');
-          if (input) {
-            input.focus();
-          }
+          focusField(input, false);
         }
       }
       return;
@@ -3475,9 +3487,7 @@
       render();
       if (uiState.createBoardOpen) {
         const input = app.querySelector('[data-role="create-board-form"] input[name="title"]');
-        if (input) {
-          input.focus();
-        }
+        focusField(input, false);
       }
       return;
     }
@@ -3663,8 +3673,12 @@
     }
 
     if (action === "toggle-board-menu") {
+      const previousBoardMenuId = uiState.openBoardMenuId;
       uiState.openBoardMenuId = uiState.openBoardMenuId === boardId ? null : boardId;
-      render();
+      if (previousBoardMenuId && previousBoardMenuId !== boardId) {
+        rerenderBoardInPlace(previousBoardMenuId);
+      }
+      rerenderBoardInPlace(boardId);
       return;
     }
 
@@ -3717,13 +3731,10 @@
       }
       uiState.editItemId = null;
       uiState.editBoardId = uiState.editBoardId === boardId ? null : boardId;
-      render();
+      rerenderBoardInPlace(boardId);
       if (uiState.editBoardId === boardId) {
         const input = app.querySelector('.board-meta-form[data-board-id="' + cssEscape(boardId) + '"] input[name="title"]');
-        if (input) {
-          input.focus();
-          input.select();
-        }
+        focusField(input, true);
       }
       return;
     }
@@ -3731,7 +3742,7 @@
     if (action === "cancel-edit-board") {
       uiState.editBoardId = null;
       uiState.editItemId = null;
-      render();
+      rerenderBoardInPlace(boardId);
       return;
     }
 
@@ -3782,11 +3793,9 @@
       }
       uiState.openAddBoardId = uiState.openAddBoardId === boardId ? null : boardId;
       saveBoards();
-      render();
+      rerenderBoardInPlace(boardId);
       const input = app.querySelector('.board-add-form--floating[data-board-id="' + cssEscape(boardId) + '"] input[name="url"]');
-      if (input) {
-        input.focus();
-      }
+      focusField(input, false);
       return;
     }
 
@@ -3795,7 +3804,7 @@
         return;
       }
       uiState.openBoardMenuId = null;
-      render();
+      rerenderBoardInPlace(boardId);
       pickFileForBoard(boardId);
       return;
     }
@@ -3803,7 +3812,7 @@
     if (action === "export-board") {
       const board = findBoard(boardId);
       uiState.openBoardMenuId = null;
-      render();
+      rerenderBoardInPlace(boardId);
       if (board) {
         exportBoardToCsv(board);
       }
@@ -3840,7 +3849,7 @@
 
     if (action === "cancel-add") {
       uiState.openAddBoardId = null;
-      render();
+      rerenderBoardInPlace(boardId);
       return;
     }
 
@@ -3871,18 +3880,15 @@
       uiState.openAddBoardId = null;
       uiState.editBoardId = boardId;
       uiState.editItemId = itemId;
-      render();
+      rerenderBoardInPlace(boardId);
       const input = app.querySelector('.item-edit-form[data-item-id="' + cssEscape(itemId) + '"] input[name="name"]');
-      if (input) {
-        input.focus();
-        input.select();
-      }
+      focusField(input, true);
       return;
     }
 
     if (action === "cancel-edit-item") {
       uiState.editItemId = null;
-      render();
+      rerenderBoardInPlace(boardId);
       return;
     }
 
@@ -3955,10 +3961,7 @@
           : (error && error.status === 500 ? TEXT.loginConfigError : TEXT.loginFailed);
         render();
         const input = app.querySelector('[data-role="login-form"] input[name="password"]');
-        if (input) {
-          input.focus();
-          input.select();
-        }
+        focusField(input, true);
       });
       return;
     }
@@ -4020,7 +4023,7 @@
           : board;
       });
       saveBoards();
-      render();
+      rerenderBoardInPlace(boardId);
       return;
     }
 
@@ -4548,7 +4551,7 @@
       }
 
       uiState.importingBoardId = boardId;
-      render();
+      rerenderBoardInPlace(boardId);
 
       fetchUrlTitlesInBatches(urls).then(function (list) {
         const tabId = getBoardActiveTabId(findBoard(boardId));
@@ -4580,7 +4583,7 @@
         window.alert(TEXT.importFailed);
       }).finally(function () {
         uiState.importingBoardId = null;
-        render();
+        rerenderBoardInPlace(boardId);
       });
     };
     reader.readAsText(file, "utf-8");
