@@ -2537,6 +2537,8 @@
     const scrollState = captureScrollState();
     slot.className = "board-slot" + (uiState.openBoardMenuId === boardId ? " has-open-menu" : "");
     slot.replaceChildren(renderBoard(board));
+    bindIconPickers(slot);
+    ensureItemEditorFits(boardId, slot);
     syncBoardWallLayout();
     updateBoardOverflowIndicators(slot);
     restoreScrollState(scrollState);
@@ -2574,12 +2576,13 @@
       hydrateBoardDragRuntime();
     }
     updateDragGhostPosition();
+    bindIconPickers(app);
+    ensureOpenItemEditorFits();
     if (!uiState.boardDragging) {
       syncBoardWallLayout();
     }
     updateBoardOverflowIndicators();
     animateBoardFlip(previousRects);
-    bindIconPickers(app);
     restoreScrollState(scrollState);
   }
 
@@ -2623,6 +2626,42 @@
     if (selectText && typeof field.select === "function") {
       field.select();
     }
+  }
+
+  function ensureOpenItemEditorFits() {
+    if (!uiState.editBoardId || !uiState.editItemId) {
+      return false;
+    }
+
+    return ensureItemEditorFits(uiState.editBoardId);
+  }
+
+  function ensureItemEditorFits(boardId, scope) {
+    const board = findBoard(boardId);
+    if (!board || board.collapsed || uiState.editBoardId !== boardId || !uiState.editItemId) {
+      return false;
+    }
+
+    const root = scope || app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]');
+    const card = root ? root.querySelector(".board-card") : null;
+    const list = root ? root.querySelector('[data-role="board-list"]') : null;
+    const editor = list ? list.querySelector('[data-role="item-edit-form"][data-item-id="' + cssEscape(uiState.editItemId) + '"]') : null;
+    if (!card || !list || !editor) {
+      return false;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const editorRect = editor.getBoundingClientRect();
+    const listStyle = window.getComputedStyle(list);
+    const paddingBottom = parseFloat(listStyle.paddingBottom) || 0;
+    const desiredHeight = clampHeight(Math.ceil(editorRect.bottom - listRect.top + paddingBottom + BOARD_ROW_GAP));
+    const nextHeight = Math.max(clampHeight(board.height), desiredHeight);
+    if (nextHeight <= board.height + 1) {
+      return false;
+    }
+
+    card.style.setProperty("--list-height", nextHeight + "px");
+    return true;
   }
 
   function updateBoardOverflowIndicators(scope) {
