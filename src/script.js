@@ -525,7 +525,6 @@
         }));
       });
     }
-    menu.appendChild(workspaceMenuItem("import-bookmarks-html", "icon-bookmark", "导入收藏 HTML", "从浏览器导出的书签文件创建 boards"));
     wrapper.appendChild(menu);
     return wrapper;
   }
@@ -804,6 +803,7 @@
     menu.className = "workspace-menu";
     menu.appendChild(workspaceMenuItem("export-full-backup", "icon-upload", "导出完整 JSON", "保存一份可恢复的本地文件"));
     menu.appendChild(workspaceMenuItem("import-full-backup", "icon-download", "导入完整 JSON", "用本地文件恢复整个看板"));
+    menu.appendChild(workspaceMenuItem("import-bookmarks-html", "icon-bookmark", "导入收藏 HTML", "从浏览器导出的书签文件创建 boards"));
     wrapper.appendChild(menu);
     return wrapper;
   }

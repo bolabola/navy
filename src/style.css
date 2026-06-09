@@ -1562,21 +1562,6 @@ body.is-board-dragging {
   background: rgba(66, 82, 110, 0.54);
 }
 
-.board-card.has-hidden-items .board-card__body {
-  position: relative;
-}
-
-.board-card.has-hidden-items .board-card__body::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 18px;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(226, 228, 230, 0), rgba(226, 228, 230, 0.38));
-}
-
 .board-hidden-count {
   position: relative;
   z-index: 1;
