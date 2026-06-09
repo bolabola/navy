@@ -4,7 +4,7 @@
   const GITHUB_URL = "https://github.com/bolabola/navy";
   const SAVE_DEBOUNCE_MS = 500;
   const MIN_BOARD_HEIGHT = 160;
-  const MAX_BOARD_HEIGHT = 640;
+  const MAX_BOARD_HEIGHT = 4096;
   const DEFAULT_NEW_BOARD_HEIGHT = 240;
   const BOARD_WIDTH = 250;
   const BOARD_GAP = 10;
@@ -2626,6 +2626,10 @@
 
     const list = app.querySelector('.board-list[data-board-id="' + cssEscape(boardId) + '"]');
     const nextHeight = clampHeight(Math.max(BOARD_LIST_MIN_HEIGHT, Math.ceil(list ? list.scrollHeight : board.height)));
+    if (Math.abs(nextHeight - board.height) < 1) {
+      updateBoardOverflowIndicators(app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]'));
+      return;
+    }
     mutateBoard(boardId, function (entry) {
       return Object.assign({}, entry, { height: nextHeight });
     });
