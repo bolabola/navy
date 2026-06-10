@@ -199,10 +199,18 @@
 
   function cacheBoardsLocally() {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(boards));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(boardStoragePayload()));
     } catch (error) {
       // localStorage 满或隐私模式 - 忽略
     }
+  }
+
+  function boardStoragePayload() {
+    return boards.map(function (board) {
+      const copy = Object.assign({}, board);
+      delete copy.collapsed;
+      return copy;
+    });
   }
 
   function apiGet(path) {
@@ -296,7 +304,7 @@
     savePending = false;
     saveInFlight = true;
     const payloadVersion = serverState.version;
-    const payloadBoards = boards;
+    const payloadBoards = boardStoragePayload();
 
     apiSend("/board", "PUT", {
       version: payloadVersion,
@@ -991,7 +999,7 @@
         accent: board.accent || BOARD_ACCENTS[0],
         icon: normalizeIconName(board.icon),
         height: clampHeight(board.height),
-        collapsed: Boolean(board.collapsed),
+        collapsed: false,
         column: Number.isInteger(board.column) ? board.column : null,
         displayMode: normalizeDisplayMode(board.displayMode),
         tabs: tabs,
@@ -1184,6 +1192,20 @@
 
   function applyTheme(theme) {
     document.body.classList.toggle("is-dark-theme", theme === THEME_DARK);
+    syncIconPickerTheme();
+  }
+
+  function iconPickerTheme() {
+    return document.body.classList.contains("is-dark-theme") ? THEME_DARK : THEME_LIGHT;
+  }
+
+  function applyIconPickerTheme(picker) {
+    if (!picker) return;
+    picker.dataset.theme = iconPickerTheme();
+  }
+
+  function syncIconPickerTheme(scope) {
+    (scope || app).querySelectorAll('[data-role="icon-picker"]').forEach(applyIconPickerTheme);
   }
 
   function getThemeToggleLabel() {
@@ -1532,6 +1554,7 @@
     const picker = document.createElement("div");
     picker.className = "icon-picker";
     picker.dataset.role = "icon-picker";
+    applyIconPickerTheme(picker);
 
     const trigger = document.createElement("button");
     trigger.className = "icon-picker-trigger";
@@ -2856,6 +2879,13 @@
     rerenderBoardInPlace(boardId);
   }
 
+  function mutateBoardSessionState(boardId, updater) {
+    boards = boards.map(function (board) {
+      return board.id === boardId ? updater(board) : board;
+    });
+    rerenderBoardInPlace(boardId);
+  }
+
   function addBoardTab(boardId, rawName) {
     const name = String(rawName || "").trim().slice(0, BOARD_TAB_NAME_MAX_LENGTH);
     if (!name) return;
@@ -2939,9 +2969,6 @@
 
       return Object.assign({}, board, { collapsed: collapsedById.get(board.id) });
     });
-    if (auth.isAdmin) {
-      saveBoards();
-    }
     rerenderBoardWall(false);
     syncAllCollapseButton();
   }
@@ -2959,9 +2986,6 @@
     boards = boards.map(function (board) {
       return Object.assign({}, board, { collapsed: true });
     });
-    if (auth.isAdmin) {
-      saveBoards();
-    }
     rerenderBoardWall(false);
     syncAllCollapseButton();
   }
@@ -3854,7 +3878,7 @@
       if (uiState.openAddBoardId === boardId) {
         uiState.openAddBoardId = null;
       }
-      mutateBoardUiPreference(boardId, function (board) {
+      mutateBoardSessionState(boardId, function (board) {
         return Object.assign({}, board, { collapsed: !board.collapsed });
       });
       return;
@@ -3885,7 +3909,6 @@
         });
       }
       uiState.openAddBoardId = uiState.openAddBoardId === boardId ? null : boardId;
-      saveBoards();
       rerenderBoardInPlace(boardId);
       const input = app.querySelector('.board-add-form--floating[data-board-id="' + cssEscape(boardId) + '"] input[name="url"]');
       focusField(input, false);
@@ -4242,7 +4265,7 @@
       exportedAt: new Date().toISOString(),
       serverVersion: serverState.version,
       serverUpdatedAt: serverState.updatedAt,
-      boards: boards
+      boards: boardStoragePayload()
     };
     const text = JSON.stringify(payload, null, 2) + "\n";
     const blob = new Blob([text], { type: "application/json;charset=utf-8" });
@@ -4279,7 +4302,7 @@
         setSyncState("saving", TEXT.syncSaving);
         apiSend("/board", "PUT", {
           version: serverState.version,
-          boards: boards
+          boards: boardStoragePayload()
         }).then(function (result) {
           if (result && Number.isInteger(result.version)) {
             serverState.version = result.version;

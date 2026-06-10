@@ -2344,6 +2344,7 @@ body.is-dark-theme .board-meta-form--inline,
 body.is-dark-theme .board-add-form--floating,
 body.is-dark-theme .modal-panel,
 body.is-dark-theme .icon-picker-popover,
+.icon-picker[data-theme="dark"] .icon-picker-popover,
 body.is-dark-theme .link-row__actions,
 body.is-dark-theme .link-row--icon-only.link-row--editing .link-row__actions {
   background: #1f2937;
@@ -2384,7 +2385,9 @@ body.is-dark-theme .link-row__edit,
 body.is-dark-theme .link-row__delete,
 body.is-dark-theme .item-edit-form__icon-reset,
 body.is-dark-theme .icon-picker-grid__item,
-body.is-dark-theme .icon-picker-trigger {
+body.is-dark-theme .icon-picker-trigger,
+.icon-picker[data-theme="dark"] .icon-picker-grid__item,
+.icon-picker[data-theme="dark"] .icon-picker-trigger {
   color: #aeb8c8;
 }
 
@@ -2448,13 +2451,19 @@ body.is-dark-theme .board-add-form input,
 body.is-dark-theme .item-edit-form input,
 body.is-dark-theme .item-edit-form textarea,
 body.is-dark-theme .login-form input[type="password"],
-body.is-dark-theme .icon-picker-search {
-  color: var(--text);
+body.is-dark-theme .icon-picker-search,
+.icon-picker[data-theme="dark"] .icon-picker-search {
+  color: #e5e7eb;
   background: #111827;
   box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.20);
 }
 
-body.is-dark-theme .icon-picker-search {
+.icon-picker[data-theme="dark"] .icon-picker-overflow-hint {
+  color: #a3aab7;
+}
+
+body.is-dark-theme .icon-picker-search,
+.icon-picker[data-theme="dark"] .icon-picker-search {
   border-color: rgba(148, 163, 184, 0.20);
 }
 
@@ -2464,23 +2473,28 @@ body.is-dark-theme .board-meta-form__tab-new:focus,
 body.is-dark-theme .board-add-form input:focus,
 body.is-dark-theme .item-edit-form input:focus,
 body.is-dark-theme .item-edit-form textarea:focus,
-body.is-dark-theme .icon-picker-search:focus {
+body.is-dark-theme .icon-picker-search:focus,
+.icon-picker[data-theme="dark"] .icon-picker-search:focus {
   box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.28), inset 0 0 0 1px #2dd4bf;
 }
 
 body.is-dark-theme .icon-picker-trigger:hover,
-body.is-dark-theme .icon-picker-trigger[aria-expanded="true"] {
+body.is-dark-theme .icon-picker-trigger[aria-expanded="true"],
+.icon-picker[data-theme="dark"] .icon-picker-trigger:hover,
+.icon-picker[data-theme="dark"] .icon-picker-trigger[aria-expanded="true"] {
   color: #f9fafb;
   background: #111827;
   box-shadow: inset 0 0 0 1px #2dd4bf;
 }
 
-body.is-dark-theme .icon-picker-grid__item:hover {
+body.is-dark-theme .icon-picker-grid__item:hover,
+.icon-picker[data-theme="dark"] .icon-picker-grid__item:hover {
   color: #f9fafb;
   background: rgba(45, 212, 191, 0.14);
 }
 
-body.is-dark-theme .icon-picker-grid__item.is-selected {
+body.is-dark-theme .icon-picker-grid__item.is-selected,
+.icon-picker[data-theme="dark"] .icon-picker-grid__item.is-selected {
   color: #06241f;
   background: #5eead4;
 }
