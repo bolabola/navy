@@ -2391,6 +2391,13 @@ body.is-dark-theme .icon-picker-trigger,
   color: #aeb8c8;
 }
 
+body.is-dark-theme .icon-picker-trigger,
+.icon-picker[data-theme="dark"] .icon-picker-trigger,
+body.is-dark-theme .item-edit-form__icon-reset {
+  background: #111827;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.20);
+}
+
 body.is-dark-theme .board-card__count,
 body.is-dark-theme .board-empty,
 body.is-dark-theme .board-cancel-button,
@@ -2421,7 +2428,8 @@ body.is-dark-theme .board-tab:hover,
 body.is-dark-theme .board-meta-form__tab:hover,
 body.is-dark-theme .board-meta-form__tab.is-active,
 body.is-dark-theme .link-row__edit:hover,
-body.is-dark-theme .link-row__delete:hover {
+body.is-dark-theme .link-row__delete:hover,
+body.is-dark-theme .item-edit-form__icon-reset:hover {
   color: #f9fafb;
   background: var(--hover);
 }
