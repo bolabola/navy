@@ -1,6 +1,6 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
 import { jsonResponse, isPlainObject, type BoardStateEnvelope, type Env } from "./shared";
-import { validateBoardState, validateLayoutSettings } from "./validation";
+import { validateBoardState, validateLayoutSettings, validatePagesState } from "./validation";
 
 type ProviderId = "google" | "dropbox";
 
@@ -267,6 +267,8 @@ export async function handleCloudBackupRestore(request: Request, env: Env, provi
     version: existing ? existing.version + 1 : 1,
     updatedAt: new Date().toISOString(),
     boards: restored.boards,
+    pages: restored.pages,
+    activePageId: restored.activePageId,
     layout: restored.layout
   };
   await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
@@ -667,14 +669,19 @@ function parseStoredBoardState(raw: string): BoardStateEnvelope | null {
   const version = parsed.version;
   const updatedAt = parsed.updatedAt;
   const boards = parsed.boards;
+  const pages = parsed.pages;
+  const activePageId = parsed.activePageId;
   const layout = parsed.layout;
   if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return null;
   if (typeof updatedAt !== "string") return null;
   if (!Array.isArray(boards)) return null;
   const error = validateBoardState(boards);
   if (error) return null;
+  const pagesError = validatePagesState(pages);
+  if (pagesError) return null;
+  if (activePageId !== undefined && activePageId !== null && typeof activePageId !== "string") return null;
   const layoutError = validateLayoutSettings(layout);
-  return layoutError ? null : { version, updatedAt, boards, layout };
+  return layoutError ? null : { version, updatedAt, boards, pages, activePageId, layout };
 }
 
 function escapeDriveQueryValue(value: string): string {

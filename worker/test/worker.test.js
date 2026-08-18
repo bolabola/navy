@@ -41,7 +41,13 @@ function createEnv(initial = {}, overrides = {}) {
 
 const boardPayload = {
   version: null,
-  layout: { columnMode: "manual", columns: 3, columnWidth: 280, align: "center" },
+  layout: { columnMode: "manual", columns: 3, columnWidth: 280, columnGap: 14, rowGap: 18, align: "center" },
+  activePageId: "page-1",
+  pages: [{
+    id: "page-1",
+    name: "Home",
+    boards: [{ id: "board-1", title: "Tools", items: [{ id: "item-1", name: "OpenAI", url: "https://openai.com/" }] }]
+  }],
   boards: [{ id: "board-1", title: "Tools", items: [{ id: "item-1", name: "OpenAI", url: "https://openai.com/" }] }]
 };
 
@@ -128,6 +134,8 @@ test("PUT /api/board stores state and rejects stale versions", async () => {
   assert.equal(createdBody.backupKey, null);
   const storedState = JSON.parse(await env.BOARD_KV.get("state"));
   assert.deepEqual(storedState.layout, boardPayload.layout);
+  assert.deepEqual(storedState.pages, boardPayload.pages);
+  assert.equal(storedState.activePageId, "page-1");
 
   const stale = await worker.fetch(new Request("https://example.com/api/board", {
     method: "PUT",
@@ -538,6 +546,12 @@ test("Google Drive cloud backup list and restore remote state", async () => {
   const remoteState = JSON.stringify({
     version: 1,
     updatedAt: "2026-01-02T00:00:00.000Z",
+    activePageId: "page-restore",
+    pages: [{
+      id: "page-restore",
+      name: "Restored Page",
+      boards: [{ id: "restored-board", title: "Restored", items: [{ id: "restored-item", name: "Restored", url: "https://restored.example/" }] }]
+    }],
     boards: [{ id: "restored-board", title: "Restored", items: [{ id: "restored-item", name: "Restored", url: "https://restored.example/" }] }]
   });
   const remoteFiles = Array.from({ length: 12 }, (_, index) => {
@@ -606,6 +620,8 @@ test("Google Drive cloud backup list and restore remote state", async () => {
     const state = JSON.parse(await env.BOARD_KV.get("state"));
     assert.equal(state.version, 2);
     assert.equal(state.boards[0].id, "restored-board");
+    assert.equal(state.activePageId, "page-restore");
+    assert.equal(state.pages[0].boards[0].id, "restored-board");
     assert.equal(JSON.parse(await env.BOARD_KV.get(restoredBody.backupKey)).boards[0].id, "board-1");
     await Promise.all(waitUntilTasks);
   } finally {
@@ -618,6 +634,12 @@ test("Dropbox cloud backup list and restore remote state", async () => {
   const remoteState = JSON.stringify({
     version: 1,
     updatedAt: "2026-01-03T00:00:00.000Z",
+    activePageId: "dropbox-page",
+    pages: [{
+      id: "dropbox-page",
+      name: "Dropbox Page",
+      boards: [{ id: "dropbox-restored-board", title: "Restored", items: [{ id: "restored-item", name: "Restored", url: "https://restored.example/" }] }]
+    }],
     boards: [{ id: "dropbox-restored-board", title: "Restored", items: [{ id: "restored-item", name: "Restored", url: "https://restored.example/" }] }]
   });
   const calls = [];
@@ -688,6 +710,8 @@ test("Dropbox cloud backup list and restore remote state", async () => {
     const state = JSON.parse(await env.BOARD_KV.get("state"));
     assert.equal(state.version, 2);
     assert.equal(state.boards[0].id, "dropbox-restored-board");
+    assert.equal(state.activePageId, "dropbox-page");
+    assert.equal(state.pages[0].boards[0].id, "dropbox-restored-board");
     const downloadCalls = calls.filter((call) => call.url.includes("content.dropboxapi.com/2/files/download"));
     assert.deepEqual(downloadCalls.map((call) => JSON.parse(call.init.headers["Dropbox-API-Arg"]).path), [
       "id:dropbox-cloud-file",

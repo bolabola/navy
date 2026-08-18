@@ -9,8 +9,13 @@ const BOARD_TAB_NAME_MAX_LENGTH = 40;
 const BOARD_ITEM_NAME_MAX_LENGTH = 200;
 const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
 const BOARD_URL_MAX_LENGTH = 2048;
+const PAGE_MAX_COUNT = 30;
+const PAGE_ID_MAX_LENGTH = 128;
+const PAGE_NAME_MAX_LENGTH = 40;
 const MIN_LAYOUT_COLUMN_WIDTH = 220;
 const MAX_LAYOUT_COLUMN_WIDTH = 360;
+const MIN_LAYOUT_GAP = 0;
+const MAX_LAYOUT_GAP = 32;
 const MAX_MANUAL_COLUMNS = 6;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const ICON_NAME_RE = /^[a-z0-9-]+$/;
@@ -47,7 +52,15 @@ interface LayoutSettings {
   columnMode?: unknown;
   columns?: unknown;
   columnWidth?: unknown;
+  columnGap?: unknown;
+  rowGap?: unknown;
   align?: unknown;
+}
+
+interface PageState {
+  id?: unknown;
+  name?: unknown;
+  boards?: unknown;
 }
 
 export function validateBoardState(value: unknown): string | null {
@@ -62,12 +75,35 @@ export function validateBoardState(value: unknown): string | null {
   return null;
 }
 
+export function validatePagesState(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) return "Invalid pages";
+  if (value.length > PAGE_MAX_COUNT) return "Too many pages";
+
+  const pageIds = new Set<string>();
+  for (const entry of value) {
+    if (!isPlainObject(entry)) return "Invalid page";
+    const page = entry as PageState;
+    if (!isNonEmptyString(page.id, PAGE_ID_MAX_LENGTH)) return "Invalid page id";
+    if (pageIds.has(page.id)) return "Duplicate page id";
+    pageIds.add(page.id);
+    if (!isNonEmptyString(page.name, PAGE_NAME_MAX_LENGTH)) return "Invalid page name";
+    if (!Array.isArray(page.boards)) return "Invalid page boards";
+    const boardError = validateBoardState(page.boards);
+    if (boardError) return boardError;
+  }
+
+  return null;
+}
+
 export function validateLayoutSettings(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (!isPlainObject(value)) return "Invalid layout settings";
   const layout = value as LayoutSettings;
   const columns = layout.columns;
   const columnWidth = layout.columnWidth;
+  const columnGap = layout.columnGap;
+  const rowGap = layout.rowGap;
   if (layout.columnMode !== undefined && layout.columnMode !== "auto" && layout.columnMode !== "manual") return "Invalid layout column mode";
   if (
     columns !== undefined &&
@@ -77,6 +113,14 @@ export function validateLayoutSettings(value: unknown): string | null {
     columnWidth !== undefined &&
     (typeof columnWidth !== "number" || !Number.isInteger(columnWidth) || columnWidth < MIN_LAYOUT_COLUMN_WIDTH || columnWidth > MAX_LAYOUT_COLUMN_WIDTH)
   ) return "Invalid layout column width";
+  if (
+    columnGap !== undefined &&
+    (typeof columnGap !== "number" || !Number.isInteger(columnGap) || columnGap < MIN_LAYOUT_GAP || columnGap > MAX_LAYOUT_GAP)
+  ) return "Invalid layout column gap";
+  if (
+    rowGap !== undefined &&
+    (typeof rowGap !== "number" || !Number.isInteger(rowGap) || rowGap < MIN_LAYOUT_GAP || rowGap > MAX_LAYOUT_GAP)
+  ) return "Invalid layout row gap";
   if (layout.align !== undefined && layout.align !== "left" && layout.align !== "center") return "Invalid layout alignment";
   return null;
 }

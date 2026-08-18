@@ -15,8 +15,10 @@
   const SINGLE_COLUMN_SIDE_GUTTER = 16;
   const MIN_LAYOUT_COLUMN_WIDTH = 220;
   const MAX_LAYOUT_COLUMN_WIDTH = 360;
+  const MIN_LAYOUT_GAP = 0;
+  const MAX_LAYOUT_GAP = 32;
   const MAX_MANUAL_COLUMNS = 6;
-  const DEFAULT_LAYOUT_SETTINGS = { columnMode: "auto", columns: 3, columnWidth: BOARD_WIDTH, align: "left" };
+  const DEFAULT_LAYOUT_SETTINGS = { columnMode: "auto", columns: 3, columnWidth: BOARD_WIDTH, columnGap: BOARD_GAP, rowGap: BOARD_GAP, align: "left" };
   const BOARD_HEADER_HEIGHT = 34;
   const BOARD_CHROME_HEIGHT = 36;
   const BOARD_LIST_MIN_HEIGHT = 64;
@@ -31,6 +33,10 @@
   const BOARD_ICON_TILE_GAP = 4;
   const DEFAULT_TAB_ID = "default";
   const DEFAULT_TAB_NAME = "默认";
+  const DEFAULT_PAGE_ID = "default";
+  const DEFAULT_PAGE_NAME = "首页";
+  const PAGE_NAME_MAX_LENGTH = 40;
+  const PAGE_MAX_COUNT = 30;
   const BOARD_TAB_NAME_MAX_LENGTH = 40;
   const BOARD_ITEM_NAME_MAX_LENGTH = 200;
   const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
@@ -134,9 +140,17 @@
     layoutColumns: "列数",
     layoutAuto: "自动",
     layoutColumnWidth: "列宽",
+    layoutColumnGap: "左右间隙",
+    layoutRowGap: "上下间隙",
     layoutAlign: "排列",
     layoutLeft: "左对齐",
-    layoutCenter: "居中"
+    layoutCenter: "居中",
+    layoutReset: "重置",
+    pageDefault: DEFAULT_PAGE_NAME,
+    addPage: "新建页面",
+    renamePage: "重命名页面",
+    deletePage: "删除页面",
+    deletePageConfirm: "确认删除这个页面？页面里的 board 也会一起删除。"
   };
 
   const defaultBoards = [];
@@ -190,7 +204,9 @@
     updatedAt: ""
   };
 
-  let boards = normalizeBoards(defaultBoards);
+  let pages = normalizePages(null, defaultBoards);
+  let activePageId = pages[0].id;
+  let boards = normalizeBoards(pages[0].boards);
   let layoutSettings = normalizeLayoutSettings(null);
   let saveTimer = null;
   let saveInFlight = false;
@@ -201,20 +217,26 @@
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (!saved) {
-        return { boards: normalizeBoards(defaultBoards), hadData: false };
+        const fallbackPages = normalizePages(null, defaultBoards);
+        return { boards: normalizeBoards(defaultBoards), pages: fallbackPages, activePageId: fallbackPages[0].id, hadData: false };
       }
       const parsed = JSON.parse(saved);
       const envelope = readBoardEnvelope(parsed);
       if (!envelope) {
-        return { boards: normalizeBoards(defaultBoards), hadData: false };
+        const fallbackPages = normalizePages(null, defaultBoards);
+        return { boards: normalizeBoards(defaultBoards), pages: fallbackPages, activePageId: fallbackPages[0].id, hadData: false };
       }
+      const parsedPages = normalizePages(envelope.pages, envelope.boards);
       return {
         boards: normalizeBoards(envelope.boards),
+        pages: parsedPages,
+        activePageId: normalizeActivePageId(envelope.activePageId, parsedPages),
         layout: normalizeLayoutSettings(envelope.layout),
-        hadData: envelope.boards.length > 0
+        hadData: envelope.boards.length > 0 || parsedPages.some(function (page) { return page.boards.length > 0; })
       };
     } catch (error) {
-      return { boards: normalizeBoards(defaultBoards), hadData: false };
+      const fallbackPages = normalizePages(null, defaultBoards);
+      return { boards: normalizeBoards(defaultBoards), pages: fallbackPages, activePageId: fallbackPages[0].id, hadData: false };
     }
   }
 
@@ -227,17 +249,36 @@
   }
 
   function boardStatePayload() {
+    syncActivePageBoards();
     return {
       boards: boardStoragePayload(),
+      pages: pageStoragePayload(),
+      activePageId: activePageId,
       layout: layoutStoragePayload()
     };
   }
 
-  function boardStoragePayload() {
-    return boards.map(function (board) {
+  function boardStoragePayload(sourceBoards) {
+    return (sourceBoards || boards).map(function (board) {
       const copy = Object.assign({}, board);
       delete copy.collapsed;
       return copy;
+    });
+  }
+
+  function boardMemoryPayload(sourceBoards) {
+    return (sourceBoards || boards).map(function (board) {
+      return Object.assign({}, board);
+    });
+  }
+
+  function pageStoragePayload() {
+    return pages.map(function (page) {
+      return {
+        id: page.id,
+        name: page.name,
+        boards: boardStoragePayload(page.boards)
+      };
     });
   }
 
@@ -246,6 +287,8 @@
       columnMode: layoutSettings.columnMode,
       columns: layoutSettings.columns,
       columnWidth: layoutSettings.columnWidth,
+      columnGap: layoutSettings.columnGap,
+      rowGap: layoutSettings.rowGap,
       align: layoutSettings.align
     };
   }
@@ -304,8 +347,7 @@
       if (boardData && Array.isArray(boardData.boards)) {
         serverState.version = boardData.version;
         serverState.updatedAt = boardData.updatedAt;
-        boards = normalizeBoards(boardData.boards);
-        layoutSettings = normalizeLayoutSettings(boardData.layout);
+        applyBoardEnvelope(boardData);
         cacheBoardsLocally();
         return true;
       }
@@ -325,12 +367,74 @@
     if (value && typeof value === "object" && Array.isArray(value.boards)) {
       return {
         boards: value.boards,
+        pages: Array.isArray(value.pages) ? value.pages : null,
+        activePageId: typeof value.activePageId === "string" ? value.activePageId : null,
         layout: value.layout,
         version: Number.isInteger(value.version) ? value.version : null,
         updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : ""
       };
     }
     return null;
+  }
+
+  function normalizePageName(name, fallback) {
+    const value = typeof name === "string" ? name.trim().slice(0, PAGE_NAME_MAX_LENGTH) : "";
+    if (value) return value;
+    if (fallback !== undefined) return fallback;
+    return TEXT.pageDefault;
+  }
+
+  function normalizePages(sourcePages, fallbackBoards) {
+    const rawPages = Array.isArray(sourcePages) ? sourcePages : [];
+    const normalized = rawPages.slice(0, PAGE_MAX_COUNT).map(function (page, index) {
+      const rawBoards = Array.isArray(page && page.boards) ? page.boards : [];
+      return {
+        id: typeof page.id === "string" && page.id.trim() ? page.id : uid("page"),
+        name: normalizePageName(page.name, index === 0 ? TEXT.pageDefault : "页面 " + (index + 1)),
+        boards: normalizeBoards(rawBoards)
+      };
+    }).filter(function (page) {
+      return page.id && page.name;
+    });
+
+    if (normalized.length) {
+      return normalized;
+    }
+
+    return [{
+      id: DEFAULT_PAGE_ID,
+      name: TEXT.pageDefault,
+      boards: normalizeBoards(Array.isArray(fallbackBoards) ? fallbackBoards : defaultBoards)
+    }];
+  }
+
+  function normalizeActivePageId(pageId, sourcePages) {
+    const list = Array.isArray(sourcePages) && sourcePages.length ? sourcePages : pages;
+    if (typeof pageId === "string" && list.some(function (page) { return page.id === pageId; })) {
+      return pageId;
+    }
+    return list[0] ? list[0].id : DEFAULT_PAGE_ID;
+  }
+
+  function syncActivePageBoards() {
+    pages = pages.map(function (page) {
+      return page.id === activePageId
+        ? Object.assign({}, page, { boards: normalizeBoards(boardMemoryPayload()) })
+        : page;
+    });
+  }
+
+  function loadActivePageBoards() {
+    const page = pages.find(function (entry) { return entry.id === activePageId; }) || pages[0];
+    boards = normalizeBoards(page ? page.boards : defaultBoards);
+  }
+
+  function applyBoardEnvelope(boardData) {
+    const nextPages = normalizePages(boardData.pages, boardData.boards);
+    pages = nextPages;
+    activePageId = normalizeActivePageId(boardData.activePageId, nextPages);
+    loadActivePageBoards();
+    layoutSettings = normalizeLayoutSettings(boardData.layout);
   }
 
   function pushToBackend() {
@@ -357,11 +461,14 @@
     savePending = false;
     saveInFlight = true;
     const payloadVersion = serverState.version;
+    syncActivePageBoards();
     const payloadBoards = boardStoragePayload();
 
     apiSend("/board", "PUT", {
       version: payloadVersion,
       boards: payloadBoards,
+      pages: pageStoragePayload(),
+      activePageId: activePageId,
       layout: layoutStoragePayload()
     }).then(function (result) {
       if (result && Number.isInteger(result.version)) {
@@ -941,6 +1048,32 @@
     widthRow.appendChild(widthInput);
     menu.appendChild(widthRow);
 
+    const columnGapRow = document.createElement("label");
+    columnGapRow.className = "layout-menu__row";
+    columnGapRow.appendChild(layoutMenuLabel(TEXT.layoutColumnGap));
+    const columnGapInput = document.createElement("input");
+    columnGapInput.type = "number";
+    columnGapInput.name = "columnGap";
+    columnGapInput.min = String(MIN_LAYOUT_GAP);
+    columnGapInput.max = String(MAX_LAYOUT_GAP);
+    columnGapInput.step = "2";
+    columnGapInput.value = String(layoutSettings.columnGap);
+    columnGapRow.appendChild(columnGapInput);
+    menu.appendChild(columnGapRow);
+
+    const rowGapRow = document.createElement("label");
+    rowGapRow.className = "layout-menu__row";
+    rowGapRow.appendChild(layoutMenuLabel(TEXT.layoutRowGap));
+    const rowGapInput = document.createElement("input");
+    rowGapInput.type = "number";
+    rowGapInput.name = "rowGap";
+    rowGapInput.min = String(MIN_LAYOUT_GAP);
+    rowGapInput.max = String(MAX_LAYOUT_GAP);
+    rowGapInput.step = "2";
+    rowGapInput.value = String(layoutSettings.rowGap);
+    rowGapRow.appendChild(rowGapInput);
+    menu.appendChild(rowGapRow);
+
     const alignGroup = document.createElement("div");
     alignGroup.className = "layout-menu__row layout-menu__row--stacked";
     alignGroup.appendChild(layoutMenuLabel(TEXT.layoutAlign));
@@ -963,6 +1096,15 @@
     });
     alignGroup.appendChild(alignControls);
     menu.appendChild(alignGroup);
+
+    const actions = document.createElement("div");
+    actions.className = "layout-menu__actions";
+    actions.appendChild(actionButton("board-cancel-button", "reset-layout-settings", null, TEXT.layoutReset, [
+      staticIconNode("icon-rotate-ccw"),
+      " " + TEXT.layoutReset
+    ]));
+    menu.appendChild(actions);
+
     wrapper.appendChild(menu);
     return wrapper;
   }
@@ -1064,23 +1206,28 @@
         if (boardData && Array.isArray(boardData.boards)) {
           serverState.version = boardData.version;
           serverState.updatedAt = boardData.updatedAt;
-          boards = normalizeBoards(boardData.boards);
-          layoutSettings = normalizeLayoutSettings(boardData.layout);
+          applyBoardEnvelope(boardData);
           cacheBoardsLocally();
         } else if (results[1].value === null) {
           serverState.version = null;
           serverState.updatedAt = "";
-          boards = local.boards;
+          pages = local.pages || normalizePages(null, local.boards);
+          activePageId = normalizeActivePageId(local.activePageId, pages);
+          loadActivePageBoards();
           layoutSettings = normalizeLayoutSettings(local.layout);
           if (auth.isAdmin && local.hadData) {
             pushToBackend();
           }
         } else {
-          boards = local.boards;
+          pages = local.pages || normalizePages(null, local.boards);
+          activePageId = normalizeActivePageId(local.activePageId, pages);
+          loadActivePageBoards();
           layoutSettings = normalizeLayoutSettings(local.layout);
         }
       } else {
-        boards = local.boards;
+        pages = local.pages || normalizePages(null, local.boards);
+        activePageId = normalizeActivePageId(local.activePageId, pages);
+        loadActivePageBoards();
         layoutSettings = normalizeLayoutSettings(local.layout);
       }
       render();
@@ -1155,11 +1302,15 @@
     const columnMode = input.columnMode === "manual" ? "manual" : "auto";
     const columns = Math.min(MAX_MANUAL_COLUMNS, Math.max(1, Number(input.columns) || DEFAULT_LAYOUT_SETTINGS.columns));
     const columnWidth = Math.min(MAX_LAYOUT_COLUMN_WIDTH, Math.max(MIN_LAYOUT_COLUMN_WIDTH, Number(input.columnWidth) || DEFAULT_LAYOUT_SETTINGS.columnWidth));
+    const columnGap = Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, input.columnGap == null ? DEFAULT_LAYOUT_SETTINGS.columnGap : Number(input.columnGap)));
+    const rowGap = Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, input.rowGap == null ? DEFAULT_LAYOUT_SETTINGS.rowGap : Number(input.rowGap)));
     const align = input.align === "center" ? "center" : "left";
     return {
       columnMode: columnMode,
       columns: Math.round(columns),
       columnWidth: Math.round(columnWidth),
+      columnGap: Math.round(columnGap),
+      rowGap: Math.round(rowGap),
       align: align
     };
   }
@@ -2307,7 +2458,8 @@
 
   function getColumnCount(containerWidth) {
     const columnWidth = getConfiguredColumnWidth();
-    if (containerWidth < columnWidth * 2 + BOARD_GAP) {
+    const columnGap = getLayoutColumnGap();
+    if (containerWidth < columnWidth * 2 + columnGap) {
       return 1;
     }
 
@@ -2315,11 +2467,19 @@
       return Math.min(MAX_MANUAL_COLUMNS, Math.max(1, layoutSettings.columns));
     }
 
-    return Math.max(2, Math.floor((containerWidth + BOARD_GAP) / (columnWidth + BOARD_GAP)));
+    return Math.max(2, Math.floor((containerWidth + columnGap) / (columnWidth + columnGap)));
   }
 
   function getConfiguredColumnWidth() {
     return Math.min(MAX_LAYOUT_COLUMN_WIDTH, Math.max(MIN_LAYOUT_COLUMN_WIDTH, layoutSettings.columnWidth || BOARD_WIDTH));
+  }
+
+  function getLayoutColumnGap() {
+    return Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, Number(layoutSettings.columnGap)));
+  }
+
+  function getLayoutRowGap() {
+    return Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, Number(layoutSettings.rowGap)));
   }
 
   function getColumnWidth(columns, contentWidth, sideGutter) {
@@ -2450,7 +2610,9 @@
     const columnWidth = dragging && dragging.metrics
       ? dragging.metrics.columnWidth
       : getColumnWidth(columns, contentWidth, 0);
-    const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * BOARD_GAP;
+    const columnGap = dragging && dragging.metrics ? dragging.metrics.columnGap : getLayoutColumnGap();
+    const rowGap = dragging && dragging.metrics ? dragging.metrics.rowGap : getLayoutRowGap();
+    const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * columnGap;
     const sideGutter = getLayoutSideGutter(columns, contentWidth, actualWidth);
     const heights = Array(columns).fill(0);
     const positions = [];
@@ -2458,7 +2620,7 @@
 
     buckets.forEach(function (bucket, columnIndex) {
       bucket.forEach(function (entry, rowIndex) {
-        const x = columnIndex * (columnWidth + BOARD_GAP);
+        const x = columnIndex * (columnWidth + columnGap);
         const y = heights[columnIndex];
         const height = entry.placeholder
           ? entry.height
@@ -2476,16 +2638,18 @@
           row: rowIndex
         });
 
-        heights[columnIndex] += height + BOARD_GAP;
+        heights[columnIndex] += height + rowGap;
       });
     });
 
     return {
       positions: positions,
       width: actualWidth,
-      height: Math.max(0, Math.max.apply(null, heights) - BOARD_GAP),
+      height: Math.max(0, Math.max.apply(null, heights) - rowGap),
       columns: columns,
-      sideGutter: sideGutter
+      sideGutter: sideGutter,
+      columnGap: columnGap,
+      rowGap: rowGap
     };
   }
 
@@ -2564,6 +2728,42 @@
     right.appendChild(actionButton("workspace__auth-button", "toggle-auth", null, "", [auth.isAdmin ? TEXT.logout : TEXT.login]));
     nav.appendChild(right);
     return nav;
+  }
+
+  function renderPageBar() {
+    const bar = document.createElement("div");
+    bar.className = "page-bar";
+
+    const list = document.createElement("div");
+    list.className = "page-bar__list";
+    pages.forEach(function (page) {
+      const tab = actionButton("page-tab" + (page.id === activePageId ? " is-active" : ""), "switch-page", null, page.name, [
+        page.name
+      ]);
+      tab.dataset.pageId = page.id;
+      tab.setAttribute("aria-label", page.name);
+      list.appendChild(tab);
+    });
+    bar.appendChild(list);
+
+    if (auth.isAdmin) {
+      const actions = document.createElement("div");
+      actions.className = "page-bar__actions";
+      actions.appendChild(actionButton("page-bar__button", "add-page", null, TEXT.addPage, [
+        staticIconNode("icon-plus")
+      ]));
+      actions.appendChild(actionButton("page-bar__button", "rename-page", null, TEXT.renamePage, [
+        staticIconNode("icon-pencil")
+      ]));
+      const del = actionButton("page-bar__button page-bar__button--danger", "delete-page", null, TEXT.deletePage, [
+        staticIconNode("icon-trash-2")
+      ]);
+      del.disabled = pages.length <= 1;
+      actions.appendChild(del);
+      bar.appendChild(actions);
+    }
+
+    return bar;
   }
 
   function renderLoginModal() {
@@ -2701,7 +2901,10 @@
     uiState.boardDragging.metrics = {
       contentWidth: scrollNode ? scrollNode.clientWidth : window.innerWidth - 20,
       columns: masonryLayout.columns,
-      columnWidth: masonryLayout.positions[0] ? masonryLayout.positions[0].width : BOARD_WIDTH
+      columnWidth: masonryLayout.positions[0] ? masonryLayout.positions[0].width : BOARD_WIDTH,
+      columnGap: masonryLayout.columnGap != null ? masonryLayout.columnGap : getLayoutColumnGap(),
+      rowGap: masonryLayout.rowGap != null ? masonryLayout.rowGap : getLayoutRowGap(),
+      sideGutter: masonryLayout.sideGutter != null ? masonryLayout.sideGutter : 0
     };
   }
 
@@ -2808,12 +3011,84 @@
       columnMode: columnsValue === "auto" ? "auto" : "manual",
       columns: columnsValue === "auto" ? layoutSettings.columns : Number(columnsValue),
       columnWidth: Number(formData.get("columnWidth")),
+      columnGap: Number(formData.get("columnGap")),
+      rowGap: Number(formData.get("rowGap")),
       align: String(formData.get("align") || layoutSettings.align)
     });
     layoutSettings = next;
     cacheBoardsLocally();
     saveBoards();
     syncBoardWallLayout();
+  }
+
+  function resetLayoutSettings() {
+    if (!auth.isAdmin) return;
+    layoutSettings = normalizeLayoutSettings(DEFAULT_LAYOUT_SETTINGS);
+    cacheBoardsLocally();
+    saveBoards();
+    syncBoardWallLayout();
+    render();
+  }
+
+  function switchPage(pageId) {
+    if (!pageId || pageId === activePageId || !pages.some(function (page) { return page.id === pageId; })) return;
+    syncActivePageBoards();
+    activePageId = pageId;
+    loadActivePageBoards();
+    closeTransientUi();
+    cacheBoardsLocally();
+    render();
+  }
+
+  function closeTransientUi() {
+    uiState.openBoardMenuId = null;
+    uiState.openAddBoardId = null;
+    uiState.editBoardId = null;
+    uiState.editItemId = null;
+    uiState.createBoardOpen = false;
+    uiState.dataMenuOpen = false;
+    uiState.backupMenuOpen = false;
+    uiState.layoutMenuOpen = false;
+    uiState.allCollapseSnapshot = null;
+  }
+
+  function addPage() {
+    if (!auth.isAdmin || pages.length >= PAGE_MAX_COUNT) return;
+    const name = normalizePageName(window.prompt(TEXT.addPage, "页面 " + (pages.length + 1)), "");
+    if (!name) return;
+    syncActivePageBoards();
+    const page = { id: uid("page"), name: name, boards: [] };
+    pages = pages.concat(page);
+    activePageId = page.id;
+    boards = [];
+    closeTransientUi();
+    saveBoards();
+    render();
+  }
+
+  function renameActivePage() {
+    if (!auth.isAdmin) return;
+    const current = pages.find(function (page) { return page.id === activePageId; });
+    if (!current) return;
+    const name = normalizePageName(window.prompt(TEXT.renamePage, current.name), "");
+    if (!name || name === current.name) return;
+    pages = pages.map(function (page) {
+      return page.id === activePageId ? Object.assign({}, page, { name: name }) : page;
+    });
+    saveBoards();
+    render();
+  }
+
+  function deleteActivePage() {
+    if (!auth.isAdmin || pages.length <= 1) return;
+    if (!window.confirm(TEXT.deletePageConfirm)) return;
+    const index = Math.max(0, pages.findIndex(function (page) { return page.id === activePageId; }));
+    pages = pages.filter(function (page) { return page.id !== activePageId; });
+    activePageId = pages[Math.min(index, pages.length - 1)].id;
+    loadActivePageBoards();
+    closeTransientUi();
+    saveBoards();
+    render();
   }
 
   function scheduleRowDragLayoutSync() {
@@ -2873,6 +3148,7 @@
     const main = document.createElement("main");
     main.className = "workspace";
     main.appendChild(renderNavbar());
+    main.appendChild(renderPageBar());
     if (uiState.loginOpen && !auth.isAdmin) main.appendChild(renderLoginModal());
     if (uiState.createBoardOpen && auth.isAdmin) main.appendChild(renderCreateBoardModal());
     const backupsModal = renderBackupsModal();
@@ -3688,10 +3964,14 @@
     const dragging = uiState.boardDragging;
     const runtime = dragging && dragging.runtime;
     const scroll = runtime && runtime.scrollNode ? runtime.scrollNode : app.querySelector(".board-wall-scroll");
-    const relativeX = clientX - (runtime ? runtime.scrollRectLeft : scroll.getBoundingClientRect().left) + scroll.scrollLeft;
+    const sideGutter = dragging && dragging.metrics ? dragging.metrics.sideGutter || 0 : masonryLayout.sideGutter || 0;
+    const relativeX = clientX - (runtime ? runtime.scrollRectLeft : scroll.getBoundingClientRect().left) + scroll.scrollLeft - sideGutter;
     const relativeY = clientY - (runtime ? runtime.scrollRectTop : scroll.getBoundingClientRect().top) + scroll.scrollTop;
     const columnWidth = dragging && dragging.metrics ? dragging.metrics.columnWidth : (masonryLayout.positions[0] ? masonryLayout.positions[0].width : BOARD_WIDTH);
-    const laneWidth = columnWidth + BOARD_GAP;
+    const columnGap = dragging && dragging.metrics
+      ? dragging.metrics.columnGap
+      : (masonryLayout.columnGap != null ? masonryLayout.columnGap : getLayoutColumnGap());
+    const laneWidth = columnWidth + columnGap;
     const maxColumn = Math.max(0, masonryLayout.columns - 1);
     const targetColumn = Math.min(Math.max(Math.floor(relativeX / laneWidth), 0), maxColumn);
     const columnEntries = masonryLayout.positions.filter(function (entry) {
@@ -3744,7 +4024,10 @@
       metrics: {
         contentWidth: scrollNode ? scrollNode.clientWidth : window.innerWidth - 20,
         columns: masonryLayout.columns,
-        columnWidth: layoutEntry ? layoutEntry.width : rect.width
+        columnWidth: layoutEntry ? layoutEntry.width : rect.width,
+        columnGap: masonryLayout.columnGap != null ? masonryLayout.columnGap : getLayoutColumnGap(),
+        rowGap: masonryLayout.rowGap != null ? masonryLayout.rowGap : getLayoutRowGap(),
+        sideGutter: masonryLayout.sideGutter != null ? masonryLayout.sideGutter : 0
       },
       dropColumn: layoutEntry ? layoutEntry.column : 0,
       dropRow: layoutEntry ? layoutEntry.row : 0
@@ -3925,6 +4208,26 @@
       return;
     }
 
+    if (action === "switch-page") {
+      switchPage(button.getAttribute("data-page-id"));
+      return;
+    }
+
+    if (action === "add-page") {
+      addPage();
+      return;
+    }
+
+    if (action === "rename-page") {
+      renameActivePage();
+      return;
+    }
+
+    if (action === "delete-page") {
+      deleteActivePage();
+      return;
+    }
+
     if (action === "toggle-backups") {
       openKvBackupsModal();
       return;
@@ -4048,6 +4351,11 @@
       uiState.backupMenuOpen = false;
       uiState.layoutMenuOpen = !uiState.layoutMenuOpen;
       render();
+      return;
+    }
+
+    if (action === "reset-layout-settings") {
+      resetLayoutSettings();
       return;
     }
 
@@ -4601,12 +4909,15 @@
   }
 
   function exportFullBackup() {
+    syncActivePageBoards();
     const payload = {
       schema: FULL_BACKUP_SCHEMA,
       exportedAt: new Date().toISOString(),
       serverVersion: serverState.version,
       serverUpdatedAt: serverState.updatedAt,
       layout: layoutStoragePayload(),
+      activePageId: activePageId,
+      pages: pageStoragePayload(),
       boards: boardStoragePayload()
     };
     const text = JSON.stringify(payload, null, 2) + "\n";
@@ -4634,20 +4945,28 @@
       try {
         const text = typeof reader.result === "string" ? reader.result : "";
         const parsed = JSON.parse(text);
-        const importedBoards = parseFullBackupBoards(parsed);
+        const importedPages = parseFullBackupPages(parsed);
+        const importedActivePageId = normalizeActivePageId(parsed && typeof parsed === "object" ? parsed.activePageId : null, importedPages);
         const importedLayout = normalizeLayoutSettings(parsed && typeof parsed === "object" ? parsed.layout : null);
         if (!window.confirm("Import this JSON backup? Current remote state will be backed up first.")) {
           return;
         }
         const previousBoards = boards;
+        const previousPages = pages;
+        const previousActivePageId = activePageId;
         const previousLayout = layoutSettings;
-        boards = importedBoards;
+        pages = importedPages;
+        activePageId = importedActivePageId;
+        loadActivePageBoards();
         layoutSettings = importedLayout;
         cacheBoardsLocally();
         setSyncState("saving", TEXT.syncSaving);
+        syncActivePageBoards();
         apiSend("/board", "PUT", {
           version: serverState.version,
           boards: boardStoragePayload(),
+          pages: pageStoragePayload(),
+          activePageId: activePageId,
           layout: layoutStoragePayload()
         }).then(function (result) {
           if (result && Number.isInteger(result.version)) {
@@ -4667,6 +4986,8 @@
             return;
           }
           boards = previousBoards;
+          pages = previousPages;
+          activePageId = previousActivePageId;
           layoutSettings = previousLayout;
           cacheBoardsLocally();
           setSyncState("failed", TEXT.syncFailed);
@@ -4681,14 +5002,17 @@
     reader.readAsText(file, "utf-8");
   }
 
-  function parseFullBackupBoards(value) {
-    const source = Array.isArray(value)
+  function parseFullBackupPages(value) {
+    if (value && typeof value === "object" && Array.isArray(value.pages)) {
+      return normalizePages(value.pages, value.boards);
+    }
+    const sourceBoards = Array.isArray(value)
       ? value
       : (value && typeof value === "object" && Array.isArray(value.boards) ? value.boards : null);
-    if (!source) {
+    if (!sourceBoards) {
       throw new Error("Invalid backup");
     }
-    return normalizeBoards(source);
+    return normalizePages(null, sourceBoards);
   }
 
   function handleBookmarksHtmlImport(file) {

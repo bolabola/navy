@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { isUrlSafe } = require("../../.tmp-test/src/urlSafety.js");
-const { isStoredUrlAllowed, validateBoardState, validateLayoutSettings } = require("../../.tmp-test/src/validation.js");
+const { isStoredUrlAllowed, validateBoardState, validateLayoutSettings, validatePagesState } = require("../../.tmp-test/src/validation.js");
 
 const validBoard = {
   id: "board-1",
@@ -51,11 +51,25 @@ test("validateBoardState rejects invalid item URLs", () => {
 
 test("validateLayoutSettings accepts and rejects layout options", () => {
   assert.equal(validateLayoutSettings(undefined), null);
-  assert.equal(validateLayoutSettings({ columnMode: "auto", columns: 3, columnWidth: 250, align: "left" }), null);
-  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 6, columnWidth: 360, align: "center" }), null);
+  assert.equal(validateLayoutSettings({ columnMode: "auto", columns: 3, columnWidth: 250, columnGap: 10, rowGap: 10, align: "left" }), null);
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 6, columnWidth: 360, columnGap: 32, rowGap: 0, align: "center" }), null);
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 7, columnWidth: 250, align: "left" }), "Invalid layout columns");
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 200, align: "left" }), "Invalid layout column width");
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, columnGap: 33, align: "left" }), "Invalid layout column gap");
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, rowGap: -1, align: "left" }), "Invalid layout row gap");
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, align: "right" }), "Invalid layout alignment");
+});
+
+test("validatePagesState accepts and rejects page payloads", () => {
+  assert.equal(validatePagesState(undefined), null);
+  assert.equal(validatePagesState([{ id: "page-1", name: "Home", boards: [validBoard] }]), null);
+  assert.equal(validatePagesState({ pages: [] }), "Invalid pages");
+  assert.equal(validatePagesState(Array.from({ length: 31 }, (_, i) => ({ id: "p-" + i, name: "Page " + i, boards: [] }))), "Too many pages");
+  assert.equal(validatePagesState([{ id: "", name: "Home", boards: [] }]), "Invalid page id");
+  assert.equal(validatePagesState([{ id: "page-1", name: "", boards: [] }]), "Invalid page name");
+  assert.equal(validatePagesState([{ id: "page-1", name: "Home", boards: "bad" }]), "Invalid page boards");
+  assert.equal(validatePagesState([{ id: "page-1", name: "Home", boards: [{ ...validBoard, id: "" }] }]), "Invalid board id");
+  assert.equal(validatePagesState([{ id: "page-1", name: "Home", boards: [] }, { id: "page-1", name: "Work", boards: [] }]), "Duplicate page id");
 });
 
 test("validateBoardState enforces board limit", () => {

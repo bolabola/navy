@@ -15,12 +15,16 @@ export interface BoardStateEnvelope {
   version: number;
   updatedAt: string;
   boards: unknown[];
+  pages?: unknown;
+  activePageId?: unknown;
   layout?: unknown;
 }
 
 export interface BoardPutPayload {
   version?: unknown;
   boards?: unknown;
+  pages?: unknown;
+  activePageId?: unknown;
   layout?: unknown;
 }
 
