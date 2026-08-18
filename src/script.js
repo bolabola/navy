@@ -1342,9 +1342,29 @@
     }
   }
 
+  function previewFaviconDomain(url) {
+    const value = String(url || "").trim();
+    if (!value) return "";
+    try {
+      return new URL(toExternalUrl(value)).hostname;
+    } catch (_) {
+      return "";
+    }
+  }
+
   function isGithubDomain(domain) {
     const normalized = String(domain || "").toLowerCase();
     return normalized === "github.com" || normalized.endsWith(".github.com");
+  }
+
+  function defaultFaviconPreviewNode() {
+    const node = document.createElement("span");
+    node.className = "icon-picker-trigger__default";
+    node.appendChild(staticIconNode("icon-globe"));
+    const label = document.createElement("span");
+    label.textContent = "默认";
+    node.appendChild(label);
+    return node;
   }
 
   function githubIconNode() {
@@ -1438,7 +1458,10 @@
   }
 
   function faviconPreviewNode(url) {
-    const domain = faviconDomain(url);
+    const domain = previewFaviconDomain(url);
+    if (!domain) {
+      return defaultFaviconPreviewNode();
+    }
     if (isGithubDomain(domain)) {
       return githubIconNode();
     }
@@ -1450,6 +1473,9 @@
     img.dataset.faviconDomain = domain;
     const cached = faviconCache.get(domain);
     img.src = typeof cached === "string" ? cached : faviconUrlForDomain(domain, false);
+    img.addEventListener("error", function () {
+      img.replaceWith(defaultFaviconPreviewNode());
+    }, { once: true });
     return img;
   }
 
