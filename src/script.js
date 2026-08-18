@@ -109,6 +109,8 @@
     importNoUrls: "文件里没找到网址。",
     importTooMany: "文件里发现 {found} 个网址，仅导入前 {kept} 个。",
     importFailed: "导入失败，请稍后再试。",
+    autofillFailed: "自动获取失败，请稍后再试。",
+    autofillLoginExpired: "登录已过期，请重新登录后再自动获取。",
     exportBoard: "导出",
     exportEmpty: "这个 board 是空的，没有可导出的内容。",
     syncSaving: "保存中",
@@ -245,6 +247,19 @@
       }
       return res.json();
     });
+  }
+
+  function handleAuthExpired() {
+    auth.isAdmin = false;
+    auth.csrfToken = null;
+    uiState.dataMenuOpen = false;
+    uiState.backupMenuOpen = false;
+    uiState.openBoardMenuId = null;
+    uiState.openAddBoardId = null;
+    uiState.editBoardId = null;
+    uiState.editItemId = null;
+    uiState.createBoardOpen = false;
+    render();
   }
 
   function loadServerBoardState() {
@@ -4111,8 +4126,13 @@
         if (descInput && meta && typeof meta.description === "string" && meta.description.trim()) {
           descInput.value = meta.description.trim().slice(0, BOARD_ITEM_DESCRIPTION_MAX_LENGTH);
         }
-      }).catch(function () {
-        window.alert(TEXT.importFailed);
+      }).catch(function (error) {
+        if (error && (error.status === 401 || error.status === 403)) {
+          handleAuthExpired();
+          window.alert(TEXT.autofillLoginExpired);
+          return;
+        }
+        window.alert(TEXT.autofillFailed);
       }).finally(function () {
         button.disabled = false;
       });
