@@ -2683,11 +2683,7 @@
 
     const left = document.createElement("div");
     left.className = "workspace__navbar-left";
-    left.appendChild(staticIconNode("icon-layout-grid workspace__navbar-logo"));
-    const title = document.createElement("span");
-    title.className = "workspace__navbar-title";
-    title.textContent = TEXT.title;
-    left.appendChild(title);
+    left.appendChild(renderPageBar());
     if (!auth.isAdmin) {
       const notice = document.createElement("span");
       notice.className = "workspace__guest-notice";
@@ -3148,7 +3144,6 @@
     const main = document.createElement("main");
     main.className = "workspace";
     main.appendChild(renderNavbar());
-    main.appendChild(renderPageBar());
     if (uiState.loginOpen && !auth.isAdmin) main.appendChild(renderLoginModal());
     if (uiState.createBoardOpen && auth.isAdmin) main.appendChild(renderCreateBoardModal());
     const backupsModal = renderBackupsModal();

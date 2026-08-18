@@ -75,6 +75,7 @@ a {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .workspace__navbar-logo {
@@ -103,6 +104,7 @@ a {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   flex-shrink: 0;
 }
 
@@ -1811,13 +1813,9 @@ body.is-resizing {
 .page-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  border-radius: 8px;
-  padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: 0 1px 0 rgba(20, 38, 63, 0.08);
-  flex-shrink: 0;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .page-bar__list {
@@ -1838,14 +1836,14 @@ body.is-resizing {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  max-width: 180px;
-  min-height: 26px;
+  max-width: 160px;
+  min-height: 28px;
   border: 0;
-  border-radius: 6px;
-  padding: 5px 10px;
+  border-radius: 999px;
+  padding: 5px 12px;
   overflow: hidden;
-  color: var(--muted);
-  background: transparent;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.10);
   font-size: 12px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -1855,13 +1853,13 @@ body.is-resizing {
 }
 
 .page-tab:hover {
-  color: var(--text);
-  background: rgba(9, 30, 66, 0.06);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .page-tab.is-active {
   color: #0b3250;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 1px 3px rgba(9, 30, 66, 0.12);
 }
 
@@ -1879,16 +1877,16 @@ body.is-resizing {
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 999px;
   padding: 0;
-  color: var(--muted);
-  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.10);
   cursor: pointer;
 }
 
 .page-bar__button:hover {
-  color: var(--text);
-  background: rgba(9, 30, 66, 0.06);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .page-bar__button:disabled {
@@ -1897,8 +1895,8 @@ body.is-resizing {
 }
 
 .page-bar__button--danger:hover {
-  color: #c9372c;
-  background: rgba(201, 55, 44, 0.08);
+  color: #ffebe6;
+  background: rgba(201, 55, 44, 0.38);
 }
 
 .login-form {
@@ -2040,6 +2038,36 @@ body {
 .workspace__navbar-title {
   font-size: 13px;
   font-weight: 700;
+}
+
+.page-tab {
+  color: #465568;
+  background: rgba(9, 30, 66, 0.06);
+}
+
+.page-tab:hover {
+  color: #172b4d;
+  background: rgba(9, 30, 66, 0.10);
+}
+
+.page-tab.is-active {
+  color: #0b3250;
+  background: #ffffff;
+}
+
+.page-bar__button {
+  color: #5d6b7e;
+  background: rgba(9, 30, 66, 0.06);
+}
+
+.page-bar__button:hover {
+  color: #172b4d;
+  background: rgba(9, 30, 66, 0.10);
+}
+
+.page-bar__button--danger:hover {
+  color: #c9372c;
+  background: rgba(201, 55, 44, 0.10);
 }
 
 .workspace__guest-notice {
