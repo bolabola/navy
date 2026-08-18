@@ -111,7 +111,9 @@ a {
 .workspace__collapse-all-button,
 .workspace__create-button,
 .workspace__github-link,
-.workspace__theme-button {
+.workspace__theme-button,
+.page-tab,
+.page-bar__button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -129,7 +131,9 @@ a {
 
 .workspace__create-button:hover,
 .workspace__github-link:hover,
-.workspace__theme-button:hover {
+.workspace__theme-button:hover,
+.page-tab:hover,
+.page-bar__button:hover {
   background: #ffffff;
 }
 
@@ -1813,9 +1817,9 @@ body.is-resizing {
 .page-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
 
 .page-bar__list {
@@ -1825,7 +1829,7 @@ body.is-resizing {
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .page-bar__list::-webkit-scrollbar {
@@ -1833,34 +1837,19 @@ body.is-resizing {
 }
 
 .page-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   max-width: 160px;
   min-height: 28px;
-  border: 0;
-  border-radius: 999px;
-  padding: 5px 12px;
+  padding: 6px 12px;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.84);
-  background: rgba(255, 255, 255, 0.10);
-  font-size: 12px;
-  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
   flex: 0 0 auto;
-}
-
-.page-tab:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.18);
 }
 
 .page-tab.is-active {
   color: #0b3250;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 1px 3px rgba(9, 30, 66, 0.12);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.24), 0 2px 8px rgba(9, 30, 66, 0.14);
 }
 
 .page-bar__actions {
@@ -1871,22 +1860,9 @@ body.is-resizing {
 }
 
 .page-bar__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 999px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.10);
-  cursor: pointer;
-}
-
-.page-bar__button:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.18);
 }
 
 .page-bar__button:disabled {
@@ -2040,29 +2016,9 @@ body {
   font-weight: 700;
 }
 
-.page-tab {
-  color: #465568;
-  background: rgba(9, 30, 66, 0.06);
-}
-
-.page-tab:hover {
-  color: #172b4d;
-  background: rgba(9, 30, 66, 0.10);
-}
-
 .page-tab.is-active {
   color: #0b3250;
   background: #ffffff;
-}
-
-.page-bar__button {
-  color: #5d6b7e;
-  background: rgba(9, 30, 66, 0.06);
-}
-
-.page-bar__button:hover {
-  color: #172b4d;
-  background: rgba(9, 30, 66, 0.10);
 }
 
 .page-bar__button--danger:hover {
@@ -2084,7 +2040,9 @@ body {
 .workspace__collapse-all-button,
 .workspace__create-button,
 .workspace__github-link,
-.workspace__theme-button {
+.workspace__theme-button,
+.page-tab,
+.page-bar__button {
   border-radius: 4px;
   color: #344054;
   background: rgba(31, 41, 55, 0.08);
@@ -2096,6 +2054,8 @@ body {
 .workspace__create-button:hover,
 .workspace__github-link:hover,
 .workspace__theme-button:hover,
+.page-tab:hover,
+.page-bar__button:hover,
 .workspace__auth-button:hover {
   color: #111827;
   background: rgba(31, 41, 55, 0.13);
@@ -2537,27 +2497,18 @@ body.is-dark-theme .workspace__guest-notice {
   color: #aeb8c8;
 }
 
-body.is-dark-theme .page-bar {
-  background: rgba(17, 24, 39, 0.68);
-  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.12);
-}
-
 body.is-dark-theme .page-tab.is-active {
   color: #f3f4f6;
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(148, 163, 184, 0.24);
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.12);
-}
-
-body.is-dark-theme .page-tab:hover,
-body.is-dark-theme .page-bar__button:hover {
-  color: #f9fafb;
-  background: rgba(148, 163, 184, 0.12);
 }
 
 body.is-dark-theme .workspace__collapse-all-button,
 body.is-dark-theme .workspace__create-button,
 body.is-dark-theme .workspace__github-link,
 body.is-dark-theme .workspace__theme-button,
+body.is-dark-theme .page-tab,
+body.is-dark-theme .page-bar__button,
 body.is-dark-theme .workspace__auth-button {
   color: #d8dee9;
   background: rgba(148, 163, 184, 0.14);
@@ -2567,6 +2518,8 @@ body.is-dark-theme .workspace__collapse-all-button:hover,
 body.is-dark-theme .workspace__create-button:hover,
 body.is-dark-theme .workspace__github-link:hover,
 body.is-dark-theme .workspace__theme-button:hover,
+body.is-dark-theme .page-tab:hover,
+body.is-dark-theme .page-bar__button:hover,
 body.is-dark-theme .workspace__auth-button:hover {
   color: #ffffff;
   background: rgba(148, 163, 184, 0.24);
