@@ -2490,6 +2490,10 @@
 
     const placeholder = document.createElement("div");
     placeholder.className = "board-card board-card--placeholder";
+    placeholder.style.width = sourceSlot.style.width || uiState.boardDragging.width + "px";
+    placeholder.style.height = uiState.boardDragging.height + "px";
+    placeholder.style.transform = sourceSlot.style.transform || "";
+    ghost.style.transform = "translate(" + uiState.boardDragging.ghostLeft + "px, " + uiState.boardDragging.ghostTop + "px)";
     wall.appendChild(placeholder);
     app.appendChild(ghost);
     sourceSlot.classList.add("is-board-drag-source");
