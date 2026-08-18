@@ -1479,6 +1479,16 @@
     return img;
   }
 
+  function resetItemFormIconToFavicon(form, url) {
+    if (!form) return;
+    const mode = form.querySelector('input[name="itemIconMode"]');
+    const icon = form.querySelector('input[name="icon"]');
+    const current = form.querySelector('[data-role="icon-picker-current"]');
+    if (mode) mode.value = "favicon";
+    if (icon) icon.value = "";
+    if (current) current.replaceChildren(faviconPreviewNode(url));
+  }
+
   function nextBoardAccent() {
     return BOARD_ACCENTS[boards.length % BOARD_ACCENTS.length];
   }
@@ -1730,12 +1740,9 @@
         const defaultItem = event.target.closest('[data-role="icon-picker-default"]');
         if (defaultItem) {
           event.preventDefault();
-          valueInput.value = "";
           const form = picker.closest('[data-role="item-edit-form"]');
-          const itemIconMode = form?.querySelector('input[name="itemIconMode"]');
           const urlInput = form?.querySelector('input[name="url"]');
-          if (itemIconMode) itemIconMode.value = "favicon";
-          currentSpan.replaceChildren(faviconPreviewNode(urlInput ? urlInput.value : ""));
+          resetItemFormIconToFavicon(form, urlInput ? urlInput.value : "");
           grid.querySelectorAll(".icon-picker-grid__item.is-selected").forEach(function (el) {
             el.classList.remove("is-selected");
           });
@@ -1895,15 +1902,6 @@
     iconMode.value = item.icon ? "custom" : "favicon";
     row.appendChild(iconMode);
 
-    const resetIcon = actionButton("item-edit-form__icon-reset", "reset-item-icon", boardId, "恢复 favicon", [
-      staticIconNode("icon-rotate-ccw")
-    ]);
-    if (item.id) {
-      resetIcon.dataset.itemId = item.id;
-    }
-    resetIcon.setAttribute("aria-label", "恢复 favicon");
-    row.appendChild(resetIcon);
-
     const title = document.createElement("input");
     title.type = "text";
     title.name = "name";
@@ -1922,7 +1920,7 @@
 
     const actions = document.createElement("div");
     actions.className = "item-edit-form__actions";
-    const autofill = actionButton("board-cancel-button", "autofill-item-meta", boardId, "自动获取标题和描述", [
+    const autofill = actionButton("board-cancel-button", "autofill-item-meta", boardId, "自动获取图标、标题和描述", [
       staticIconNode("icon-sparkles"),
       " 自动获取"
     ]);
@@ -4153,20 +4151,6 @@
       return;
     }
 
-    if (action === "reset-item-icon") {
-      if (!auth.isAdmin) return;
-      const form = button.closest('[data-role="item-edit-form"]');
-      if (!form) return;
-      const mode = form.querySelector('input[name="itemIconMode"]');
-      const icon = form.querySelector('input[name="icon"]');
-      const current = form.querySelector('[data-role="icon-picker-current"]');
-      const urlInput = form.querySelector('input[name="url"]');
-      if (mode) mode.value = "favicon";
-      if (icon) icon.value = "";
-      if (current) current.replaceChildren(faviconPreviewNode(urlInput ? urlInput.value : ""));
-      return;
-    }
-
     if (action === "autofill-item-meta") {
       if (!auth.isAdmin) return;
       const form = button.closest('[data-role="item-edit-form"]');
@@ -4181,9 +4165,11 @@
         window.alert(TEXT.invalidUrl);
         return;
       }
+      if (urlInput) urlInput.value = url;
       button.disabled = true;
       apiSend("/url-titles", "POST", { urls: [url] }).then(function (results) {
         const meta = Array.isArray(results) ? results[0] : null;
+        resetItemFormIconToFavicon(form, url);
         if (nameInput && meta && typeof meta.title === "string" && meta.title.trim()) {
           nameInput.value = normalizeItemName(meta.title);
         }
