@@ -54,6 +54,8 @@ a {
 }
 
 .workspace__navbar {
+  position: relative;
+  z-index: 120;
   display: flex;
   align-items: center;
   justify-content: space-between;

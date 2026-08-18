@@ -911,7 +911,7 @@
 
     const columnRow = document.createElement("label");
     columnRow.className = "layout-menu__row";
-    columnRow.appendChild(el("span", "layout-menu__label", [TEXT.layoutColumns]));
+    columnRow.appendChild(layoutMenuLabel(TEXT.layoutColumns));
     const columnSelect = document.createElement("select");
     columnSelect.name = "columns";
     const autoOption = document.createElement("option");
@@ -930,7 +930,7 @@
 
     const widthRow = document.createElement("label");
     widthRow.className = "layout-menu__row";
-    widthRow.appendChild(el("span", "layout-menu__label", [TEXT.layoutColumnWidth]));
+    widthRow.appendChild(layoutMenuLabel(TEXT.layoutColumnWidth));
     const widthInput = document.createElement("input");
     widthInput.type = "number";
     widthInput.name = "columnWidth";
@@ -943,7 +943,7 @@
 
     const alignGroup = document.createElement("div");
     alignGroup.className = "layout-menu__row layout-menu__row--stacked";
-    alignGroup.appendChild(el("span", "layout-menu__label", [TEXT.layoutAlign]));
+    alignGroup.appendChild(layoutMenuLabel(TEXT.layoutAlign));
     const alignControls = document.createElement("div");
     alignControls.className = "layout-menu__segmented";
     [
@@ -965,6 +965,13 @@
     menu.appendChild(alignGroup);
     wrapper.appendChild(menu);
     return wrapper;
+  }
+
+  function layoutMenuLabel(text) {
+    const label = document.createElement("span");
+    label.className = "layout-menu__label";
+    label.textContent = text;
+    return label;
   }
 
   function renderBackupsModal() {
