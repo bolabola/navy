@@ -105,6 +105,7 @@
     loginRateLimited: "尝试次数过多，请稍后再试",
     iconPickerSearch: "搜索图标（英文）",
     iconPickerOverflow: "结果太多，请输入更精确的关键词。",
+    iconPickerDefaultFavicon: "默认 favicon",
     importBoard: "导入",
     importNoUrls: "文件里没找到网址。",
     importTooMany: "文件里发现 {found} 个网址，仅导入前 {kept} 个。",
@@ -1547,8 +1548,26 @@
     });
   }
 
-  function renderIconPickerGridItems(icons, selected) {
+  function renderDefaultFaviconPickerItem(isSelected) {
+    const button = document.createElement("button");
+    button.className = "icon-picker-grid__item icon-picker-grid__item--default" + (isSelected ? " is-selected" : "");
+    button.type = "button";
+    button.dataset.role = "icon-picker-default";
+    button.dataset.name = "";
+    button.title = TEXT.iconPickerDefaultFavicon;
+    button.setAttribute("aria-label", TEXT.iconPickerDefaultFavicon);
+    button.appendChild(staticIconNode("icon-globe"));
+    const label = document.createElement("span");
+    label.textContent = "默认";
+    button.appendChild(label);
+    return button;
+  }
+
+  function renderIconPickerGridItems(icons, selected, options = {}) {
     const fragment = document.createDocumentFragment();
+    if (options.includeFaviconOption) {
+      fragment.appendChild(renderDefaultFaviconPickerItem(!selected));
+    }
     icons.forEach(function (name) {
       const safe = normalizeIconName(name);
       const button = document.createElement("button");
@@ -1564,11 +1583,12 @@
     return fragment;
   }
 
-  function renderIconPickerWidget(name, selected) {
+  function renderIconPickerWidget(name, selected, options = {}) {
     const current = normalizeIconName(selected);
     const picker = document.createElement("div");
     picker.className = "icon-picker";
     picker.dataset.role = "icon-picker";
+    if (options.includeFaviconOption) picker.dataset.includeFaviconOption = "1";
     applyIconPickerTheme(picker);
 
     const trigger = document.createElement("button");
@@ -1609,7 +1629,7 @@
     const grid = document.createElement("div");
     grid.className = "icon-picker-grid";
     grid.dataset.role = "icon-picker-grid";
-    grid.appendChild(renderIconPickerGridItems(CURATED_LUCIDE_ICONS, current));
+    grid.appendChild(renderIconPickerGridItems(CURATED_LUCIDE_ICONS, options.includeFaviconOption && !selected ? "" : current, options));
     popover.appendChild(grid);
 
     const hint = document.createElement("p");
@@ -1643,7 +1663,8 @@
         popover.hidden = false;
         trigger.setAttribute("aria-expanded", "true");
         search.value = "";
-        grid.replaceChildren(renderIconPickerGridItems(CURATED_LUCIDE_ICONS, valueInput.value));
+        const gridOptions = { includeFaviconOption: picker.dataset.includeFaviconOption === "1" };
+        grid.replaceChildren(renderIconPickerGridItems(CURATED_LUCIDE_ICONS, valueInput.value, gridOptions));
         hint.hidden = true;
         const slot = picker.closest(".board-slot");
         if (slot) slot.classList.add("is-icon-picking");
@@ -1665,8 +1686,9 @@
 
       search.addEventListener("input", function () {
         const q = search.value.trim().toLowerCase();
+        const gridOptions = { includeFaviconOption: picker.dataset.includeFaviconOption === "1" };
         if (!q) {
-          grid.replaceChildren(renderIconPickerGridItems(CURATED_LUCIDE_ICONS, valueInput.value));
+          grid.replaceChildren(renderIconPickerGridItems(CURATED_LUCIDE_ICONS, valueInput.value, gridOptions));
           hint.hidden = true;
           return;
         }
@@ -1674,11 +1696,27 @@
         const matches = pool.filter(function (n) { return n.indexOf(q) >= 0; });
         const overflow = matches.length > ICON_PICKER_OVERFLOW_LIMIT;
         const display = overflow ? matches.slice(0, ICON_PICKER_OVERFLOW_LIMIT) : matches;
-        grid.replaceChildren(renderIconPickerGridItems(display, valueInput.value));
+        grid.replaceChildren(renderIconPickerGridItems(display, valueInput.value, gridOptions));
         hint.hidden = !overflow;
       });
 
       grid.addEventListener("click", function (event) {
+        const defaultItem = event.target.closest('[data-role="icon-picker-default"]');
+        if (defaultItem) {
+          event.preventDefault();
+          valueInput.value = "";
+          const form = picker.closest('[data-role="item-edit-form"]');
+          const itemIconMode = form?.querySelector('input[name="itemIconMode"]');
+          const urlInput = form?.querySelector('input[name="url"]');
+          if (itemIconMode) itemIconMode.value = "favicon";
+          currentSpan.replaceChildren(faviconPreviewNode(urlInput ? urlInput.value : ""));
+          grid.querySelectorAll(".icon-picker-grid__item.is-selected").forEach(function (el) {
+            el.classList.remove("is-selected");
+          });
+          defaultItem.classList.add("is-selected");
+          close();
+          return;
+        }
         const item = event.target.closest('[data-role="icon-picker-item"]');
         if (!item) return;
         event.preventDefault();
@@ -1817,7 +1855,7 @@
 
     const row = document.createElement("div");
     row.className = "item-edit-form__row";
-    const iconPicker = renderIconPickerWidget("icon", item.icon || "link");
+    const iconPicker = renderIconPickerWidget("icon", item.icon || "", { includeFaviconOption: true });
     if (!item.icon) {
       const current = iconPicker.querySelector('[data-role="icon-picker-current"]');
       const iconInput = iconPicker.querySelector('input[name="icon"]');

@@ -1139,6 +1139,19 @@ body.is-board-dragging {
   color: #ffffff;
 }
 
+.icon-picker-grid__item--default {
+  grid-column: span 2;
+  aspect-ratio: auto;
+  min-height: 24px;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: rgba(9, 30, 66, 0.04);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .icon-picker-grid__item i[class^="icon-"] {
   font-size: 14px !important;
   line-height: 1 !important;
@@ -2509,6 +2522,11 @@ body.is-dark-theme .icon-picker-grid__item.is-selected,
 .icon-picker[data-theme="dark"] .icon-picker-grid__item.is-selected {
   color: #06241f;
   background: #5eead4;
+}
+
+body.is-dark-theme .icon-picker-grid__item--default,
+.icon-picker[data-theme="dark"] .icon-picker-grid__item--default {
+  background: rgba(148, 163, 184, 0.12);
 }
 
 body.is-dark-theme .board-save-button {
