@@ -13,6 +13,10 @@
   const BOARD_GAP = 10;
   const MIN_TWO_COLUMN_WIDTH = BOARD_WIDTH * 2 + BOARD_GAP;
   const SINGLE_COLUMN_SIDE_GUTTER = 16;
+  const MIN_LAYOUT_COLUMN_WIDTH = 220;
+  const MAX_LAYOUT_COLUMN_WIDTH = 360;
+  const MAX_MANUAL_COLUMNS = 6;
+  const DEFAULT_LAYOUT_SETTINGS = { columnMode: "auto", columns: 3, columnWidth: BOARD_WIDTH, align: "left" };
   const BOARD_HEADER_HEIGHT = 34;
   const BOARD_CHROME_HEIGHT = 36;
   const BOARD_LIST_MIN_HEIGHT = 64;
@@ -125,7 +129,14 @@
     backupLoadFailed: "备份加载失败",
     backupRestore: "恢复",
     backupRestoreConfirm: "确认恢复这个备份？当前状态会先自动备份。",
-    backupRestoreFailed: "恢复失败，请稍后再试。"
+    backupRestoreFailed: "恢复失败，请稍后再试。",
+    layout: "布局",
+    layoutColumns: "列数",
+    layoutAuto: "自动",
+    layoutColumnWidth: "列宽",
+    layoutAlign: "排列",
+    layoutLeft: "左对齐",
+    layoutCenter: "居中"
   };
 
   const defaultBoards = [];
@@ -147,6 +158,7 @@
     importingBoardId: null,
     dataMenuOpen: false,
     backupMenuOpen: false,
+    layoutMenuOpen: false,
     backupStatus: null,
     localLastBackup: null,
     backupStatusLoading: false,
@@ -179,6 +191,7 @@
   };
 
   let boards = normalizeBoards(defaultBoards);
+  let layoutSettings = normalizeLayoutSettings(null);
   let saveTimer = null;
   let saveInFlight = false;
   let savePending = false;
@@ -191,10 +204,15 @@
         return { boards: normalizeBoards(defaultBoards), hadData: false };
       }
       const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed)) {
+      const envelope = readBoardEnvelope(parsed);
+      if (!envelope) {
         return { boards: normalizeBoards(defaultBoards), hadData: false };
       }
-      return { boards: normalizeBoards(parsed), hadData: parsed.length > 0 };
+      return {
+        boards: normalizeBoards(envelope.boards),
+        layout: normalizeLayoutSettings(envelope.layout),
+        hadData: envelope.boards.length > 0
+      };
     } catch (error) {
       return { boards: normalizeBoards(defaultBoards), hadData: false };
     }
@@ -202,10 +220,17 @@
 
   function cacheBoardsLocally() {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(boardStoragePayload()));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(boardStatePayload()));
     } catch (error) {
       // localStorage 满或隐私模式 - 忽略
     }
+  }
+
+  function boardStatePayload() {
+    return {
+      boards: boardStoragePayload(),
+      layout: layoutStoragePayload()
+    };
   }
 
   function boardStoragePayload() {
@@ -214,6 +239,15 @@
       delete copy.collapsed;
       return copy;
     });
+  }
+
+  function layoutStoragePayload() {
+    return {
+      columnMode: layoutSettings.columnMode,
+      columns: layoutSettings.columns,
+      columnWidth: layoutSettings.columnWidth,
+      align: layoutSettings.align
+    };
   }
 
   function apiGet(path) {
@@ -255,6 +289,7 @@
     auth.csrfToken = null;
     uiState.dataMenuOpen = false;
     uiState.backupMenuOpen = false;
+    uiState.layoutMenuOpen = false;
     uiState.openBoardMenuId = null;
     uiState.openAddBoardId = null;
     uiState.editBoardId = null;
@@ -270,6 +305,7 @@
         serverState.version = boardData.version;
         serverState.updatedAt = boardData.updatedAt;
         boards = normalizeBoards(boardData.boards);
+        layoutSettings = normalizeLayoutSettings(boardData.layout);
         cacheBoardsLocally();
         return true;
       }
@@ -289,6 +325,7 @@
     if (value && typeof value === "object" && Array.isArray(value.boards)) {
       return {
         boards: value.boards,
+        layout: value.layout,
         version: Number.isInteger(value.version) ? value.version : null,
         updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : ""
       };
@@ -324,7 +361,8 @@
 
     apiSend("/board", "PUT", {
       version: payloadVersion,
-      boards: payloadBoards
+      boards: payloadBoards,
+      layout: layoutStoragePayload()
     }).then(function (result) {
       if (result && Number.isInteger(result.version)) {
         serverState.version = result.version;
@@ -349,12 +387,14 @@
           }
           uiState.dataMenuOpen = false;
           uiState.backupMenuOpen = false;
+          uiState.layoutMenuOpen = false;
           uiState.backupStatus = null;
           uiState.localLastBackup = null;
           clearPendingCloudBackup();
           uiState.openBoardMenuId = null;
           uiState.openAddBoardId = null;
           uiState.editBoardId = null;
+          uiState.layoutMenuOpen = false;
           uiState.createBoardOpen = false;
           setSyncState("failed", TEXT.syncLoginExpired);
           render();
@@ -765,6 +805,7 @@
     uiState.openBoardMenuId = null;
     uiState.dataMenuOpen = false;
     uiState.backupMenuOpen = false;
+    uiState.layoutMenuOpen = false;
     uiState.createBoardOpen = false;
     uiState.backupsOpen = true;
     uiState.backupsLoading = true;
@@ -789,6 +830,7 @@
     uiState.openBoardMenuId = null;
     uiState.dataMenuOpen = false;
     uiState.backupMenuOpen = false;
+    uiState.layoutMenuOpen = false;
     uiState.createBoardOpen = false;
     uiState.backupsOpen = true;
     uiState.backupsLoading = true;
@@ -851,6 +893,78 @@
     text.appendChild(desc);
     button.appendChild(text);
     return button;
+  }
+
+  function renderLayoutMenu() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "workspace__menu";
+    wrapper.appendChild(actionButton("workspace__create-button", "toggle-layout-menu", null, TEXT.layout, [
+      staticIconNode("icon-sliders"),
+      " " + TEXT.layout
+    ]));
+
+    if (!uiState.layoutMenuOpen) return wrapper;
+
+    const menu = document.createElement("form");
+    menu.className = "layout-menu";
+    menu.dataset.role = "layout-settings-form";
+
+    const columnRow = document.createElement("label");
+    columnRow.className = "layout-menu__row";
+    columnRow.appendChild(el("span", "layout-menu__label", [TEXT.layoutColumns]));
+    const columnSelect = document.createElement("select");
+    columnSelect.name = "columns";
+    const autoOption = document.createElement("option");
+    autoOption.value = "auto";
+    autoOption.textContent = TEXT.layoutAuto;
+    columnSelect.appendChild(autoOption);
+    for (let i = 1; i <= MAX_MANUAL_COLUMNS; i += 1) {
+      const option = document.createElement("option");
+      option.value = String(i);
+      option.textContent = String(i);
+      columnSelect.appendChild(option);
+    }
+    columnSelect.value = layoutSettings.columnMode === "manual" ? String(layoutSettings.columns) : "auto";
+    columnRow.appendChild(columnSelect);
+    menu.appendChild(columnRow);
+
+    const widthRow = document.createElement("label");
+    widthRow.className = "layout-menu__row";
+    widthRow.appendChild(el("span", "layout-menu__label", [TEXT.layoutColumnWidth]));
+    const widthInput = document.createElement("input");
+    widthInput.type = "number";
+    widthInput.name = "columnWidth";
+    widthInput.min = String(MIN_LAYOUT_COLUMN_WIDTH);
+    widthInput.max = String(MAX_LAYOUT_COLUMN_WIDTH);
+    widthInput.step = "10";
+    widthInput.value = String(layoutSettings.columnWidth);
+    widthRow.appendChild(widthInput);
+    menu.appendChild(widthRow);
+
+    const alignGroup = document.createElement("div");
+    alignGroup.className = "layout-menu__row layout-menu__row--stacked";
+    alignGroup.appendChild(el("span", "layout-menu__label", [TEXT.layoutAlign]));
+    const alignControls = document.createElement("div");
+    alignControls.className = "layout-menu__segmented";
+    [
+      { value: "left", label: TEXT.layoutLeft },
+      { value: "center", label: TEXT.layoutCenter }
+    ].forEach(function (option) {
+      const label = document.createElement("label");
+      label.className = "layout-menu__segment" + (layoutSettings.align === option.value ? " is-active" : "");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "align";
+      input.value = option.value;
+      input.checked = layoutSettings.align === option.value;
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(option.label));
+      alignControls.appendChild(label);
+    });
+    alignGroup.appendChild(alignControls);
+    menu.appendChild(alignGroup);
+    wrapper.appendChild(menu);
+    return wrapper;
   }
 
   function renderBackupsModal() {
@@ -944,19 +1058,23 @@
           serverState.version = boardData.version;
           serverState.updatedAt = boardData.updatedAt;
           boards = normalizeBoards(boardData.boards);
+          layoutSettings = normalizeLayoutSettings(boardData.layout);
           cacheBoardsLocally();
         } else if (results[1].value === null) {
           serverState.version = null;
           serverState.updatedAt = "";
           boards = local.boards;
+          layoutSettings = normalizeLayoutSettings(local.layout);
           if (auth.isAdmin && local.hadData) {
             pushToBackend();
           }
         } else {
           boards = local.boards;
+          layoutSettings = normalizeLayoutSettings(local.layout);
         }
       } else {
         boards = local.boards;
+        layoutSettings = normalizeLayoutSettings(local.layout);
       }
       render();
       if (auth.isAdmin) {
@@ -1023,6 +1141,20 @@
         items: normalizeBoardItems(board.items, tabs)
       };
     });
+  }
+
+  function normalizeLayoutSettings(value) {
+    const input = value && typeof value === "object" ? value : {};
+    const columnMode = input.columnMode === "manual" ? "manual" : "auto";
+    const columns = Math.min(MAX_MANUAL_COLUMNS, Math.max(1, Number(input.columns) || DEFAULT_LAYOUT_SETTINGS.columns));
+    const columnWidth = Math.min(MAX_LAYOUT_COLUMN_WIDTH, Math.max(MIN_LAYOUT_COLUMN_WIDTH, Number(input.columnWidth) || DEFAULT_LAYOUT_SETTINGS.columnWidth));
+    const align = input.align === "center" ? "center" : "left";
+    return {
+      columnMode: columnMode,
+      columns: Math.round(columns),
+      columnWidth: Math.round(columnWidth),
+      align: align
+    };
   }
 
   function normalizeDisplayMode(mode) {
@@ -2167,11 +2299,20 @@
   }
 
   function getColumnCount(containerWidth) {
-    if (containerWidth < MIN_TWO_COLUMN_WIDTH) {
+    const columnWidth = getConfiguredColumnWidth();
+    if (containerWidth < columnWidth * 2 + BOARD_GAP) {
       return 1;
     }
 
-    return Math.max(2, Math.floor((containerWidth + BOARD_GAP) / (BOARD_WIDTH + BOARD_GAP)));
+    if (layoutSettings.columnMode === "manual") {
+      return Math.min(MAX_MANUAL_COLUMNS, Math.max(1, layoutSettings.columns));
+    }
+
+    return Math.max(2, Math.floor((containerWidth + BOARD_GAP) / (columnWidth + BOARD_GAP)));
+  }
+
+  function getConfiguredColumnWidth() {
+    return Math.min(MAX_LAYOUT_COLUMN_WIDTH, Math.max(MIN_LAYOUT_COLUMN_WIDTH, layoutSettings.columnWidth || BOARD_WIDTH));
   }
 
   function getColumnWidth(columns, contentWidth, sideGutter) {
@@ -2179,15 +2320,19 @@
       return Math.max(0, contentWidth - sideGutter * 2);
     }
 
-    return BOARD_WIDTH;
+    return getConfiguredColumnWidth();
   }
 
-  function getLayoutSideGutter(columns, contentWidth) {
-    if (columns !== 1) {
-      return 0;
+  function getLayoutSideGutter(columns, contentWidth, actualWidth) {
+    if (columns === 1) {
+      return Math.min(SINGLE_COLUMN_SIDE_GUTTER, Math.floor(contentWidth / 2));
     }
 
-    return Math.min(SINGLE_COLUMN_SIDE_GUTTER, Math.floor(contentWidth / 2));
+    if (layoutSettings.align === "center" && actualWidth < contentWidth) {
+      return Math.floor((contentWidth - actualWidth) / 2);
+    }
+
+    return 0;
   }
 
   function shouldUseStoredColumns(entries, columns) {
@@ -2295,11 +2440,11 @@
     const columns = dragging && dragging.metrics
       ? dragging.metrics.columns
       : getColumnCount(contentWidth);
-    const sideGutter = getLayoutSideGutter(columns, contentWidth);
     const columnWidth = dragging && dragging.metrics
       ? dragging.metrics.columnWidth
-      : getColumnWidth(columns, contentWidth, sideGutter);
+      : getColumnWidth(columns, contentWidth, 0);
     const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * BOARD_GAP;
+    const sideGutter = getLayoutSideGutter(columns, contentWidth, actualWidth);
     const heights = Array(columns).fill(0);
     const positions = [];
     const buckets = getPreviewColumnBuckets(columns);
@@ -2400,6 +2545,7 @@
     right.appendChild(github);
     right.appendChild(renderThemeToggleButton());
     if (auth.isAdmin) {
+      right.appendChild(renderLayoutMenu());
       right.appendChild(renderDataMenu());
       right.appendChild(renderBackupMenu());
       right.appendChild(actionButton("workspace__create-button", "toggle-create-board", null, "", [
@@ -2645,6 +2791,22 @@
     wall.style.height = masonryLayout.height + "px";
     wall.style.marginLeft = sideGutter ? sideGutter + "px" : "";
     wall.style.marginRight = sideGutter ? sideGutter + "px" : "";
+  }
+
+  function applyLayoutSettingsFromForm(form) {
+    if (!form || !auth.isAdmin) return;
+    const formData = new FormData(form);
+    const columnsValue = String(formData.get("columns") || "auto");
+    const next = normalizeLayoutSettings({
+      columnMode: columnsValue === "auto" ? "auto" : "manual",
+      columns: columnsValue === "auto" ? layoutSettings.columns : Number(columnsValue),
+      columnWidth: Number(formData.get("columnWidth")),
+      align: String(formData.get("align") || layoutSettings.align)
+    });
+    layoutSettings = next;
+    cacheBoardsLocally();
+    saveBoards();
+    syncBoardWallLayout();
   }
 
   function scheduleRowDragLayoutSync() {
@@ -3689,9 +3851,10 @@
         uiState.openBoardMenuId = null;
         rerenderBoardInPlace(previousBoardMenuId);
       }
-      if ((uiState.dataMenuOpen || uiState.backupMenuOpen) && !event.target.closest(".workspace__menu")) {
+      if ((uiState.dataMenuOpen || uiState.backupMenuOpen || uiState.layoutMenuOpen) && !event.target.closest(".workspace__menu")) {
         uiState.dataMenuOpen = false;
         uiState.backupMenuOpen = false;
+        uiState.layoutMenuOpen = false;
         render();
       }
       return;
@@ -3743,6 +3906,9 @@
 
     if (action === "toggle-create-board") {
       uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
+      uiState.backupMenuOpen = false;
+      uiState.layoutMenuOpen = false;
       uiState.createBoardOpen = !uiState.createBoardOpen;
       render();
       if (uiState.createBoardOpen) {
@@ -3824,6 +3990,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.layoutMenuOpen = false;
       exportFullBackup();
       render();
       return;
@@ -3835,6 +4002,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.layoutMenuOpen = false;
       pickFullBackupFile();
       render();
       return;
@@ -3846,6 +4014,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.layoutMenuOpen = false;
       pickBookmarksHtmlFile();
       render();
       return;
@@ -3857,7 +4026,20 @@
       }
       uiState.openBoardMenuId = null;
       uiState.backupMenuOpen = false;
+      uiState.layoutMenuOpen = false;
       uiState.dataMenuOpen = !uiState.dataMenuOpen;
+      render();
+      return;
+    }
+
+    if (action === "toggle-layout-menu") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      uiState.openBoardMenuId = null;
+      uiState.dataMenuOpen = false;
+      uiState.backupMenuOpen = false;
+      uiState.layoutMenuOpen = !uiState.layoutMenuOpen;
       render();
       return;
     }
@@ -3868,6 +4050,7 @@
       }
       uiState.openBoardMenuId = null;
       uiState.dataMenuOpen = false;
+      uiState.layoutMenuOpen = false;
       uiState.backupMenuOpen = !uiState.backupMenuOpen;
       render();
       if (uiState.backupMenuOpen) {
@@ -4190,7 +4373,22 @@
     }
   });
 
+  app.addEventListener("change", function (event) {
+    const form = event.target.closest('[data-role="layout-settings-form"]');
+    if (!form) return;
+    applyLayoutSettingsFromForm(form);
+    render();
+  });
+
   app.addEventListener("submit", function (event) {
+    const layoutForm = event.target.closest('[data-role="layout-settings-form"]');
+    if (layoutForm) {
+      event.preventDefault();
+      applyLayoutSettingsFromForm(layoutForm);
+      render();
+      return;
+    }
+
     const loginForm = event.target.closest('[data-role="login-form"]');
     if (loginForm) {
       event.preventDefault();
@@ -4401,6 +4599,7 @@
       exportedAt: new Date().toISOString(),
       serverVersion: serverState.version,
       serverUpdatedAt: serverState.updatedAt,
+      layout: layoutStoragePayload(),
       boards: boardStoragePayload()
     };
     const text = JSON.stringify(payload, null, 2) + "\n";
@@ -4429,16 +4628,20 @@
         const text = typeof reader.result === "string" ? reader.result : "";
         const parsed = JSON.parse(text);
         const importedBoards = parseFullBackupBoards(parsed);
+        const importedLayout = normalizeLayoutSettings(parsed && typeof parsed === "object" ? parsed.layout : null);
         if (!window.confirm("Import this JSON backup? Current remote state will be backed up first.")) {
           return;
         }
         const previousBoards = boards;
+        const previousLayout = layoutSettings;
         boards = importedBoards;
+        layoutSettings = importedLayout;
         cacheBoardsLocally();
         setSyncState("saving", TEXT.syncSaving);
         apiSend("/board", "PUT", {
           version: serverState.version,
-          boards: boardStoragePayload()
+          boards: boardStoragePayload(),
+          layout: layoutStoragePayload()
         }).then(function (result) {
           if (result && Number.isInteger(result.version)) {
             serverState.version = result.version;
@@ -4457,6 +4660,7 @@
             return;
           }
           boards = previousBoards;
+          layoutSettings = previousLayout;
           cacheBoardsLocally();
           setSyncState("failed", TEXT.syncFailed);
           window.alert("Import failed.");

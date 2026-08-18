@@ -1,7 +1,7 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
 import { scheduleCloudBackups } from "./cloudBackup";
 import { jsonResponse, isPlainObject, type BoardPutPayload, type BoardStateEnvelope, type Env } from "./shared";
-import { validateBoardState } from "./validation";
+import { validateBoardState, validateLayoutSettings } from "./validation";
 
 const STATE_KEY = "state";
 const BACKUP_PREFIX = "state_backup:";
@@ -45,6 +45,10 @@ export async function handlePutBoard(request: Request, env: Env, ctx?: Execution
   if (validationError) {
     return new Response(validationError, { status: 400 });
   }
+  const layoutValidationError = validateLayoutSettings(payload.layout);
+  if (layoutValidationError) {
+    return new Response(layoutValidationError, { status: 400 });
+  }
 
   const existingRaw = await env.BOARD_KV.get(STATE_KEY);
   const existing = existingRaw ? parseStoredBoardState(existingRaw) : null;
@@ -66,7 +70,8 @@ export async function handlePutBoard(request: Request, env: Env, ctx?: Execution
   const nextState: BoardStateEnvelope = {
     version: currentVersion == null ? 1 : currentVersion + 1,
     updatedAt: new Date().toISOString(),
-    boards: payload.boards
+    boards: payload.boards,
+    layout: payload.layout
   };
 
   await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
@@ -130,7 +135,8 @@ export async function handleRestoreBackup(request: Request, env: Env, ctx?: Exec
   const nextState: BoardStateEnvelope = {
     version: nextVersion,
     updatedAt: new Date().toISOString(),
-    boards: backup.boards
+    boards: backup.boards,
+    layout: backup.layout
   };
   await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
   await pruneBoardBackups(env);
@@ -186,14 +192,17 @@ function parseStoredBoardState(raw: string): BoardStateEnvelope | null {
   const version = parsed.version;
   const updatedAt = parsed.updatedAt;
   const boards = parsed.boards;
+  const layout = parsed.layout;
   if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return null;
   if (typeof updatedAt !== "string") return null;
   if (!Array.isArray(boards)) return null;
   const error = validateBoardState(boards);
-  return error ? null : { version, updatedAt, boards };
+  if (error) return null;
+  const layoutError = validateLayoutSettings(layout);
+  return layoutError ? null : { version, updatedAt, boards, layout };
 }
 
-function parseBoardPutPayload(value: unknown): { version: number | null; boards: unknown[] } | null {
+function parseBoardPutPayload(value: unknown): { version: number | null; boards: unknown[]; layout?: unknown } | null {
   if (Array.isArray(value)) {
     return { version: null, boards: value };
   }
@@ -204,5 +213,5 @@ function parseBoardPutPayload(value: unknown): { version: number | null; boards:
   if (version !== null && !Number.isInteger(version)) return null;
   if (!Array.isArray(payload.boards)) return null;
 
-  return { version: version as number | null, boards: payload.boards };
+  return { version: version as number | null, boards: payload.boards, layout: payload.layout };
 }

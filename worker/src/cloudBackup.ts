@@ -1,6 +1,6 @@
 import { isAuthenticated, isCsrfTokenValid } from "./auth";
 import { jsonResponse, isPlainObject, type BoardStateEnvelope, type Env } from "./shared";
-import { validateBoardState } from "./validation";
+import { validateBoardState, validateLayoutSettings } from "./validation";
 
 type ProviderId = "google" | "dropbox";
 
@@ -266,7 +266,8 @@ export async function handleCloudBackupRestore(request: Request, env: Env, provi
   const nextState: BoardStateEnvelope = {
     version: existing ? existing.version + 1 : 1,
     updatedAt: new Date().toISOString(),
-    boards: restored.boards
+    boards: restored.boards,
+    layout: restored.layout
   };
   await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
   await pruneLocalBoardBackups(env);
@@ -666,11 +667,14 @@ function parseStoredBoardState(raw: string): BoardStateEnvelope | null {
   const version = parsed.version;
   const updatedAt = parsed.updatedAt;
   const boards = parsed.boards;
+  const layout = parsed.layout;
   if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return null;
   if (typeof updatedAt !== "string") return null;
   if (!Array.isArray(boards)) return null;
   const error = validateBoardState(boards);
-  return error ? null : { version, updatedAt, boards };
+  if (error) return null;
+  const layoutError = validateLayoutSettings(layout);
+  return layoutError ? null : { version, updatedAt, boards, layout };
 }
 
 function escapeDriveQueryValue(value: string): string {

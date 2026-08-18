@@ -9,6 +9,9 @@ const BOARD_TAB_NAME_MAX_LENGTH = 40;
 const BOARD_ITEM_NAME_MAX_LENGTH = 200;
 const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
 const BOARD_URL_MAX_LENGTH = 2048;
+const MIN_LAYOUT_COLUMN_WIDTH = 220;
+const MAX_LAYOUT_COLUMN_WIDTH = 360;
+const MAX_MANUAL_COLUMNS = 6;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const ICON_NAME_RE = /^[a-z0-9-]+$/;
 
@@ -40,6 +43,13 @@ interface Board {
   items?: unknown;
 }
 
+interface LayoutSettings {
+  columnMode?: unknown;
+  columns?: unknown;
+  columnWidth?: unknown;
+  align?: unknown;
+}
+
 export function validateBoardState(value: unknown): string | null {
   if (!Array.isArray(value)) return "Expected array";
   if (value.length > BOARD_MAX_COUNT) return "Too many boards";
@@ -49,6 +59,25 @@ export function validateBoardState(value: unknown): string | null {
     if (error) return error;
   }
 
+  return null;
+}
+
+export function validateLayoutSettings(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (!isPlainObject(value)) return "Invalid layout settings";
+  const layout = value as LayoutSettings;
+  const columns = layout.columns;
+  const columnWidth = layout.columnWidth;
+  if (layout.columnMode !== undefined && layout.columnMode !== "auto" && layout.columnMode !== "manual") return "Invalid layout column mode";
+  if (
+    columns !== undefined &&
+    (typeof columns !== "number" || !Number.isInteger(columns) || columns < 1 || columns > MAX_MANUAL_COLUMNS)
+  ) return "Invalid layout columns";
+  if (
+    columnWidth !== undefined &&
+    (typeof columnWidth !== "number" || !Number.isInteger(columnWidth) || columnWidth < MIN_LAYOUT_COLUMN_WIDTH || columnWidth > MAX_LAYOUT_COLUMN_WIDTH)
+  ) return "Invalid layout column width";
+  if (layout.align !== undefined && layout.align !== "left" && layout.align !== "center") return "Invalid layout alignment";
   return null;
 }
 

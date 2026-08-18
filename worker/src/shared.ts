@@ -15,11 +15,13 @@ export interface BoardStateEnvelope {
   version: number;
   updatedAt: string;
   boards: unknown[];
+  layout?: unknown;
 }
 
 export interface BoardPutPayload {
   version?: unknown;
   boards?: unknown;
+  layout?: unknown;
 }
 
 const SECURITY_HEADERS: Record<string, string> = {

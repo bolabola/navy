@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { isUrlSafe } = require("../../.tmp-test/src/urlSafety.js");
-const { isStoredUrlAllowed, validateBoardState } = require("../../.tmp-test/src/validation.js");
+const { isStoredUrlAllowed, validateBoardState, validateLayoutSettings } = require("../../.tmp-test/src/validation.js");
 
 const validBoard = {
   id: "board-1",
@@ -47,6 +47,15 @@ test("validateBoardState rejects invalid item URLs", () => {
     validateBoardState([{ ...validBoard, items: [{ id: "item-1", name: "Bad", url: "javascript:alert(1)" }] }]),
     "Invalid item URL"
   );
+});
+
+test("validateLayoutSettings accepts and rejects layout options", () => {
+  assert.equal(validateLayoutSettings(undefined), null);
+  assert.equal(validateLayoutSettings({ columnMode: "auto", columns: 3, columnWidth: 250, align: "left" }), null);
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 6, columnWidth: 360, align: "center" }), null);
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 7, columnWidth: 250, align: "left" }), "Invalid layout columns");
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 200, align: "left" }), "Invalid layout column width");
+  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, align: "right" }), "Invalid layout alignment");
 });
 
 test("validateBoardState enforces board limit", () => {

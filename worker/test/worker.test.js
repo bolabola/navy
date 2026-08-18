@@ -41,6 +41,7 @@ function createEnv(initial = {}, overrides = {}) {
 
 const boardPayload = {
   version: null,
+  layout: { columnMode: "manual", columns: 3, columnWidth: 280, align: "center" },
   boards: [{ id: "board-1", title: "Tools", items: [{ id: "item-1", name: "OpenAI", url: "https://openai.com/" }] }]
 };
 
@@ -125,6 +126,8 @@ test("PUT /api/board stores state and rejects stale versions", async () => {
   const createdBody = await created.json();
   assert.equal(createdBody.version, 1);
   assert.equal(createdBody.backupKey, null);
+  const storedState = JSON.parse(await env.BOARD_KV.get("state"));
+  assert.deepEqual(storedState.layout, boardPayload.layout);
 
   const stale = await worker.fetch(new Request("https://example.com/api/board", {
     method: "PUT",
