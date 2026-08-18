@@ -2503,14 +2503,19 @@
     updateDragGhostPosition();
   }
 
-  function cleanupBoardDragPreview(dragging) {
+  function getBoardDragSourceSlot(dragging) {
     const runtime = dragging && dragging.runtime;
-    const wall = runtime && runtime.wallNode ? runtime.wallNode : app.querySelector(".board-wall");
-    const sourceSlot = runtime && runtime.slotNodes
+    return runtime && runtime.slotNodes
       ? runtime.slotNodes[dragging.boardId]
       : app.querySelector('.board-slot[data-board-id="' + cssEscape(dragging.boardId) + '"]');
+  }
 
-    if (sourceSlot) {
+  function cleanupBoardDragPreview(dragging, keepSourceHidden) {
+    const runtime = dragging && dragging.runtime;
+    const wall = runtime && runtime.wallNode ? runtime.wallNode : app.querySelector(".board-wall");
+    const sourceSlot = getBoardDragSourceSlot(dragging);
+
+    if (sourceSlot && !keepSourceHidden) {
       sourceSlot.classList.remove("is-board-drag-source");
     }
     const placeholder = runtime && runtime.placeholderNode ? runtime.placeholderNode : wall && wall.querySelector(".board-card--placeholder");
@@ -3573,8 +3578,20 @@
 
     uiState.boardDragging = null;
     document.body.classList.remove("is-board-dragging");
-    cleanupBoardDragPreview(dragging);
+    const sourceSlot = getBoardDragSourceSlot(dragging);
+    const previousTransition = sourceSlot ? sourceSlot.style.transition : "";
+    if (sourceSlot) {
+      sourceSlot.style.transition = "none";
+    }
+    cleanupBoardDragPreview(dragging, true);
     syncBoardWallLayout();
+    if (sourceSlot) {
+      sourceSlot.getBoundingClientRect();
+      sourceSlot.classList.remove("is-board-drag-source");
+      window.requestAnimationFrame(function () {
+        sourceSlot.style.transition = previousTransition;
+      });
+    }
   }
 
   app.addEventListener("click", function (event) {
