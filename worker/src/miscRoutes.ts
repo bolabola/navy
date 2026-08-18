@@ -211,15 +211,24 @@ export async function handleUrlTitles(request: Request, env: Env): Promise<Respo
 
   const safeUrls: string[] = [];
   for (const u of urls) {
-    if (typeof u !== "string" || !isUrlSafe(u)) {
+    const normalizedUrl = typeof u === "string" ? normalizeMetadataUrl(u) : null;
+    if (!normalizedUrl || !isUrlSafe(normalizedUrl)) {
       return new Response("URL not allowed", { status: 400 });
     }
-    safeUrls.push(u);
+    safeUrls.push(normalizedUrl);
   }
 
   const metadata = await runWithConcurrency(safeUrls, URL_TITLES_CONCURRENCY, fetchMetadata);
   const result = safeUrls.map((url, i) => ({ url, title: metadata[i]?.title || null, description: metadata[i]?.description || null }));
   return jsonResponse(JSON.stringify(result), 200, { "Cache-Control": "no-store" });
+}
+
+function normalizeMetadataUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^\/\//.test(trimmed)) return "https:" + trimmed;
+  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) return trimmed;
+  return "https://" + trimmed;
 }
 
 async function fetchMetadata(rawUrl: string): Promise<{ title: string | null; description: string | null }> {

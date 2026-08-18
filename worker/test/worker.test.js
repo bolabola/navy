@@ -839,11 +839,15 @@ test("logout clears cookie", async () => {
 test("url titles returns title and description metadata", async () => {
   const previousFetch = globalThis.fetch;
   const previousAbortSignalTimeout = AbortSignal.timeout;
+  const fetchedUrls = [];
   AbortSignal.timeout = undefined;
-  globalThis.fetch = async () => new Response(
-    "<!doctype html><html><head><title>Example &amp; Tools</title><meta name=\"description\" content=\"Helpful board links &amp; references\"></head><body></body></html>",
-    { headers: { "Content-Type": "text/html; charset=utf-8" } }
-  );
+  globalThis.fetch = async (request) => {
+    fetchedUrls.push(typeof request === "string" ? request : request.url);
+    return new Response(
+      "<!doctype html><html><head><title>Example &amp; Tools</title><meta name=\"description\" content=\"Helpful board links &amp; references\"></head><body></body></html>",
+      { headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
+  };
 
   try {
     const env = createEnv();
@@ -851,7 +855,7 @@ test("url titles returns title and description metadata", async () => {
     const res = await worker.fetch(new Request("https://example.com/api/url-titles", {
       method: "POST",
       headers: { Cookie: cookie, "X-CSRF-Token": csrfToken },
-      body: JSON.stringify({ urls: ["https://example.com/tools"] })
+      body: JSON.stringify({ urls: ["example.com/tools"] })
     }), env);
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), [{
@@ -859,6 +863,7 @@ test("url titles returns title and description metadata", async () => {
       title: "Example & Tools",
       description: "Helpful board links & references"
     }]);
+    assert.deepEqual(fetchedUrls, ["https://example.com/tools"]);
   } finally {
     globalThis.fetch = previousFetch;
     AbortSignal.timeout = previousAbortSignalTimeout;
