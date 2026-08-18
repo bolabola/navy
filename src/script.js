@@ -2475,6 +2475,50 @@
     };
   }
 
+  function beginBoardDragPreview() {
+    if (!uiState.boardDragging || !uiState.boardDragging.hasMoved) {
+      return;
+    }
+
+    const wall = app.querySelector(".board-wall");
+    const sourceSlot = app.querySelector('.board-slot[data-board-id="' + cssEscape(uiState.boardDragging.boardId) + '"]');
+    const ghost = renderDragGhost();
+    if (!wall || !sourceSlot || !ghost) {
+      render();
+      return;
+    }
+
+    const placeholder = document.createElement("div");
+    placeholder.className = "board-card board-card--placeholder";
+    wall.appendChild(placeholder);
+    app.appendChild(ghost);
+    sourceSlot.classList.add("is-board-drag-source");
+
+    hydrateBoardDragRuntime();
+    syncBoardWallLayout();
+    updateDragGhostPosition();
+  }
+
+  function cleanupBoardDragPreview(dragging) {
+    const runtime = dragging && dragging.runtime;
+    const wall = runtime && runtime.wallNode ? runtime.wallNode : app.querySelector(".board-wall");
+    const sourceSlot = runtime && runtime.slotNodes
+      ? runtime.slotNodes[dragging.boardId]
+      : app.querySelector('.board-slot[data-board-id="' + cssEscape(dragging.boardId) + '"]');
+
+    if (sourceSlot) {
+      sourceSlot.classList.remove("is-board-drag-source");
+    }
+    const placeholder = runtime && runtime.placeholderNode ? runtime.placeholderNode : wall && wall.querySelector(".board-card--placeholder");
+    if (placeholder) {
+      placeholder.remove();
+    }
+    const ghost = runtime && runtime.ghostNode ? runtime.ghostNode : app.querySelector(".board-drag-ghost");
+    if (ghost) {
+      ghost.remove();
+    }
+  }
+
   function syncBoardWallLayout() {
     masonryLayout = buildMasonryLayout();
 
@@ -3463,7 +3507,7 @@
       if (!uiState.boardDragging.hasMoved) {
         uiState.boardDragging.hasMoved = true;
         document.body.classList.add("is-board-dragging");
-        render();
+        beginBoardDragPreview();
       }
     }
 
@@ -3525,7 +3569,8 @@
 
     uiState.boardDragging = null;
     document.body.classList.remove("is-board-dragging");
-    render();
+    cleanupBoardDragPreview(dragging);
+    syncBoardWallLayout();
   }
 
   app.addEventListener("click", function (event) {

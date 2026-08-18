@@ -585,6 +585,10 @@ a {
   z-index: 12;
 }
 
+.board-slot.is-board-drag-source {
+  visibility: hidden;
+}
+
 .board-slot.is-icon-picking {
   z-index: 50;
 }
