@@ -854,9 +854,9 @@ a {
 }
 
 .board-card__glyph.board-card__glyph--placeholder {
-  width: 42px;
+  width: 24px;
   background: transparent !important;
-  flex-basis: 42px;
+  flex-basis: 24px;
 }
 
 .board-card__glyph.board-card__glyph--placeholder i[class^="icon-"] {
