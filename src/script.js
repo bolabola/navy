@@ -2851,6 +2851,16 @@
     return nav;
   }
 
+  function rerenderNavbarInPlace() {
+    const current = app.querySelector(".workspace__navbar");
+    const next = renderNavbar();
+    if (current) {
+      current.replaceWith(next);
+    } else {
+      app.appendChild(next);
+    }
+  }
+
   function renderPageBar() {
     const bar = document.createElement("div");
     bar.className = "page-bar";
@@ -4478,7 +4488,7 @@
       uiState.dataMenuOpen = false;
       uiState.backupMenuOpen = false;
       uiState.layoutMenuOpen = !uiState.layoutMenuOpen;
-      render();
+      rerenderNavbarInPlace();
       return;
     }
 
