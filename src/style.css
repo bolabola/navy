@@ -2076,8 +2076,8 @@ body.is-resizing {
   --bg-bottom: #c1cad4;
   --panel: #ffffff;
   --panel-border: rgba(15, 23, 42, 0.14);
-  --text: #1b222b;
-  --muted: #5b6673;
+  --text: #333333;
+  --muted: #7a7a7a;
   --soft: #e2e8f0;
   --white: #ffffff;
   --hover: rgba(15, 23, 42, 0.06);
@@ -2090,7 +2090,6 @@ body {
   line-height: 1.15;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)),
     linear-gradient(135deg, var(--bg-top), var(--bg-bottom));
@@ -2106,7 +2105,7 @@ body {
   margin: 0 -10px;
   border-radius: 0;
   padding: 0 10px;
-  color: #1b222b;
+  color: #2f3b4c;
   background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 1px 0 rgba(15, 23, 42, 0.08),
@@ -2324,9 +2323,9 @@ body {
 }
 
 .link-row__name {
-  color: #17202b;
+  color: var(--text);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 22px;
 }
 
