@@ -18,7 +18,17 @@
   const MIN_LAYOUT_GAP = 0;
   const MAX_LAYOUT_GAP = 32;
   const MAX_MANUAL_COLUMNS = 6;
-  const DEFAULT_LAYOUT_SETTINGS = { columnMode: "auto", columns: 3, columnWidth: BOARD_WIDTH, columnGap: BOARD_GAP, rowGap: BOARD_GAP, align: "left" };
+  const DEFAULT_LAYOUT_SETTINGS = {
+    columnMode: "auto",
+    columns: 3,
+    columnWidth: BOARD_WIDTH,
+    columnGap: BOARD_GAP,
+    rowGap: BOARD_GAP,
+    align: "left",
+    showBoardIcon: true,
+    showBoardCount: true,
+    showItemDragHandle: true
+  };
   const BOARD_HEADER_HEIGHT = 34;
   const BOARD_CHROME_HEIGHT = 36;
   const BOARD_LIST_MIN_HEIGHT = 64;
@@ -146,6 +156,14 @@
     layoutAlign: "排列",
     layoutLeft: "左对齐",
     layoutCenter: "居中",
+    layoutSectionLayout: "布局",
+    layoutSectionDisplay: "显示",
+    layoutShowBoardIcon: "Board 图标",
+    layoutShowBoardIconDesc: "显示标题左侧的图标",
+    layoutShowBoardCount: "网址数量",
+    layoutShowBoardCountDesc: "显示标题右侧的数字",
+    layoutShowItemDragHandle: "Item 拖拽点",
+    layoutShowItemDragHandleDesc: "显示 item 左侧的三个点",
     layoutReset: "重置",
     pageDefault: DEFAULT_PAGE_NAME,
     addPage: "新建页面",
@@ -290,7 +308,10 @@
       columnWidth: layoutSettings.columnWidth,
       columnGap: layoutSettings.columnGap,
       rowGap: layoutSettings.rowGap,
-      align: layoutSettings.align
+      align: layoutSettings.align,
+      showBoardIcon: layoutSettings.showBoardIcon,
+      showBoardCount: layoutSettings.showBoardCount,
+      showItemDragHandle: layoutSettings.showItemDragHandle
     };
   }
 
@@ -1017,6 +1038,10 @@
     menu.className = "layout-menu";
     menu.dataset.role = "layout-settings-form";
 
+    const layoutSection = document.createElement("section");
+    layoutSection.className = "layout-menu__section";
+    layoutSection.appendChild(layoutMenuSectionTitle(TEXT.layoutSectionLayout));
+
     const columnRow = document.createElement("label");
     columnRow.className = "layout-menu__row";
     columnRow.appendChild(layoutMenuLabel(TEXT.layoutColumns));
@@ -1034,7 +1059,7 @@
     }
     columnSelect.value = layoutSettings.columnMode === "manual" ? String(layoutSettings.columns) : "auto";
     columnRow.appendChild(columnSelect);
-    menu.appendChild(columnRow);
+    layoutSection.appendChild(columnRow);
 
     const widthRow = document.createElement("label");
     widthRow.className = "layout-menu__row";
@@ -1047,7 +1072,7 @@
     widthInput.step = "10";
     widthInput.value = String(layoutSettings.columnWidth);
     widthRow.appendChild(widthInput);
-    menu.appendChild(widthRow);
+    layoutSection.appendChild(widthRow);
 
     const columnGapRow = document.createElement("label");
     columnGapRow.className = "layout-menu__row";
@@ -1060,7 +1085,7 @@
     columnGapInput.step = "2";
     columnGapInput.value = String(layoutSettings.columnGap);
     columnGapRow.appendChild(columnGapInput);
-    menu.appendChild(columnGapRow);
+    layoutSection.appendChild(columnGapRow);
 
     const rowGapRow = document.createElement("label");
     rowGapRow.className = "layout-menu__row";
@@ -1073,7 +1098,7 @@
     rowGapInput.step = "2";
     rowGapInput.value = String(layoutSettings.rowGap);
     rowGapRow.appendChild(rowGapInput);
-    menu.appendChild(rowGapRow);
+    layoutSection.appendChild(rowGapRow);
 
     const alignGroup = document.createElement("div");
     alignGroup.className = "layout-menu__row layout-menu__row--stacked";
@@ -1096,7 +1121,19 @@
       alignControls.appendChild(label);
     });
     alignGroup.appendChild(alignControls);
-    menu.appendChild(alignGroup);
+    layoutSection.appendChild(alignGroup);
+    menu.appendChild(layoutSection);
+
+    const displaySection = document.createElement("section");
+    displaySection.className = "layout-menu__section";
+    displaySection.appendChild(layoutMenuSectionTitle(TEXT.layoutSectionDisplay));
+    const toggles = document.createElement("div");
+    toggles.className = "layout-menu__toggles";
+    toggles.appendChild(layoutMenuToggle("showBoardIcon", TEXT.layoutShowBoardIcon, TEXT.layoutShowBoardIconDesc, layoutSettings.showBoardIcon !== false));
+    toggles.appendChild(layoutMenuToggle("showBoardCount", TEXT.layoutShowBoardCount, TEXT.layoutShowBoardCountDesc, layoutSettings.showBoardCount !== false));
+    toggles.appendChild(layoutMenuToggle("showItemDragHandle", TEXT.layoutShowItemDragHandle, TEXT.layoutShowItemDragHandleDesc, layoutSettings.showItemDragHandle !== false));
+    displaySection.appendChild(toggles);
+    menu.appendChild(displaySection);
 
     const actions = document.createElement("div");
     actions.className = "layout-menu__actions";
@@ -1114,6 +1151,41 @@
     const label = document.createElement("span");
     label.className = "layout-menu__label";
     label.textContent = text;
+    return label;
+  }
+
+  function layoutMenuSectionTitle(text) {
+    const title = document.createElement("div");
+    title.className = "layout-menu__section-title";
+    title.textContent = text;
+    return title;
+  }
+
+  function layoutMenuToggle(name, title, description, checked) {
+    const label = document.createElement("label");
+    label.className = "layout-menu__toggle" + (checked ? " is-on" : "");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.name = name;
+    input.checked = checked;
+    label.appendChild(input);
+
+    const text = document.createElement("span");
+    text.className = "layout-menu__toggle-text";
+    const nameNode = document.createElement("span");
+    nameNode.className = "layout-menu__toggle-name";
+    nameNode.textContent = title;
+    const descNode = document.createElement("span");
+    descNode.className = "layout-menu__toggle-desc";
+    descNode.textContent = description;
+    text.appendChild(nameNode);
+    text.appendChild(descNode);
+    label.appendChild(text);
+
+    const switchNode = document.createElement("span");
+    switchNode.className = "layout-menu__switch";
+    switchNode.setAttribute("aria-hidden", "true");
+    label.appendChild(switchNode);
     return label;
   }
 
@@ -1306,13 +1378,19 @@
     const columnGap = Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, input.columnGap == null ? DEFAULT_LAYOUT_SETTINGS.columnGap : Number(input.columnGap)));
     const rowGap = Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, input.rowGap == null ? DEFAULT_LAYOUT_SETTINGS.rowGap : Number(input.rowGap)));
     const align = input.align === "center" ? "center" : "left";
+    const showBoardIcon = input.showBoardIcon !== false;
+    const showBoardCount = input.showBoardCount !== false;
+    const showItemDragHandle = input.showItemDragHandle !== false;
     return {
       columnMode: columnMode,
       columns: Math.round(columns),
       columnWidth: Math.round(columnWidth),
       columnGap: Math.round(columnGap),
       rowGap: Math.round(rowGap),
-      align: align
+      align: align,
+      showBoardIcon: showBoardIcon,
+      showBoardCount: showBoardCount,
+      showItemDragHandle: showItemDragHandle
     };
   }
 
@@ -2087,7 +2165,7 @@
     row.dataset.tabId = item.tabId || DEFAULT_TAB_ID;
     if (auth.isAdmin) row.draggable = true;
 
-    if (!iconOnly && auth.isAdmin) {
+    if (!iconOnly && auth.isAdmin && layoutSettings.showItemDragHandle !== false) {
       const grab = document.createElement("span");
       grab.className = "link-row__grab";
       grab.setAttribute("aria-hidden", "true");
@@ -2369,19 +2447,23 @@
     titleWrap.dataset.role = "board-drag-handle";
     titleWrap.dataset.boardId = board.id;
     titleWrap.title = TEXT.moveBoard;
-    const glyph = document.createElement("span");
-    glyph.className = "board-card__glyph";
-    glyph.appendChild(iconNode(board.icon));
-    titleWrap.appendChild(glyph);
+    if (layoutSettings.showBoardIcon !== false) {
+      const glyph = document.createElement("span");
+      glyph.className = "board-card__glyph";
+      glyph.appendChild(iconNode(board.icon));
+      titleWrap.appendChild(glyph);
+    }
     const title = document.createElement("h2");
     title.className = "board-card__title";
     title.textContent = board.title;
     titleWrap.appendChild(title);
-    const count = document.createElement("span");
-    count.className = "board-card__count";
-    count.textContent = String(Array.isArray(board.items) ? board.items.length : 0);
-    count.title = String(Array.isArray(board.items) ? board.items.length : 0) + TEXT.urlCount;
-    titleWrap.appendChild(count);
+    if (layoutSettings.showBoardCount !== false) {
+      const count = document.createElement("span");
+      count.className = "board-card__count";
+      count.textContent = String(Array.isArray(board.items) ? board.items.length : 0);
+      count.title = String(Array.isArray(board.items) ? board.items.length : 0) + TEXT.urlCount;
+      titleWrap.appendChild(count);
+    }
     header.appendChild(titleWrap);
 
     const actions = document.createElement("div");
@@ -3009,7 +3091,10 @@
       columnWidth: Number(formData.get("columnWidth")),
       columnGap: Number(formData.get("columnGap")),
       rowGap: Number(formData.get("rowGap")),
-      align: String(formData.get("align") || layoutSettings.align)
+      align: String(formData.get("align") || layoutSettings.align),
+      showBoardIcon: formData.has("showBoardIcon"),
+      showBoardCount: formData.has("showBoardCount"),
+      showItemDragHandle: formData.has("showItemDragHandle")
     });
     layoutSettings = next;
     cacheBoardsLocally();

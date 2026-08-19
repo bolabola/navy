@@ -55,6 +55,9 @@ interface LayoutSettings {
   columnGap?: unknown;
   rowGap?: unknown;
   align?: unknown;
+  showBoardIcon?: unknown;
+  showBoardCount?: unknown;
+  showItemDragHandle?: unknown;
 }
 
 interface PageState {
@@ -122,6 +125,9 @@ export function validateLayoutSettings(value: unknown): string | null {
     (typeof rowGap !== "number" || !Number.isInteger(rowGap) || rowGap < MIN_LAYOUT_GAP || rowGap > MAX_LAYOUT_GAP)
   ) return "Invalid layout row gap";
   if (layout.align !== undefined && layout.align !== "left" && layout.align !== "center") return "Invalid layout alignment";
+  if (layout.showBoardIcon !== undefined && typeof layout.showBoardIcon !== "boolean") return "Invalid layout board icon visibility";
+  if (layout.showBoardCount !== undefined && typeof layout.showBoardCount !== "boolean") return "Invalid layout board count visibility";
+  if (layout.showItemDragHandle !== undefined && typeof layout.showItemDragHandle !== "boolean") return "Invalid layout item drag handle visibility";
   return null;
 }
 
