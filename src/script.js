@@ -1038,90 +1038,67 @@
     menu.className = "layout-menu";
     menu.dataset.role = "layout-settings-form";
 
+    const header = document.createElement("header");
+    header.className = "layout-menu__header";
+    const heading = document.createElement("div");
+    heading.className = "layout-menu__heading";
+    const title = document.createElement("div");
+    title.className = "layout-menu__title";
+    title.textContent = "布局设置";
+    const subtitle = document.createElement("div");
+    subtitle.className = "layout-menu__subtitle";
+    subtitle.textContent = "调整看板网格、间距和显示项";
+    heading.appendChild(title);
+    heading.appendChild(subtitle);
+    header.appendChild(heading);
+    header.appendChild(actionButton("layout-menu__close", "toggle-layout-menu", null, "关闭", [
+      staticIconNode("icon-x")
+    ]));
+    menu.appendChild(header);
+
     const layoutSection = document.createElement("section");
     layoutSection.className = "layout-menu__section";
     layoutSection.appendChild(layoutMenuSectionTitle(TEXT.layoutSectionLayout));
 
-    const columnRow = document.createElement("label");
-    columnRow.className = "layout-menu__row";
-    columnRow.appendChild(layoutMenuLabel(TEXT.layoutColumns));
-    const columnSelect = document.createElement("select");
-    columnSelect.name = "columns";
-    const autoOption = document.createElement("option");
-    autoOption.value = "auto";
-    autoOption.textContent = TEXT.layoutAuto;
-    columnSelect.appendChild(autoOption);
+    const columnOptions = [{ value: "auto", label: TEXT.layoutAuto }];
     for (let i = 1; i <= MAX_MANUAL_COLUMNS; i += 1) {
-      const option = document.createElement("option");
-      option.value = String(i);
-      option.textContent = String(i);
-      columnSelect.appendChild(option);
+      columnOptions.push({ value: String(i), label: String(i) });
     }
-    columnSelect.value = layoutSettings.columnMode === "manual" ? String(layoutSettings.columns) : "auto";
-    columnRow.appendChild(columnSelect);
-    layoutSection.appendChild(columnRow);
+    const selectedColumns = layoutSettings.columnMode === "manual" ? String(layoutSettings.columns) : "auto";
+    layoutSection.appendChild(layoutMenuSegmentedField("columns", TEXT.layoutColumns, columnOptions, selectedColumns));
 
-    const widthRow = document.createElement("label");
-    widthRow.className = "layout-menu__row";
-    widthRow.appendChild(layoutMenuLabel(TEXT.layoutColumnWidth));
-    const widthInput = document.createElement("input");
-    widthInput.type = "number";
-    widthInput.name = "columnWidth";
-    widthInput.min = String(MIN_LAYOUT_COLUMN_WIDTH);
-    widthInput.max = String(MAX_LAYOUT_COLUMN_WIDTH);
-    widthInput.step = "10";
-    widthInput.value = String(layoutSettings.columnWidth);
-    widthRow.appendChild(widthInput);
-    layoutSection.appendChild(widthRow);
+    layoutSection.appendChild(layoutMenuRangeField(
+      "columnWidth",
+      TEXT.layoutColumnWidth,
+      layoutSettings.columnWidth,
+      MIN_LAYOUT_COLUMN_WIDTH,
+      MAX_LAYOUT_COLUMN_WIDTH,
+      10,
+      "px"
+    ));
+    layoutSection.appendChild(layoutMenuRangeField(
+      "columnGap",
+      TEXT.layoutColumnGap,
+      layoutSettings.columnGap,
+      MIN_LAYOUT_GAP,
+      MAX_LAYOUT_GAP,
+      2,
+      "px"
+    ));
+    layoutSection.appendChild(layoutMenuRangeField(
+      "rowGap",
+      TEXT.layoutRowGap,
+      layoutSettings.rowGap,
+      MIN_LAYOUT_GAP,
+      MAX_LAYOUT_GAP,
+      2,
+      "px"
+    ));
 
-    const columnGapRow = document.createElement("label");
-    columnGapRow.className = "layout-menu__row";
-    columnGapRow.appendChild(layoutMenuLabel(TEXT.layoutColumnGap));
-    const columnGapInput = document.createElement("input");
-    columnGapInput.type = "number";
-    columnGapInput.name = "columnGap";
-    columnGapInput.min = String(MIN_LAYOUT_GAP);
-    columnGapInput.max = String(MAX_LAYOUT_GAP);
-    columnGapInput.step = "2";
-    columnGapInput.value = String(layoutSettings.columnGap);
-    columnGapRow.appendChild(columnGapInput);
-    layoutSection.appendChild(columnGapRow);
-
-    const rowGapRow = document.createElement("label");
-    rowGapRow.className = "layout-menu__row";
-    rowGapRow.appendChild(layoutMenuLabel(TEXT.layoutRowGap));
-    const rowGapInput = document.createElement("input");
-    rowGapInput.type = "number";
-    rowGapInput.name = "rowGap";
-    rowGapInput.min = String(MIN_LAYOUT_GAP);
-    rowGapInput.max = String(MAX_LAYOUT_GAP);
-    rowGapInput.step = "2";
-    rowGapInput.value = String(layoutSettings.rowGap);
-    rowGapRow.appendChild(rowGapInput);
-    layoutSection.appendChild(rowGapRow);
-
-    const alignGroup = document.createElement("div");
-    alignGroup.className = "layout-menu__row layout-menu__row--stacked";
-    alignGroup.appendChild(layoutMenuLabel(TEXT.layoutAlign));
-    const alignControls = document.createElement("div");
-    alignControls.className = "layout-menu__segmented";
-    [
+    layoutSection.appendChild(layoutMenuSegmentedField("align", TEXT.layoutAlign, [
       { value: "left", label: TEXT.layoutLeft },
       { value: "center", label: TEXT.layoutCenter }
-    ].forEach(function (option) {
-      const label = document.createElement("label");
-      label.className = "layout-menu__segment" + (layoutSettings.align === option.value ? " is-active" : "");
-      const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "align";
-      input.value = option.value;
-      input.checked = layoutSettings.align === option.value;
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(option.label));
-      alignControls.appendChild(label);
-    });
-    alignGroup.appendChild(alignControls);
-    layoutSection.appendChild(alignGroup);
+    ], layoutSettings.align));
     menu.appendChild(layoutSection);
 
     const displaySection = document.createElement("section");
@@ -1135,23 +1112,20 @@
     displaySection.appendChild(toggles);
     menu.appendChild(displaySection);
 
-    const actions = document.createElement("div");
-    actions.className = "layout-menu__actions";
-    actions.appendChild(actionButton("board-cancel-button", "reset-layout-settings", null, TEXT.layoutReset, [
+    const footer = document.createElement("footer");
+    footer.className = "layout-menu__footer";
+    footer.appendChild(actionButton("layout-menu__reset", "reset-layout-settings", null, TEXT.layoutReset, [
       staticIconNode("icon-rotate-ccw"),
       " " + TEXT.layoutReset
     ]));
-    menu.appendChild(actions);
+    const hint = document.createElement("span");
+    hint.className = "layout-menu__hint";
+    hint.textContent = "调整会立即应用";
+    footer.appendChild(hint);
+    menu.appendChild(footer);
 
     wrapper.appendChild(menu);
     return wrapper;
-  }
-
-  function layoutMenuLabel(text) {
-    const label = document.createElement("span");
-    label.className = "layout-menu__label";
-    label.textContent = text;
-    return label;
   }
 
   function layoutMenuSectionTitle(text) {
@@ -1159,6 +1133,58 @@
     title.className = "layout-menu__section-title";
     title.textContent = text;
     return title;
+  }
+
+  function layoutMenuField(labelText, control, valueText) {
+    const field = document.createElement("div");
+    field.className = "layout-menu__field";
+
+    const meta = document.createElement("div");
+    meta.className = "layout-menu__field-meta";
+    const label = document.createElement("span");
+    label.className = "layout-menu__label";
+    label.textContent = labelText;
+    meta.appendChild(label);
+    if (valueText != null) {
+      const value = document.createElement("span");
+      value.className = "layout-menu__value";
+      value.textContent = valueText;
+      meta.appendChild(value);
+    }
+    field.appendChild(meta);
+    field.appendChild(control);
+    return field;
+  }
+
+  function layoutMenuSegmentedField(name, labelText, options, selectedValue) {
+    const controls = document.createElement("div");
+    controls.className = "layout-menu__segmented layout-menu__segmented--" + name;
+    options.forEach(function (option) {
+      const label = document.createElement("label");
+      label.className = "layout-menu__segment" + (String(option.value) === String(selectedValue) ? " is-active" : "");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = name;
+      input.value = String(option.value);
+      input.checked = String(option.value) === String(selectedValue);
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(option.label));
+      controls.appendChild(label);
+    });
+    return layoutMenuField(labelText, controls);
+  }
+
+  function layoutMenuRangeField(name, labelText, value, min, max, step, suffix) {
+    const input = document.createElement("input");
+    input.type = "range";
+    input.className = "layout-menu__range";
+    input.name = name;
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(value);
+    input.dataset.suffix = suffix || "";
+    return layoutMenuField(labelText, input, String(value) + (suffix || ""));
   }
 
   function layoutMenuToggle(name, title, description, checked) {
@@ -4781,6 +4807,16 @@
     if (!form) return;
     applyLayoutSettingsFromForm(form);
     render();
+  });
+
+  app.addEventListener("input", function (event) {
+    const range = event.target.closest(".layout-menu__range");
+    if (!range) return;
+    const field = range.closest(".layout-menu__field");
+    const value = field ? field.querySelector(".layout-menu__value") : null;
+    if (value) {
+      value.textContent = range.value + (range.dataset.suffix || "");
+    }
   });
 
   app.addEventListener("submit", function (event) {
