@@ -41,7 +41,7 @@ function createEnv(initial = {}, overrides = {}) {
 
 const boardPayload = {
   version: null,
-  layout: { columnMode: "manual", columns: 3, columnWidth: 280, columnGap: 14, rowGap: 18, align: "center" },
+  layout: { columnMode: "manual", columns: 3, columnWidth: 280, columnGap: 14, rowGap: 18, align: "center", showBoardAddItemButton: false },
   activePageId: "page-1",
   pages: [{
     id: "page-1",

@@ -55,6 +55,7 @@ interface LayoutSettings {
   columnGap?: unknown;
   rowGap?: unknown;
   align?: unknown;
+  showBoardAddItemButton?: unknown;
 }
 
 interface PageState {
@@ -122,6 +123,7 @@ export function validateLayoutSettings(value: unknown): string | null {
     (typeof rowGap !== "number" || !Number.isInteger(rowGap) || rowGap < MIN_LAYOUT_GAP || rowGap > MAX_LAYOUT_GAP)
   ) return "Invalid layout row gap";
   if (layout.align !== undefined && layout.align !== "left" && layout.align !== "center") return "Invalid layout alignment";
+  if (layout.showBoardAddItemButton !== undefined && typeof layout.showBoardAddItemButton !== "boolean") return "Invalid layout add item button visibility";
   return null;
 }
 
