@@ -2684,6 +2684,20 @@
     return nextBoards;
   }
 
+  function reflowBoardColumns(columns) {
+    const safeColumns = Math.min(MAX_MANUAL_COLUMNS, Math.max(1, Number(columns) || 1));
+    const buckets = Array.from({ length: safeColumns }, function () {
+      return [];
+    });
+
+    boards.forEach(function (board, index) {
+      const column = index % safeColumns;
+      buckets[column].push(Object.assign({}, board, { column: column }));
+    });
+
+    boards = materializeColumnBuckets(buckets);
+  }
+
   function getPreviewColumnBuckets(columns) {
     const buckets = createColumnBuckets(boards.slice(), columns);
     if (!uiState.boardDragging) {
@@ -3114,6 +3128,7 @@
     if (!form || !auth.isAdmin) return;
     const formData = new FormData(form);
     const columnsValue = String(formData.get("columns") || "auto");
+    const previousManualColumns = layoutSettings.columnMode === "manual" ? layoutSettings.columns : null;
     const next = normalizeLayoutSettings({
       columnMode: columnsValue === "auto" ? "auto" : "manual",
       columns: columnsValue === "auto" ? layoutSettings.columns : Number(columnsValue),
@@ -3126,6 +3141,10 @@
       showItemDragHandle: formData.has("showItemDragHandle")
     });
     layoutSettings = next;
+    const nextManualColumns = next.columnMode === "manual" ? next.columns : null;
+    if (nextManualColumns && nextManualColumns !== previousManualColumns) {
+      reflowBoardColumns(nextManualColumns);
+    }
     cacheBoardsLocally();
     saveBoards();
     syncBoardWallLayout();
