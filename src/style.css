@@ -853,14 +853,8 @@ a {
   vertical-align: middle;
 }
 
-.board-card__glyph.board-card__glyph--placeholder {
-  width: 24px;
-  background: transparent !important;
-  flex-basis: 24px;
-}
-
-.board-card__glyph.board-card__glyph--placeholder i[class^="icon-"] {
-  visibility: hidden;
+.board-card__title-wrap--no-board-icon {
+  padding-left: 24px;
 }
 
 .workspace__collapse-all-button {
@@ -2216,6 +2210,10 @@ body {
 
 .board-card__title-wrap {
   gap: 5px;
+}
+
+.board-card__title-wrap--no-board-icon {
+  padding-left: 6px;
 }
 
 .board-card__glyph {
