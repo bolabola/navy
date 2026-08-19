@@ -51,14 +51,13 @@ test("validateBoardState rejects invalid item URLs", () => {
 
 test("validateLayoutSettings accepts and rejects layout options", () => {
   assert.equal(validateLayoutSettings(undefined), null);
-  assert.equal(validateLayoutSettings({ columnMode: "auto", columns: 3, columnWidth: 250, columnGap: 10, rowGap: 10, align: "left", showBoardAddItemButton: false }), null);
+  assert.equal(validateLayoutSettings({ columnMode: "auto", columns: 3, columnWidth: 250, columnGap: 10, rowGap: 10, align: "left" }), null);
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 6, columnWidth: 360, columnGap: 32, rowGap: 0, align: "center" }), null);
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 7, columnWidth: 250, align: "left" }), "Invalid layout columns");
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 200, align: "left" }), "Invalid layout column width");
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, columnGap: 33, align: "left" }), "Invalid layout column gap");
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, rowGap: -1, align: "left" }), "Invalid layout row gap");
   assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, align: "right" }), "Invalid layout alignment");
-  assert.equal(validateLayoutSettings({ columnMode: "manual", columns: 3, columnWidth: 250, showBoardAddItemButton: "no" }), "Invalid layout add item button visibility");
 });
 
 test("validatePagesState accepts and rejects page payloads", () => {

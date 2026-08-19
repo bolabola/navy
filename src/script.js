@@ -18,7 +18,7 @@
   const MIN_LAYOUT_GAP = 0;
   const MAX_LAYOUT_GAP = 32;
   const MAX_MANUAL_COLUMNS = 6;
-  const DEFAULT_LAYOUT_SETTINGS = { columnMode: "auto", columns: 3, columnWidth: BOARD_WIDTH, columnGap: BOARD_GAP, rowGap: BOARD_GAP, align: "left", showBoardAddItemButton: true };
+  const DEFAULT_LAYOUT_SETTINGS = { columnMode: "auto", columns: 3, columnWidth: BOARD_WIDTH, columnGap: BOARD_GAP, rowGap: BOARD_GAP, align: "left" };
   const BOARD_HEADER_HEIGHT = 34;
   const BOARD_CHROME_HEIGHT = 36;
   const BOARD_LIST_MIN_HEIGHT = 64;
@@ -83,6 +83,7 @@
     title: "网址导航看板",
     subtitle: "所有 board 按列堆叠，纵向和横向间距都是固定值。",
     addRow: "+ Add 新行",
+    addItem: "添加 item",
     enterUrl: "输入网址，例如 https://example.com",
     enterName: "名称，可选",
     createBoard: "新建 Board",
@@ -145,7 +146,6 @@
     layoutAlign: "排列",
     layoutLeft: "左对齐",
     layoutCenter: "居中",
-    layoutShowBoardAddItemButton: "显示添加 item",
     layoutReset: "重置",
     pageDefault: DEFAULT_PAGE_NAME,
     addPage: "新建页面",
@@ -290,8 +290,7 @@
       columnWidth: layoutSettings.columnWidth,
       columnGap: layoutSettings.columnGap,
       rowGap: layoutSettings.rowGap,
-      align: layoutSettings.align,
-      showBoardAddItemButton: layoutSettings.showBoardAddItemButton
+      align: layoutSettings.align
     };
   }
 
@@ -1099,16 +1098,6 @@
     alignGroup.appendChild(alignControls);
     menu.appendChild(alignGroup);
 
-    const showAddRow = document.createElement("label");
-    showAddRow.className = "layout-menu__row layout-menu__check-row";
-    showAddRow.appendChild(layoutMenuLabel(TEXT.layoutShowBoardAddItemButton));
-    const showAddInput = document.createElement("input");
-    showAddInput.type = "checkbox";
-    showAddInput.name = "showBoardAddItemButton";
-    showAddInput.checked = layoutSettings.showBoardAddItemButton !== false;
-    showAddRow.appendChild(showAddInput);
-    menu.appendChild(showAddRow);
-
     const actions = document.createElement("div");
     actions.className = "layout-menu__actions";
     actions.appendChild(actionButton("board-cancel-button", "reset-layout-settings", null, TEXT.layoutReset, [
@@ -1317,15 +1306,13 @@
     const columnGap = Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, input.columnGap == null ? DEFAULT_LAYOUT_SETTINGS.columnGap : Number(input.columnGap)));
     const rowGap = Math.min(MAX_LAYOUT_GAP, Math.max(MIN_LAYOUT_GAP, input.rowGap == null ? DEFAULT_LAYOUT_SETTINGS.rowGap : Number(input.rowGap)));
     const align = input.align === "center" ? "center" : "left";
-    const showBoardAddItemButton = input.showBoardAddItemButton !== false;
     return {
       columnMode: columnMode,
       columns: Math.round(columns),
       columnWidth: Math.round(columnWidth),
       columnGap: Math.round(columnGap),
       rowGap: Math.round(rowGap),
-      align: align,
-      showBoardAddItemButton: showBoardAddItemButton
+      align: align
     };
   }
 
@@ -2256,6 +2243,7 @@
       return button;
     }
 
+    menu.appendChild(menuItem("toggle-add", "icon-plus", TEXT.addItem));
     menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
     menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
     menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
@@ -2405,10 +2393,6 @@
       staticIconNode(board.collapsed ? "icon-chevron-down" : "icon-chevron-up")
     ]));
     if (auth.isAdmin) {
-      if (layoutSettings.showBoardAddItemButton !== false) {
-        actions.appendChild(actionButton("board-icon-button", "toggle-add", board.id, TEXT.addRow, [staticIconNode("icon-plus")]));
-      }
-
       const menuButton = actionButton("board-icon-button" + (uiState.importingBoardId === board.id ? " is-loading" : ""), "toggle-board-menu", board.id, "More", [
         staticIconNode("icon-ellipsis")
       ]);
@@ -3025,17 +3009,12 @@
       columnWidth: Number(formData.get("columnWidth")),
       columnGap: Number(formData.get("columnGap")),
       rowGap: Number(formData.get("rowGap")),
-      align: String(formData.get("align") || layoutSettings.align),
-      showBoardAddItemButton: formData.has("showBoardAddItemButton")
+      align: String(formData.get("align") || layoutSettings.align)
     });
     layoutSettings = next;
-    if (!layoutSettings.showBoardAddItemButton) {
-      uiState.openAddBoardId = null;
-    }
     cacheBoardsLocally();
     saveBoards();
     syncBoardWallLayout();
-    render();
   }
 
   function resetLayoutSettings() {
@@ -4554,7 +4533,7 @@
     }
 
     if (action === "toggle-add") {
-      if (!auth.isAdmin || layoutSettings.showBoardAddItemButton === false) {
+      if (!auth.isAdmin) {
         uiState.openAddBoardId = null;
         rerenderBoardInPlace(boardId);
         return;

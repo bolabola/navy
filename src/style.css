@@ -253,14 +253,6 @@ a {
   gap: 6px;
 }
 
-.layout-menu__check-row input[type="checkbox"] {
-  justify-self: start;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: #0b74b7;
-}
-
 .layout-menu__label {
   color: var(--muted);
   font-size: 12px;
