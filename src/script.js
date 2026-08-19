@@ -2447,12 +2447,13 @@
     titleWrap.dataset.role = "board-drag-handle";
     titleWrap.dataset.boardId = board.id;
     titleWrap.title = TEXT.moveBoard;
+    const glyph = document.createElement("span");
+    glyph.className = "board-card__glyph" + (layoutSettings.showBoardIcon === false ? " board-card__glyph--placeholder" : "");
+    glyph.setAttribute("aria-hidden", "true");
     if (layoutSettings.showBoardIcon !== false) {
-      const glyph = document.createElement("span");
-      glyph.className = "board-card__glyph";
       glyph.appendChild(iconNode(board.icon));
-      titleWrap.appendChild(glyph);
     }
+    titleWrap.appendChild(glyph);
     const title = document.createElement("h2");
     title.className = "board-card__title";
     title.textContent = board.title;

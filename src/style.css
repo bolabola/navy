@@ -853,6 +853,16 @@ a {
   vertical-align: middle;
 }
 
+.board-card__glyph.board-card__glyph--placeholder {
+  width: 42px;
+  background: transparent !important;
+  flex-basis: 42px;
+}
+
+.board-card__glyph.board-card__glyph--placeholder i[class^="icon-"] {
+  visibility: hidden;
+}
+
 .workspace__collapse-all-button {
   min-width: max-content;
   padding: 6px 10px;
