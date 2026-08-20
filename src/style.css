@@ -1464,7 +1464,7 @@ body.is-board-dragging {
 }
 
 .board-list--urls {
-  gap: 2px;
+  gap: 1px;
 }
 
 .link-row {
@@ -3405,8 +3405,8 @@ body.is-dark-theme .layout-menu__reset {
 .link-row--url-only .link-row__anchor {
   align-items: center;
   gap: 10px;
-  min-height: 52px;
-  padding: 4px 8px 4px 6px;
+  min-height: 48px;
+  padding: 2px 8px 2px 6px;
 }
 
 .link-row--url-only .link-row__icon {
@@ -3432,9 +3432,9 @@ body.is-dark-theme .layout-menu__reset {
 
 .link-row--url-only .link-row__name {
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 18px;
+  line-height: 22px;
 }
 
 .link-row--url-only .link-row__url {
