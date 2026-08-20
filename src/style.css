@@ -1530,15 +1530,15 @@ body.is-board-dragging {
 }
 
 .link-row--icon-only {
-  width: 24px;
-  height: 24px;
+  width: var(--board-icon-tile);
+  height: var(--board-icon-tile);
   border-radius: 6px;
   flex: 0 0 auto;
 }
 
 .link-row--icon-only .link-row__anchor {
   justify-content: center;
-  min-height: 24px;
+  min-height: var(--board-icon-tile);
   padding: 0;
 }
 
@@ -1549,8 +1549,8 @@ body.is-board-dragging {
 }
 
 .link-row--icon-only .link-row__icon {
-  width: 16px;
-  height: 16px;
+  width: var(--board-icon-size);
+  height: var(--board-icon-size);
   border-radius: 4px;
 }
 
@@ -1589,8 +1589,8 @@ body.is-board-dragging {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: var(--board-icon-size);
+  height: var(--board-icon-size);
   border-radius: 4px;
   background: #f1f2f4;
   overflow: hidden;
@@ -1620,14 +1620,14 @@ body.is-board-dragging {
 }
 
 .link-row__icon--custom i[class^="icon-"] {
-  font-size: 12px !important;
+  font-size: var(--board-icon-font) !important;
   line-height: 1 !important;
 }
 
 .link-row__fallback {
   display: none;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--board-icon-font);
   font-weight: 700;
 }
 
@@ -2386,8 +2386,8 @@ body {
 }
 
 .link-row__icon {
-  width: 14px;
-  height: 14px;
+  width: var(--board-icon-size);
+  height: var(--board-icon-size);
   border-radius: 3px;
   background: transparent;
   box-shadow: none;
@@ -2399,17 +2399,17 @@ body {
 }
 
 .link-row__fallback {
-  font-size: 10px;
+  font-size: var(--board-icon-font);
 }
 
 .link-row--icon-only {
-  width: 26px;
-  height: 26px;
+  width: var(--board-icon-tile);
+  height: var(--board-icon-tile);
   border-radius: 4px;
 }
 
 .link-row--icon-only .link-row__anchor {
-  min-height: 26px;
+  min-height: var(--board-icon-tile);
 }
 
 .link-row-placeholder {
@@ -3366,4 +3366,23 @@ body.is-dark-theme .layout-menu__switch::after {
 body.is-dark-theme .layout-menu__reset {
   color: #cbd5e1;
   background: rgba(148, 163, 184, 0.12);
+}
+
+/* Board item icon size levels */
+.board-list {
+  --board-icon-size: 14px;
+  --board-icon-tile: 26px;
+  --board-icon-font: 10px;
+}
+
+.board-list--icon-size-small {
+  --board-icon-size: 10px;
+  --board-icon-tile: 20px;
+  --board-icon-font: 8px;
+}
+
+.board-list--icon-size-large {
+  --board-icon-size: 22px;
+  --board-icon-tile: 34px;
+  --board-icon-font: 16px;
 }

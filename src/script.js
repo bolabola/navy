@@ -113,6 +113,10 @@
     collapseAll: "全部折叠",
     moveBoard: "拖拽 Board",
     toggleView: "显示模式",
+    iconSize: "图标大小",
+    iconSizeLarge: "大",
+    iconSizeMedium: "中",
+    iconSizeSmall: "小",
     resize: "拖动调整高度",
     shrinkBoard: "收缩到最小高度",
     hiddenItems: "还有 {count} 个未显示，点击展开",
@@ -1394,6 +1398,7 @@
         collapsed: false,
         column: Number.isInteger(board.column) ? board.column : null,
         displayMode: normalizeDisplayMode(board.displayMode),
+        iconSize: normalizeIconSize(board.iconSize),
         tabs: tabs,
         activeTabId: normalizeActiveTabId(board.activeTabId, tabs),
         items: normalizeBoardItems(board.items, tabs)
@@ -1439,6 +1444,34 @@
     if (mode === "icons") return "icon-link";
     if (mode === "urls") return "icon-list";
     return "icon-layout-grid";
+  }
+
+  function normalizeIconSize(size) {
+    if (size === "large" || size === "small") return size;
+    return "medium";
+  }
+
+  function nextIconSize(size) {
+    const current = normalizeIconSize(size);
+    if (current === "medium") return "large";
+    if (current === "large") return "small";
+    return "medium";
+  }
+
+  function iconSizeButtonIcon(size) {
+    if (size === "large") return "icon-maximize-2";
+    if (size === "small") return "icon-minimize-2";
+    return "icon-scaling";
+  }
+
+  function iconSizeLabel(size) {
+    if (size === "large") return TEXT.iconSizeLarge;
+    if (size === "small") return TEXT.iconSizeSmall;
+    return TEXT.iconSizeMedium;
+  }
+
+  function iconSizeTooltip(size) {
+    return TEXT.iconSize + "：" + iconSizeLabel(size);
   }
 
   function normalizeBoardTabs(sourceTabs) {
@@ -2508,6 +2541,9 @@
     actions.appendChild(actionButton("board-icon-button", "toggle-view-mode", board.id, TEXT.toggleView, [
       staticIconNode(displayModeButtonIcon(board.displayMode))
     ]));
+    actions.appendChild(actionButton("board-icon-button", "cycle-icon-size", board.id, iconSizeTooltip(board.iconSize), [
+      staticIconNode(iconSizeButtonIcon(board.iconSize))
+    ]));
     actions.appendChild(actionButton("board-icon-button", "toggle-collapse", board.id, board.collapsed ? TEXT.expand : TEXT.collapse, [
       staticIconNode(board.collapsed ? "icon-chevron-down" : "icon-chevron-up")
     ]));
@@ -2532,7 +2568,8 @@
       const body = document.createElement("div");
       body.className = "board-card__body";
       const list = document.createElement("div");
-      list.className = "board-list" + (iconMode ? " board-list--icons" : "") + (urlMode ? " board-list--urls" : "");
+      const iconSizeClass = board.iconSize && board.iconSize !== "medium" ? " board-list--icon-size-" + board.iconSize : "";
+      list.className = "board-list" + (iconMode ? " board-list--icons" : "") + (urlMode ? " board-list--urls" : "") + iconSizeClass;
       list.dataset.role = "board-list";
       list.dataset.boardId = board.id;
       list.dataset.tabId = activeTabId;
@@ -4771,6 +4808,16 @@
       mutateBoardUiPreference(boardId, function (board) {
         return Object.assign({}, board, {
           displayMode: nextDisplayMode(board.displayMode)
+        });
+      });
+      return;
+    }
+
+    if (action === "cycle-icon-size") {
+      uiState.openBoardMenuId = null;
+      mutateBoardUiPreference(boardId, function (board) {
+        return Object.assign({}, board, {
+          iconSize: nextIconSize(board.iconSize)
         });
       });
       return;
