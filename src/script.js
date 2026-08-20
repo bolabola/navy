@@ -1477,6 +1477,13 @@
     return TEXT.iconSize + "：" + iconSizeLabel(size);
   }
 
+  function getBoardIconTileSize(board) {
+    const size = normalizeIconSize(board && board.iconSize);
+    if (size === "large") return 42;
+    if (size === "medium") return 36;
+    return 30;
+  }
+
   function normalizeBoardTabs(sourceTabs) {
     const tabs = [];
     const seen = new Set();
@@ -2512,7 +2519,7 @@
     card.className = "board-card" + (board.collapsed ? " is-collapsed" : "") + (menuOpen ? " has-open-menu" : "") + (extraClass ? " " + extraClass : "");
     card.dataset.boardId = board.id;
     card.style.setProperty("--board-accent", board.accent);
-    card.style.setProperty("--list-height", Number(board.height) + "px");
+    card.style.setProperty("--list-height", Math.max(Number(board.height), getBoardMinimumListHeight(board)) + "px");
 
     const header = document.createElement("header");
     header.className = "board-card__header";
@@ -3536,7 +3543,7 @@
       return false;
     }
 
-    card.style.setProperty("--list-height", nextHeight + "px");
+    card.style.setProperty("--list-height", Math.max(nextHeight, getBoardMinimumListHeight(board)) + "px");
     return true;
   }
 
@@ -3596,6 +3603,7 @@
     });
     saveBoards();
 
+    const board = findBoard(boardId);
     const slot = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]');
     const card = slot ? slot.querySelector(".board-card") : null;
     if (!slot || !card) {
@@ -3603,7 +3611,7 @@
       return;
     }
 
-    card.style.setProperty("--list-height", nextHeight + "px");
+    card.style.setProperty("--list-height", Math.max(nextHeight, getBoardMinimumListHeight(board)) + "px");
     updateBoardResizeControls(slot, nextHeight);
     syncBoardWallLayout();
     updateBoardOverflowIndicators(slot);
@@ -3676,28 +3684,47 @@
     const rowHeight = detailMode ? BOARD_DETAIL_ROW_HEIGHT : BOARD_ROW_HEIGHT;
     const rowGap = detailMode ? BOARD_DETAIL_ROW_GAP : BOARD_ROW_GAP;
     const contentHeight = board.displayMode === "icons"
-      ? estimateIconGridHeight(activeItems.length)
+      ? estimateIconGridHeight(activeItems.length, getBoardIconTileSize(board), BOARD_ICON_TILE_GAP)
       : (activeItems.length
           ? activeItems.length * rowHeight + Math.max(0, activeItems.length - 1) * rowGap
           : BOARD_LIST_MIN_HEIGHT);
     const editedItemHeight = uiState.editItemId && activeItems.some(function (item) {
       return item.id === uiState.editItemId;
     }) ? BOARD_ITEM_EDIT_FORM_EXTRA_HEIGHT : 0;
-    const listHeight = Math.max(BOARD_LIST_MIN_HEIGHT, Math.min(clampHeight(board.height), contentHeight + editedItemHeight));
+    const minimumListHeight = Math.max(BOARD_LIST_MIN_HEIGHT, getBoardMinimumListHeight(board));
+    const listHeight = Math.max(minimumListHeight, Math.min(clampHeight(board.height), contentHeight + editedItemHeight));
     const metaHeight = uiState.editBoardId === board.id ? BOARD_META_FORM_HEIGHT : 0;
     const addHeight = uiState.openAddBoardId === board.id ? BOARD_ADD_FORM_HEIGHT : 0;
     const tabsHeight = shouldShowBoardTabs(board) ? BOARD_TABS_HEIGHT : 0;
     return BOARD_HEADER_HEIGHT + BOARD_CHROME_HEIGHT + tabsHeight + listHeight + metaHeight + addHeight;
   }
 
-  function estimateIconGridHeight(itemCount) {
+  function getBoardMinimumListHeight(board) {
+    if (!board) {
+      return BOARD_LIST_MIN_HEIGHT;
+    }
+
+    if (board.displayMode === "icons") {
+      return getBoardIconTileSize(board);
+    }
+
+    if (board.displayMode === "urls") {
+      return BOARD_DETAIL_ROW_HEIGHT;
+    }
+
+    return BOARD_ROW_HEIGHT;
+  }
+
+  function estimateIconGridHeight(itemCount, tileSize, tileGap) {
     if (!itemCount) {
       return BOARD_LIST_MIN_HEIGHT;
     }
 
+    const safeTileSize = tileSize || BOARD_ICON_TILE_SIZE;
+    const safeTileGap = tileGap || BOARD_ICON_TILE_GAP;
     const itemsPerRow = 5;
     const rows = Math.ceil(itemCount / itemsPerRow);
-    return rows * BOARD_ICON_TILE_SIZE + Math.max(0, rows - 1) * BOARD_ICON_TILE_GAP;
+    return rows * safeTileSize + Math.max(0, rows - 1) * safeTileGap;
   }
 
   function getBoardRenderedHeight(boardId) {
@@ -4166,7 +4193,8 @@
     uiState.resizing.nextHeight = clampHeight(uiState.resizing.startHeight + (event.clientY - uiState.resizing.startY));
     const card = app.querySelector('.board-slot[data-board-id="' + cssEscape(uiState.resizing.boardId) + '"] .board-card');
     if (card) {
-      card.style.setProperty("--list-height", uiState.resizing.nextHeight + "px");
+      const board = findBoard(uiState.resizing.boardId);
+      card.style.setProperty("--list-height", Math.max(uiState.resizing.nextHeight, getBoardMinimumListHeight(board)) + "px");
       updateBoardResizeControls(card.closest(".board-slot"), uiState.resizing.nextHeight);
       uiState.resizing.heightMap[uiState.resizing.boardId] = card.getBoundingClientRect().height;
       updateBoardOverflowIndicators(card.closest(".board-slot") || card);
