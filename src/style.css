@@ -3370,32 +3370,32 @@ body.is-dark-theme .layout-menu__reset {
 
 /* Board item icon size levels */
 .board-list {
-  --board-icon-size: 18px;
-  --board-icon-tile: 30px;
-  --board-icon-font: 12px;
-  --board-detail-icon-size: 24px;
-}
-
-.board-list--icon-size-small {
-  --board-icon-size: 14px;
-  --board-icon-tile: 26px;
-  --board-icon-font: 10px;
-  --board-detail-icon-size: 18px;
-}
-
-.board-list--icon-size-large {
   --board-icon-size: 24px;
   --board-icon-tile: 36px;
   --board-icon-font: 16px;
+  --board-detail-icon-size: 36px;
+}
+
+.board-list--icon-size-small {
+  --board-icon-size: 18px;
+  --board-icon-tile: 30px;
+  --board-icon-font: 12px;
   --board-detail-icon-size: 30px;
+}
+
+.board-list--icon-size-large {
+  --board-icon-size: 30px;
+  --board-icon-tile: 42px;
+  --board-icon-font: 20px;
+  --board-detail-icon-size: 42px;
 }
 
 /* URL / detailed mode */
 .link-row--url-only .link-row__anchor {
   align-items: center;
   gap: 10px;
-  min-height: 42px;
-  padding: 6px 8px 6px 24px;
+  min-height: 56px;
+  padding: 6px 8px 6px 6px;
 }
 
 .link-row--url-only .link-row__icon {
@@ -3422,7 +3422,7 @@ body.is-dark-theme .layout-menu__reset {
 .link-row--url-only .link-row__name {
   color: var(--text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 18px;
 }
 
