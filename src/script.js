@@ -34,6 +34,8 @@
   const BOARD_LIST_MIN_HEIGHT = 64;
   const BOARD_ROW_HEIGHT = 24;
   const BOARD_ROW_GAP = 3;
+  const BOARD_DETAIL_ROW_HEIGHT = 42;
+  const BOARD_DETAIL_ROW_GAP = 5;
   const BOARD_COLLAPSED_HEIGHT = 34;
   const BOARD_META_FORM_HEIGHT = 132;
   const BOARD_ADD_FORM_HEIGHT = 104;
@@ -1442,7 +1444,7 @@
 
   function displayModeButtonIcon(mode) {
     if (mode === "icons") return "icon-link";
-    if (mode === "urls") return "icon-list";
+    if (mode === "urls") return "icon-align-justify";
     return "icon-layout-grid";
   }
 
@@ -2243,37 +2245,41 @@
     anchor.rel = "noreferrer";
     anchor.title = urlOnly ? title : (iconOnly ? title + " - " + url : url);
 
-    if (!urlOnly) {
-      const icon = document.createElement("span");
-      icon.className = "link-row__icon" + (item.icon ? " link-row__icon--custom" : "");
-      const domain = faviconDomain(item.url);
-      if (item.icon) {
-        icon.appendChild(iconNode(item.icon));
-      } else if (isGithubDomain(domain)) {
-        icon.classList.add("link-row__icon--github");
-        icon.appendChild(githubIconNode());
-      } else {
-        const img = document.createElement("img");
-        img.alt = "";
-        img.loading = "lazy";
-        img.referrerPolicy = "no-referrer";
-        img.dataset.faviconDomain = domain;
-        icon.appendChild(img);
-        const fallback = document.createElement("span");
-        fallback.className = "link-row__fallback";
-        fallback.textContent = initial;
-        icon.appendChild(fallback);
-        hydrateFaviconImage(img, icon, item.url);
-      }
-      anchor.appendChild(icon);
+    const icon = document.createElement("span");
+    icon.className = "link-row__icon" + (item.icon ? " link-row__icon--custom" : "");
+    const domain = faviconDomain(item.url);
+    if (item.icon) {
+      icon.appendChild(iconNode(item.icon));
+    } else if (isGithubDomain(domain)) {
+      icon.classList.add("link-row__icon--github");
+      icon.appendChild(githubIconNode());
+    } else {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.dataset.faviconDomain = domain;
+      icon.appendChild(img);
+      const fallback = document.createElement("span");
+      fallback.className = "link-row__fallback";
+      fallback.textContent = initial;
+      icon.appendChild(fallback);
+      hydrateFaviconImage(img, icon, item.url);
     }
+    anchor.appendChild(icon);
 
     const text = document.createElement("span");
     text.className = "link-row__text";
     const name = document.createElement("span");
     name.className = "link-row__name";
-    name.textContent = urlOnly ? displayUrlWithoutProtocol(url) : title;
+    name.textContent = title;
     text.appendChild(name);
+    if (urlOnly) {
+      const urlLine = document.createElement("span");
+      urlLine.className = "link-row__url";
+      urlLine.textContent = displayUrlWithoutProtocol(url);
+      text.appendChild(urlLine);
+    }
     anchor.appendChild(text);
     row.appendChild(anchor);
 
@@ -3665,10 +3671,13 @@
     }
 
     const activeItems = getBoardItemsForActiveTab(board);
+    const detailMode = board.displayMode === "urls";
+    const rowHeight = detailMode ? BOARD_DETAIL_ROW_HEIGHT : BOARD_ROW_HEIGHT;
+    const rowGap = detailMode ? BOARD_DETAIL_ROW_GAP : BOARD_ROW_GAP;
     const contentHeight = board.displayMode === "icons"
       ? estimateIconGridHeight(activeItems.length)
       : (activeItems.length
-          ? activeItems.length * BOARD_ROW_HEIGHT + Math.max(0, activeItems.length - 1) * BOARD_ROW_GAP
+          ? activeItems.length * rowHeight + Math.max(0, activeItems.length - 1) * rowGap
           : BOARD_LIST_MIN_HEIGHT);
     const editedItemHeight = uiState.editItemId && activeItems.some(function (item) {
       return item.id === uiState.editItemId;
