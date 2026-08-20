@@ -1463,6 +1463,10 @@ body.is-board-dragging {
   gap: 10px;
 }
 
+.board-list--urls {
+  gap: 2px;
+}
+
 .link-row {
   position: relative;
   border-radius: 7px;
@@ -3401,8 +3405,8 @@ body.is-dark-theme .layout-menu__reset {
 .link-row--url-only .link-row__anchor {
   align-items: center;
   gap: 10px;
-  min-height: 56px;
-  padding: 6px 8px 6px 6px;
+  min-height: 52px;
+  padding: 4px 8px 4px 6px;
 }
 
 .link-row--url-only .link-row__icon {
