@@ -135,6 +135,10 @@
     autofillLoginExpired: "登录已过期，请重新登录后再自动获取。",
     exportBoard: "导出",
     exportEmpty: "这个 board 是空的，没有可导出的内容。",
+    moveBoardToPage: "移动到页面",
+    moveBoardTitle: "移动 Board",
+    moveBoardHint: "将「{board}」移动到：",
+    moveBoardNoTargets: "没有其他页面可移动。",
     syncSaving: "保存中",
     syncSaved: "已保存",
     syncFailed: "保存失败，稍后重试",
@@ -179,6 +183,7 @@
     createBoardOpen: false,
     editBoardId: null,
     openBoardMenuId: null,
+    moveBoardId: null,
     draggingRow: null,
     resizing: null,
     boardDragging: null,
@@ -2351,6 +2356,9 @@
     menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
     menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
     menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
+    if (pages.length > 1) {
+      menu.appendChild(menuItem("move-board", "icon-move", TEXT.moveBoardToPage));
+    }
     menu.appendChild(menuItem("delete-board", "icon-trash-2", TEXT.deleteBoard, true));
     return menu;
   }
@@ -2974,6 +2982,52 @@
     return backdrop;
   }
 
+  function renderMoveBoardModal() {
+    if (!uiState.moveBoardId || !auth.isAdmin) return null;
+    const board = findBoard(uiState.moveBoardId);
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.dataset.action = "cancel-move-board";
+
+    const panel = document.createElement("div");
+    panel.className = "modal-panel modal-panel--wide";
+    panel.dataset.role = "modal-panel";
+    panel.appendChild(createModalHeader(TEXT.moveBoardTitle, "cancel-move-board"));
+
+    if (board) {
+      const hint = document.createElement("p");
+      hint.className = "move-page-hint";
+      hint.textContent = TEXT.moveBoardHint.replace("{board}", board.title);
+      panel.appendChild(hint);
+    }
+
+    const targets = pages.filter(function (page) {
+      return page.id !== activePageId;
+    });
+    if (!targets.length) {
+      const empty = document.createElement("p");
+      empty.className = "backup-list__message";
+      empty.textContent = TEXT.moveBoardNoTargets;
+      panel.appendChild(empty);
+    } else {
+      const list = document.createElement("div");
+      list.className = "move-page-list";
+      targets.forEach(function (page) {
+        const button = actionButton("move-page-option", "move-board-to-page", uiState.moveBoardId, page.name, [
+          staticIconNode("icon-corner-up-right"),
+          document.createElement("span")
+        ]);
+        button.lastChild.textContent = page.name;
+        button.dataset.pageId = page.id;
+        list.appendChild(button);
+      });
+      panel.appendChild(list);
+    }
+
+    backdrop.appendChild(panel);
+    return backdrop;
+  }
+
   function renderDragGhost() {
     if (!uiState.boardDragging || !uiState.boardDragging.hasMoved) {
       return null;
@@ -3184,6 +3238,7 @@
     uiState.openAddBoardId = null;
     uiState.editBoardId = null;
     uiState.editItemId = null;
+    uiState.moveBoardId = null;
     uiState.createBoardOpen = false;
     uiState.dataMenuOpen = false;
     uiState.backupMenuOpen = false;
@@ -3224,6 +3279,46 @@
     const index = Math.max(0, pages.findIndex(function (page) { return page.id === activePageId; }));
     pages = pages.filter(function (page) { return page.id !== activePageId; });
     activePageId = pages[Math.min(index, pages.length - 1)].id;
+    loadActivePageBoards();
+    closeTransientUi();
+    saveBoards();
+    render();
+  }
+
+  function moveBoardToPage(boardId, targetPageId) {
+    if (!auth.isAdmin || !boardId || !targetPageId) return;
+    const sourceIndex = pages.findIndex(function (page) {
+      return page.id === activePageId;
+    });
+    const targetIndex = pages.findIndex(function (page) {
+      return page.id === targetPageId;
+    });
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    syncActivePageBoards();
+    const source = pages[sourceIndex];
+    const board = source.boards.find(function (entry) {
+      return entry.id === boardId;
+    });
+    if (!board) return;
+
+    pages = pages.map(function (page) {
+      if (page.id === source.id) {
+        return Object.assign({}, page, {
+          boards: page.boards.filter(function (entry) {
+            return entry.id !== boardId;
+          })
+        });
+      }
+      if (page.id === targetPageId) {
+        return Object.assign({}, page, {
+          boards: page.boards.concat(board)
+        });
+      }
+      return page;
+    });
+
+    activePageId = targetPageId;
     loadActivePageBoards();
     closeTransientUi();
     saveBoards();
@@ -3289,6 +3384,7 @@
     main.appendChild(renderNavbar());
     if (uiState.loginOpen && !auth.isAdmin) main.appendChild(renderLoginModal());
     if (uiState.createBoardOpen && auth.isAdmin) main.appendChild(renderCreateBoardModal());
+    if (uiState.moveBoardId && auth.isAdmin) main.appendChild(renderMoveBoardModal());
     const backupsModal = renderBackupsModal();
     if (backupsModal) main.appendChild(backupsModal);
 
@@ -4575,6 +4671,34 @@
         rerenderBoardInPlace(previousBoardMenuId);
       }
       rerenderBoardInPlace(boardId);
+      return;
+    }
+
+    if (action === "move-board") {
+      if (!auth.isAdmin || !boardId) return;
+      uiState.openBoardMenuId = null;
+      uiState.openAddBoardId = null;
+      uiState.editBoardId = null;
+      uiState.editItemId = null;
+      uiState.moveBoardId = boardId;
+      render();
+      return;
+    }
+
+    if (action === "cancel-move-board") {
+      if (button.classList.contains("modal-backdrop") && event.target.closest("[data-role='modal-panel']")) {
+        return;
+      }
+      uiState.moveBoardId = null;
+      render();
+      return;
+    }
+
+    if (action === "move-board-to-page") {
+      if (!auth.isAdmin) return;
+      const targetPageId = button.getAttribute("data-page-id");
+      if (!boardId || !targetPageId) return;
+      moveBoardToPage(boardId, targetPageId);
       return;
     }
 

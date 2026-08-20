@@ -735,6 +735,54 @@ a {
   color: #c9372c;
 }
 
+.move-page-hint {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.move-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.move-page-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 9px;
+  color: var(--text);
+  text-align: left;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(9, 30, 66, 0.08);
+  cursor: pointer;
+}
+
+.move-page-option:hover {
+  background: rgba(9, 30, 66, 0.06);
+}
+
+.move-page-option i[class^="icon-"] {
+  color: var(--muted);
+  font-size: 14px !important;
+  line-height: 1 !important;
+  flex: 0 0 auto;
+}
+
+.move-page-option span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace__content {
   display: flex;
   flex: 1;
@@ -2765,9 +2813,14 @@ body.is-dark-theme .link-row__grab {
 body.is-dark-theme .link-row__icon,
 body.is-dark-theme .item-edit-form,
 body.is-dark-theme .backup-list__row,
-body.is-dark-theme .backup-list__message {
+body.is-dark-theme .backup-list__message,
+body.is-dark-theme .move-page-option {
   background: #171b1f;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+body.is-dark-theme .move-page-option:hover {
+  background: var(--hover);
 }
 
 body.is-dark-theme .link-row__icon--github {
