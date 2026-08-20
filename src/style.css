@@ -3370,10 +3370,10 @@ body.is-dark-theme .layout-menu__reset {
 
 /* Board item icon size levels */
 .board-list {
-  --board-icon-size: 24px;
-  --board-icon-tile: 36px;
-  --board-icon-font: 16px;
-  --board-detail-icon-size: 36px;
+  --board-icon-size: 18px;
+  --board-icon-tile: 30px;
+  --board-icon-font: 12px;
+  --board-detail-icon-size: 30px;
 }
 
 .board-list--icon-size-small {
@@ -3381,6 +3381,13 @@ body.is-dark-theme .layout-menu__reset {
   --board-icon-tile: 30px;
   --board-icon-font: 12px;
   --board-detail-icon-size: 30px;
+}
+
+.board-list--icon-size-medium {
+  --board-icon-size: 24px;
+  --board-icon-tile: 36px;
+  --board-icon-font: 16px;
+  --board-detail-icon-size: 36px;
 }
 
 .board-list--icon-size-large {

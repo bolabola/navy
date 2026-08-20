@@ -1450,7 +1450,8 @@
 
   function normalizeIconSize(size) {
     if (size === "large" || size === "small") return size;
-    return "medium";
+    if (size === "medium") return "medium";
+    return "small";
   }
 
   function nextIconSize(size) {
@@ -2574,7 +2575,7 @@
       const body = document.createElement("div");
       body.className = "board-card__body";
       const list = document.createElement("div");
-      const iconSizeClass = board.iconSize && board.iconSize !== "medium" ? " board-list--icon-size-" + board.iconSize : "";
+      const iconSizeClass = " board-list--icon-size-" + normalizeIconSize(board.iconSize);
       list.className = "board-list" + (iconMode ? " board-list--icons" : "") + (urlMode ? " board-list--urls" : "") + iconSizeClass;
       list.dataset.role = "board-list";
       list.dataset.boardId = board.id;
