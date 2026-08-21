@@ -5926,7 +5926,10 @@
   var resizeTimer;
   window.addEventListener("resize", function () {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(render, 200);
+    resizeTimer = setTimeout(function () {
+      syncBoardWallLayout();
+      updateBoardOverflowIndicators();
+    }, 200);
   });
 
   document.addEventListener("keydown", function (event) {
