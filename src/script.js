@@ -2788,16 +2788,35 @@
     const contentWidth = dragging && dragging.metrics
       ? dragging.metrics.contentWidth
       : (scroll ? scroll.clientWidth : window.innerWidth - 20);
-    const columns = dragging && dragging.metrics
-      ? dragging.metrics.columns
-      : getColumnCount(contentWidth);
-    const columnWidth = dragging && dragging.metrics
-      ? dragging.metrics.columnWidth
-      : getColumnWidth(columns, contentWidth, 0);
-    const columnGap = dragging && dragging.metrics ? dragging.metrics.columnGap : getLayoutColumnGap();
-    const rowGap = dragging && dragging.metrics ? dragging.metrics.rowGap : getLayoutRowGap();
+
+    let columns;
+    let columnWidth;
+    let columnGap;
+    let rowGap;
+    let sideGutter;
+
+    if (dragging && dragging.metrics) {
+      columns = dragging.metrics.columns;
+      columnWidth = dragging.metrics.columnWidth;
+      columnGap = dragging.metrics.columnGap;
+      rowGap = dragging.metrics.rowGap;
+      sideGutter = dragging.metrics.sideGutter != null ? dragging.metrics.sideGutter : 0;
+    } else {
+      columns = getColumnCount(contentWidth);
+      columnGap = getLayoutColumnGap();
+      rowGap = getLayoutRowGap();
+
+      if (columns === 1) {
+        sideGutter = getLayoutSideGutter(1, contentWidth, 0);
+        columnWidth = getColumnWidth(1, contentWidth, sideGutter);
+      } else {
+        columnWidth = getColumnWidth(columns, contentWidth, 0);
+        const rawWidth = columns * columnWidth + Math.max(0, columns - 1) * columnGap;
+        sideGutter = getLayoutSideGutter(columns, contentWidth, rawWidth);
+      }
+    }
+
     const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * columnGap;
-    const sideGutter = getLayoutSideGutter(columns, contentWidth, actualWidth);
     const heights = Array(columns).fill(0);
     const positions = [];
     const buckets = getPreviewColumnBuckets(columns);
