@@ -2456,7 +2456,9 @@
 
     const tabList = document.createElement("div");
     tabList.className = "board-meta-form__tab-list";
-    tabs.forEach(function (tab) {
+    tabs.filter(function (tab) {
+      return tab.id !== DEFAULT_TAB_ID;
+    }).forEach(function (tab) {
       const tabButton = actionButton("board-meta-form__tab" + (tab.id === activeTabId ? " is-active" : ""), "select-board-tab", board.id, tab.name, [
         tab.name
       ]);
