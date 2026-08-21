@@ -96,6 +96,8 @@
     subtitle: "所有 board 按列堆叠，纵向和横向间距都是固定值。",
     addRow: "+ Add 新行",
     addItem: "添加 item",
+    addBoardTab: "新增分组",
+    deleteItem: "删除 item",
     enterUrl: "输入网址，例如 https://example.com",
     enterName: "名称，可选",
     createBoard: "新建 Board",
@@ -2298,10 +2300,6 @@
       edit.dataset.itemId = item.id;
       edit.setAttribute("aria-label", "编辑");
       actions.appendChild(edit);
-      const del = actionButton("link-row__delete", "delete-item", boardId, "删除", [staticIconNode("icon-x")]);
-      del.dataset.itemId = item.id;
-      del.setAttribute("aria-label", "删除");
-      actions.appendChild(del);
       row.appendChild(actions);
     }
 
@@ -2367,6 +2365,9 @@
 
     const actions = document.createElement("div");
     actions.className = "item-edit-form__actions";
+
+    const firstRow = document.createElement("div");
+    firstRow.className = "item-edit-form__actions-first";
     const autofill = actionButton("board-cancel-button", "autofill-item-meta", boardId, "自动获取图标、标题和描述", [
       staticIconNode("icon-sparkles"),
       " 自动获取"
@@ -2374,14 +2375,29 @@
     if (item.id) {
       autofill.dataset.itemId = item.id;
     }
-    actions.appendChild(autofill);
+    firstRow.appendChild(autofill);
+    if (item.id) {
+      const del = actionButton("board-cancel-button item-edit-form__delete", "delete-item", boardId, TEXT.deleteItem, [
+        staticIconNode("icon-trash-2"),
+        " " + TEXT.deleteItem
+      ]);
+      del.dataset.itemId = item.id;
+      del.setAttribute("aria-label", TEXT.deleteItem);
+      firstRow.appendChild(del);
+    }
+    actions.appendChild(firstRow);
+
+    const secondRow = document.createElement("div");
+    secondRow.className = "item-edit-form__actions-second";
     const save = document.createElement("button");
     save.className = "board-save-button";
     save.type = "submit";
     save.textContent = TEXT.save;
-    actions.appendChild(save);
+    secondRow.appendChild(save);
     const cancelAction = item.id ? "cancel-edit-item" : "cancel-add";
-    actions.appendChild(actionButton("board-cancel-button", cancelAction, boardId, "", [TEXT.cancel]));
+    secondRow.appendChild(actionButton("board-cancel-button", cancelAction, boardId, "", [TEXT.cancel]));
+    actions.appendChild(secondRow);
+
     form.appendChild(actions);
     return form;
   }
@@ -2435,7 +2451,7 @@
     tabTools.className = "board-meta-form__tabs";
     const tabLabel = document.createElement("span");
     tabLabel.className = "board-meta-form__label";
-    tabLabel.textContent = "子 tab";
+    tabLabel.textContent = "分组";
     tabTools.appendChild(tabLabel);
 
     const tabList = document.createElement("div");
@@ -2455,7 +2471,7 @@
     activeTabName.name = "activeTabName";
     activeTabName.maxLength = BOARD_TAB_NAME_MAX_LENGTH;
     activeTabName.value = getBoardActiveTab(board).name;
-    activeTabName.placeholder = "当前 tab 名称";
+    activeTabName.placeholder = "当前分组名称";
     tabTools.appendChild(activeTabName);
 
     const tabActions = document.createElement("div");
@@ -2465,10 +2481,10 @@
     newTab.type = "text";
     newTab.name = "newTabName";
     newTab.maxLength = BOARD_TAB_NAME_MAX_LENGTH;
-    newTab.placeholder = "新 tab";
+    newTab.placeholder = "新分组";
     tabActions.appendChild(newTab);
-    tabActions.appendChild(actionButton("board-icon-button", "add-board-tab", board.id, "新增子 tab", [staticIconNode("icon-plus")]));
-    const deleteTab = actionButton("board-icon-button", "delete-board-tab", board.id, "删除当前 tab", [staticIconNode("icon-trash")]);
+    tabActions.appendChild(actionButton("board-icon-button", "add-board-tab", board.id, TEXT.addBoardTab, [staticIconNode("icon-plus")]));
+    const deleteTab = actionButton("board-icon-button", "delete-board-tab", board.id, "删除当前分组", [staticIconNode("icon-trash")]);
     deleteTab.disabled = activeTabId === DEFAULT_TAB_ID;
     tabActions.appendChild(deleteTab);
     tabTools.appendChild(tabActions);
@@ -3824,7 +3840,7 @@
       window.alert("默认 tab 不能删除。");
       return;
     }
-    if (!window.confirm("删除当前 tab？里面的 item 会移动到默认 tab。")) {
+    if (!window.confirm("删除当前分组？里面的 item 会移动到默认分组。")) {
       return;
     }
     mutateBoard(boardId, function (entry) {

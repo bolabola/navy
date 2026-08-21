@@ -3453,3 +3453,55 @@ body.is-dark-theme .layout-menu__reset {
 body.is-dark-theme .link-row--url-only .link-row__url {
   color: var(--muted);
 }
+
+/* Icon-mode editing: edit button covers the full icon tile */
+.link-row--icon-only.link-row--editing .link-row__actions {
+  position: absolute;
+  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+  padding: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(20, 38, 63, 0.18);
+}
+
+.link-row--icon-only.link-row--editing .link-row__edit,
+.link-row--icon-only.link-row--editing .link-row__delete {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.item-edit-form__delete {
+  color: #c9372c;
+}
+
+.item-edit-form__delete:hover {
+  color: #ffffff;
+  background: rgba(201, 55, 44, 0.18);
+}
+
+body.is-dark-theme .item-edit-form__delete:hover {
+  color: #ffffff;
+  background: rgba(248, 113, 113, 0.20);
+}
+
+.item-edit-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item-edit-form__actions-first,
+.item-edit-form__actions-second {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+}
