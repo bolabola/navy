@@ -1237,7 +1237,7 @@ body.is-board-dragging {
 }
 
 .board-meta-form__tab-input {
-  flex: 0 1 98px;
+  flex: 0 0 98px;
 }
 
 .board-meta-form__tab-new {
@@ -1457,6 +1457,12 @@ body.is-board-dragging {
 
 .board-list--icons .board-empty {
   width: 100%;
+}
+
+.board-list--icons .item-edit-form {
+  flex: 1 0 100%;
+  width: 100%;
+  margin: 2px 0;
 }
 
 .board-list--urls .link-row__anchor {
