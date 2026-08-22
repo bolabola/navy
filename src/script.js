@@ -2850,7 +2850,7 @@
           ? entry.height
           : getBoardRenderedHeight(entry.id);
 
-        positions.push({
+        const position = {
           type: entry.placeholder ? "placeholder" : "board",
           boardId: entry.id,
           board: entry.placeholder ? null : entry,
@@ -2860,8 +2860,11 @@
           height: height,
           column: columnIndex,
           row: rowIndex
-        });
-        columnEntries[columnIndex].push(positions[positions.length - 1]);
+        };
+        positions.push(position);
+        if (!entry.placeholder) {
+          columnEntries[columnIndex].push(position);
+        }
 
         heights[columnIndex] += height + rowGap;
       });
