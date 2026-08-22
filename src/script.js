@@ -3126,16 +3126,20 @@
       return null;
     }
 
-    const board = findBoard(uiState.boardDragging.boardId);
-    if (!board) {
-      return null;
-    }
-
     const ghost = document.createElement("div");
     ghost.className = "board-drag-ghost";
     ghost.style.width = uiState.boardDragging.width + "px";
     ghost.style.height = uiState.boardDragging.height + "px";
-    ghost.appendChild(renderBoard(board, "is-board-dragging"));
+
+    const sourceSlot = app.querySelector('.board-slot[data-board-id="' + cssEscape(uiState.boardDragging.boardId) + '"]');
+    const sourceCard = sourceSlot ? sourceSlot.querySelector(".board-card") : null;
+    if (sourceCard) {
+      ghost.appendChild(sourceCard.cloneNode(true));
+    } else {
+      const board = findBoard(uiState.boardDragging.boardId);
+      if (board) ghost.appendChild(renderBoard(board, "is-board-dragging"));
+    }
+
     return ghost;
   }
 
@@ -3173,7 +3177,8 @@
       slotNodes: slotNodes,
       scrollNode: scrollNode,
       scrollRectLeft: scrollRect.left,
-      scrollRectTop: scrollRect.top
+      scrollRectTop: scrollRect.top,
+      wallHeight: masonryLayout.height
     };
 
     uiState.boardDragging.metrics = {
@@ -3290,8 +3295,10 @@
 
   function applyBoardWallLayoutStyles(wall) {
     const sideGutter = masonryLayout.sideGutter || 0;
+    const dragging = uiState.boardDragging;
+    const initialWallHeight = dragging && dragging.runtime ? dragging.runtime.wallHeight : null;
     wall.style.width = masonryLayout.width + "px";
-    wall.style.height = masonryLayout.height + "px";
+    wall.style.height = (initialWallHeight != null ? Math.max(initialWallHeight, masonryLayout.height) : masonryLayout.height) + "px";
     wall.style.marginLeft = sideGutter ? sideGutter + "px" : "";
     wall.style.marginRight = sideGutter ? sideGutter + "px" : "";
   }
