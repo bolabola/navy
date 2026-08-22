@@ -2837,6 +2837,9 @@
     const actualWidth = columns * columnWidth + Math.max(0, columns - 1) * columnGap;
     const heights = Array(columns).fill(0);
     const positions = [];
+    const columnEntries = Array.from({ length: columns }, function () {
+      return [];
+    });
     const buckets = getPreviewColumnBuckets(columns);
 
     buckets.forEach(function (bucket, columnIndex) {
@@ -2858,6 +2861,7 @@
           column: columnIndex,
           row: rowIndex
         });
+        columnEntries[columnIndex].push(positions[positions.length - 1]);
 
         heights[columnIndex] += height + rowGap;
       });
@@ -2865,6 +2869,7 @@
 
     return {
       positions: positions,
+      columnEntries: columnEntries,
       width: actualWidth,
       height: Math.max(0, Math.max.apply(null, heights) - rowGap),
       columns: columns,
@@ -2882,7 +2887,7 @@
         placeholder.className = "board-card board-card--placeholder";
         placeholder.style.width = entry.width + "px";
         placeholder.style.height = entry.height + "px";
-        placeholder.style.transform = "translate(" + entry.x + "px," + entry.y + "px)";
+        placeholder.style.transform = "translate3d(" + entry.x + "px, " + entry.y + "px, 0)";
         fragment.appendChild(placeholder);
         return;
       }
@@ -2891,7 +2896,7 @@
       slot.className = "board-slot" + (uiState.openBoardMenuId === entry.boardId ? " has-open-menu" : "");
       slot.dataset.boardId = entry.boardId;
       slot.style.width = entry.width + "px";
-      slot.style.transform = "translate(" + entry.x + "px," + entry.y + "px)";
+      slot.style.transform = "translate3d(" + entry.x + "px, " + entry.y + "px, 0)";
       slot.appendChild(renderBoard(entry.board));
       fragment.appendChild(slot);
     });
@@ -3146,7 +3151,7 @@
       return;
     }
 
-    ghost.style.transform = "translate(" + uiState.boardDragging.ghostLeft + "px, " + uiState.boardDragging.ghostTop + "px)";
+    ghost.style.transform = "translate3d(" + uiState.boardDragging.ghostLeft + "px, " + uiState.boardDragging.ghostTop + "px, 0)";
   }
 
   function hydrateBoardDragRuntime() {
@@ -3199,7 +3204,7 @@
     placeholder.style.width = sourceSlot.style.width || uiState.boardDragging.width + "px";
     placeholder.style.height = uiState.boardDragging.height + "px";
     placeholder.style.transform = sourceSlot.style.transform || "";
-    ghost.style.transform = "translate(" + uiState.boardDragging.ghostLeft + "px, " + uiState.boardDragging.ghostTop + "px)";
+    ghost.style.transform = "translate3d(" + uiState.boardDragging.ghostLeft + "px, " + uiState.boardDragging.ghostTop + "px, 0)";
     wall.appendChild(placeholder);
     app.appendChild(ghost);
     sourceSlot.classList.add("is-board-drag-source");
@@ -3235,7 +3240,13 @@
   }
 
   function syncBoardWallLayout() {
-    masonryLayout = buildMasonryLayout();
+    const previousPositions = new Map(
+      (masonryLayout.positions || []).map(function (entry) {
+        return [entry.type + ":" + entry.boardId, entry];
+      })
+    );
+    const nextLayout = buildMasonryLayout();
+    masonryLayout = nextLayout;
 
     const runtime = uiState.boardDragging && uiState.boardDragging.runtime;
     const wall = runtime && runtime.wallNode ? runtime.wallNode : app.querySelector(".board-wall");
@@ -3246,6 +3257,15 @@
     applyBoardWallLayoutStyles(wall);
 
     masonryLayout.positions.forEach(function (entry) {
+      const previous = previousPositions.get(entry.type + ":" + entry.boardId);
+      if (previous
+        && previous.x === entry.x
+        && previous.y === entry.y
+        && previous.width === entry.width
+        && previous.height === entry.height) {
+        return;
+      }
+
       if (entry.type === "placeholder") {
         const placeholder = runtime && runtime.placeholderNode ? runtime.placeholderNode : wall.querySelector(".board-card--placeholder");
         if (!placeholder) {
@@ -3254,7 +3274,7 @@
 
         placeholder.style.width = entry.width + "px";
         placeholder.style.height = entry.height + "px";
-        placeholder.style.transform = "translate(" + entry.x + "px, " + entry.y + "px)";
+        placeholder.style.transform = "translate3d(" + entry.x + "px, " + entry.y + "px, 0)";
         return;
       }
 
@@ -3264,7 +3284,7 @@
       }
 
       slot.style.width = entry.width + "px";
-      slot.style.transform = "translate(" + entry.x + "px, " + entry.y + "px)";
+      slot.style.transform = "translate3d(" + entry.x + "px, " + entry.y + "px, 0)";
     });
   }
 
@@ -4275,7 +4295,7 @@
       const slot = wall.querySelector('.board-slot[data-board-id="' + cssEscape(entry.boardId) + '"]');
       if (slot) {
         slot.style.width = entry.width + "px";
-        slot.style.transform = "translate(" + entry.x + "px, " + entry.y + "px)";
+        slot.style.transform = "translate3d(" + entry.x + "px, " + entry.y + "px, 0)";
       }
     });
   }
@@ -4320,9 +4340,10 @@
     const laneWidth = columnWidth + columnGap;
     const maxColumn = Math.max(0, masonryLayout.columns - 1);
     const targetColumn = Math.min(Math.max(Math.floor(relativeX / laneWidth), 0), maxColumn);
-    const columnEntries = masonryLayout.positions.filter(function (entry) {
-      return entry.type === "board" && entry.column === targetColumn;
-    });
+    const columnEntries = (masonryLayout.columnEntries && masonryLayout.columnEntries[targetColumn])
+      || masonryLayout.positions.filter(function (entry) {
+        return entry.type === "board" && entry.column === targetColumn;
+      });
 
     for (let rowIndex = 0; rowIndex < columnEntries.length; rowIndex += 1) {
       const entry = columnEntries[rowIndex];

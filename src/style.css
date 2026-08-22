@@ -1050,6 +1050,12 @@ body.is-board-dragging {
   user-select: none;
 }
 
+body.is-board-dragging .board-slot,
+body.is-board-dragging .board-card--placeholder,
+body.is-board-dragging .board-drag-ghost {
+  transition: none;
+}
+
 .board-tabs {
   display: flex;
   align-items: center;
