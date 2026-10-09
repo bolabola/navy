@@ -134,6 +134,8 @@ export function playIntro(extraClass) {
     root.classList.remove("is-intro");
     if (extraClass) root.classList.remove(extraClass);
     introTimer = null;
+    // 动画结束后再校准一次布局，防止动画期间测量的尺寸有偏差。
+    if (!uiState.boardDragging && !uiState.resizing) syncBoardWallLayout();
   }, 1100);
 }
 
@@ -332,6 +334,10 @@ export function updateBoardHeightInPlace(boardId, height) {
   updateBoardResizeControls(slot, nextHeight);
   syncBoardWallLayout();
   updateBoardOverflowIndicators(slot);
+  // 部分手机浏览器在下一帧才确定新高度，再校准一次，避免下方看板没被推开。
+  window.requestAnimationFrame(function () {
+    if (!uiState.boardDragging && !uiState.resizing) syncBoardWallLayout();
+  });
 }
 
 export function updateBoardResizeControls(slot, height) {
@@ -455,7 +461,8 @@ export function getBoardRenderedHeight(boardId) {
 
   const slot = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"] .board-card');
   if (slot) {
-    return slot.getBoundingClientRect().height;
+    // 用布局高度而不是 getBoundingClientRect：后者会受入场动画、FLIP 等 transform 缩放影响，测得偏矮会导致看板重叠。
+    return slot.offsetHeight;
   }
   const board = findBoard(boardId);
   return estimateBoardHeight(board);

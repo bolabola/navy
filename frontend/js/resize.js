@@ -24,7 +24,7 @@ export function beginResize(boardId, handle, event) {
   }
   const card = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"] .board-card');
   const list = card ? card.querySelector('[data-role="board-list"]') : null;
-  const visibleListHeight = list ? list.getBoundingClientRect().height : board.height;
+  const visibleListHeight = list ? list.offsetHeight : board.height;
   const startHeight = Math.min(board.height, visibleListHeight);
   uiState.resizing = {
     boardId: boardId,
@@ -52,7 +52,7 @@ export function updateResize(event) {
     const board = findBoard(uiState.resizing.boardId);
     card.style.setProperty("--list-height", Math.max(uiState.resizing.nextHeight, getBoardMinimumListHeight(board)) + "px");
     updateBoardResizeControls(card.closest(".board-slot"), uiState.resizing.nextHeight);
-    uiState.resizing.heightMap[uiState.resizing.boardId] = card.getBoundingClientRect().height;
+    uiState.resizing.heightMap[uiState.resizing.boardId] = card.offsetHeight;
     updateBoardOverflowIndicators(card.closest(".board-slot") || card);
   }
   scheduleResizeLayoutSync();

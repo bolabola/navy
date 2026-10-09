@@ -43,7 +43,7 @@ export function collectBoardHeightMap() {
   const heightMap = {};
   app.querySelectorAll(".board-card[data-board-id]").forEach(function (node) {
     const boardId = node.getAttribute("data-board-id");
-    heightMap[boardId] = node.getBoundingClientRect().height;
+    heightMap[boardId] = node.offsetHeight;
   });
   return heightMap;
 }
