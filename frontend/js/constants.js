@@ -155,7 +155,7 @@ export const TEXT = {
   invalidUrl: "请输入有效的网址。",
   login: "登录",
   logout: "退出",
-  guestUnsavedNotice: "未登录操作不会保存，刷新后会恢复原始状态",
+  guestUnsavedNotice: "折叠和显示方式只保存在本机浏览器",
   loginPlaceholder: "管理员密码",
   loginFailed: "密码错误",
   loginConfigError: "服务端密码配置无效，请检查 .dev.vars 或 Cloudflare secrets",

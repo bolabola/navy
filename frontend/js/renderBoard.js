@@ -575,9 +575,12 @@ export function renderBoard(board, extraClass) {
   header.className = "board-card__header";
   const titleWrap = document.createElement("div");
   titleWrap.className = "board-card__title-wrap";
-  titleWrap.dataset.role = "board-drag-handle";
   titleWrap.dataset.boardId = board.id;
-  titleWrap.title = TEXT.moveBoard;
+  // 未登录时不能拖拽 board：不挂拖拽句柄，也不显示“拖拽”提示和抓手光标。
+  if (auth.isAdmin) {
+    titleWrap.dataset.role = "board-drag-handle";
+    titleWrap.title = TEXT.moveBoard;
+  }
   if (state.layoutSettings.showBoardIcon === false) {
     titleWrap.classList.add("board-card__title-wrap--no-board-icon");
   } else {
@@ -656,9 +659,14 @@ export function renderBoard(board, extraClass) {
 
     const resize = document.createElement("div");
     resize.className = "board-resize-handle";
-    resize.dataset.role = "resize-handle";
     resize.dataset.boardId = board.id;
-    resize.title = TEXT.resize;
+    if (auth.isAdmin) {
+      resize.dataset.role = "resize-handle";
+      resize.title = TEXT.resize;
+    } else {
+      // 未登录：不能拖动调整高度，只保留“展开查看全部 / 收起”按钮（不保存）。
+      resize.classList.add("board-resize-handle--static");
+    }
     const shrink = actionButton("board-shrink-button", "shrink-board-to-min", board.id, TEXT.shrinkBoard, [
       staticIconNode("icon-chevrons-up")
     ]);

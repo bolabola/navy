@@ -5,6 +5,7 @@ import { API_BASE, DEFAULT_PAGE_ID, SAVE_DEBOUNCE_MS, STORAGE_KEY, TEXT, default
 import { uid } from "./dom.js";
 import { normalizeBoards, normalizeLayoutSettings } from "./model.js";
 import { render } from "./render.js";
+import { applyViewPrefs } from "./viewPrefs.js";
 import { app, auth, serverState, state, syncState, uiState } from "./state.js";
 
 export function loadBoardsFromLocal() {
@@ -135,6 +136,7 @@ export function handleAuthExpired() {
   uiState.editBoardId = null;
   uiState.editItemId = null;
   uiState.createBoardOpen = false;
+  state.boards = applyViewPrefs(state.boards, true);
   render();
 }
 
@@ -223,7 +225,8 @@ export function syncActivePageBoards() {
 
 export function loadActivePageBoards() {
   const page = state.pages.find(function (entry) { return entry.id === state.activePageId; }) || state.pages[0];
-  state.boards = normalizeBoards(page ? page.boards : defaultBoards);
+  // 叠加访客本机的查看偏好（折叠状态；未登录时还包括显示模式、图标大小、当前标签页）。
+  state.boards = applyViewPrefs(normalizeBoards(page ? page.boards : defaultBoards), !auth.isAdmin);
 }
 
 export function applyBoardEnvelope(boardData) {

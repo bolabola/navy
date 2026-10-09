@@ -35,6 +35,7 @@ import {
 } from "../render.js";
 import { closeAllIconPickers } from "../renderBoard.js";
 import { app, auth, serverState, state, uiState } from "../state.js";
+import { applyViewPrefs } from "../viewPrefs.js";
 import {
   apiSend,
   handleAuthExpired,
@@ -95,6 +96,8 @@ export function installClickHandlers() {
           uiState.openAddBoardId = null;
           uiState.editBoardId = null;
           uiState.createBoardOpen = false;
+          // 切回访客视图：叠加本机记住的显示模式等偏好
+          state.boards = applyViewPrefs(state.boards, true);
           render();
         });
       } else {

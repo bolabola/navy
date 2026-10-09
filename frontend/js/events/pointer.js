@@ -98,6 +98,10 @@ export function installPointerHandlers() {
     if (event.target.closest("[data-action]")) {
       return;
     }
+    // 拖拽排序和调整高度会修改布局，只对管理员开放。
+    if (!auth.isAdmin) {
+      return;
+    }
 
     const resizeHandle = event.target.closest('[data-role="resize-handle"]');
     if (resizeHandle) {

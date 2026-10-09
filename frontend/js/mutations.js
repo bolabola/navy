@@ -6,6 +6,7 @@ import { shouldCollapseAllBoards, syncAllCollapseButton, uid } from "./dom.js";
 import { saveBoards } from "./model.js";
 import { rerenderBoardInPlace, rerenderBoardWall } from "./render.js";
 import { auth, state, uiState } from "./state.js";
+import { rememberBoardView, rememberCollapsedStates, VIEW_FIELDS } from "./viewPrefs.js";
 
 export function mutateBoard(boardId, updater) {
   state.boards = state.boards.map(function (board) {
@@ -15,20 +16,39 @@ export function mutateBoard(boardId, updater) {
   rerenderBoardInPlace(boardId);
 }
 
+/**
+ * 显示模式 / 图标大小 / 当前标签页。
+ * 管理员：保存到服务器，并清掉本机对这些字段的旧覆盖（避免退出登录后看到过时的偏好）。
+ * 访客：只记在本机，刷新后保留。
+ */
 export function mutateBoardUiPreference(boardId, updater) {
+  const before = findBoard(boardId);
   state.boards = state.boards.map(function (board) {
     return board.id === boardId ? updater(board) : board;
   });
+  const after = findBoard(boardId);
+  if (before && after) {
+    const changes = {};
+    VIEW_FIELDS.forEach(function (field) {
+      if (before[field] !== after[field]) {
+        changes[field] = auth.isAdmin ? undefined : after[field];
+      }
+    });
+    if (Object.keys(changes).length) rememberBoardView(boardId, changes);
+  }
   if (auth.isAdmin) {
     saveBoards();
   }
   rerenderBoardInPlace(boardId);
 }
 
+/** 折叠 / 展开：对所有人都只记在本机，不写服务器。 */
 export function mutateBoardSessionState(boardId, updater) {
   state.boards = state.boards.map(function (board) {
     return board.id === boardId ? updater(board) : board;
   });
+  const after = findBoard(boardId);
+  if (after) rememberBoardView(boardId, { collapsed: Boolean(after.collapsed) });
   rerenderBoardInPlace(boardId);
 }
 
@@ -115,6 +135,7 @@ export function restoreAllCollapseSnapshot() {
 
     return Object.assign({}, board, { collapsed: collapsedById.get(board.id) });
   });
+  rememberCollapsedStates(state.boards);
   rerenderBoardWall(false);
   syncAllCollapseButton();
 }
@@ -132,6 +153,7 @@ export function collapseAllBoards() {
   state.boards = state.boards.map(function (board) {
     return Object.assign({}, board, { collapsed: true });
   });
+  rememberCollapsedStates(state.boards);
   rerenderBoardWall(false);
   syncAllCollapseButton();
 }
