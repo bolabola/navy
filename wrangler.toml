@@ -15,3 +15,12 @@ crons = ["17 * * * *"]
 [[kv_namespaces]]
 binding = "BOARD_KV"
 id = "REPLACE_WITH_KV_ID"
+
+# 看板状态的权威存储（强一致）。KV 中的 state 作为只读镜像供匿名访客快速读取。
+[[durable_objects.bindings]]
+name = "BOARD_STATE"
+class_name = "BoardStateObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BoardStateObject"]

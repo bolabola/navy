@@ -192,15 +192,20 @@ function Update-DeployWranglerConfig($NamespaceId) {
     throw "$WranglerToml was not found."
   }
 
-  $content = Get-Content -Raw $WranglerToml
+  # Read explicitly as UTF-8. Windows PowerShell 5.1 decodes BOM-less files with the
+  # system ANSI code page (e.g. GBK), which garbles the non-ASCII comments in
+  # wrangler.toml and can swallow line breaks (merging [[kv_namespaces]] into a comment).
+  $content = [System.IO.File]::ReadAllText((Resolve-Path $WranglerToml), [System.Text.Encoding]::UTF8)
   if ($content -notmatch "(?m)^\s*\[\[kv_namespaces\]\]\s*$") {
-    $content = $content -replace '(?m)^(binding\s*=\s*"[^"]+"\s*)$', "[[kv_namespaces]]`r`n`$1"
+    $content = $content -replace '(?m)^(binding\s*=\s*"BOARD_KV"\s*)$', "[[kv_namespaces]]`r`n`$1"
   }
   $updated = $content -replace 'id = "REPLACE_WITH_KV_ID"', "id = `"$NamespaceId`""
   if ($updated -eq $content -and $content -notmatch [regex]::Escape($NamespaceId)) {
     $updated = $content -replace 'id = "[0-9a-fA-F]{32}"', "id = `"$NamespaceId`""
   }
-  Set-Content -LiteralPath $DeployWranglerToml -Value $updated -Encoding utf8
+  # Write BOM-less UTF-8, matching wrangler.toml.
+  $deployPath = Join-Path (Get-Location) $DeployWranglerToml
+  [System.IO.File]::WriteAllText($deployPath, $updated, (New-Object System.Text.UTF8Encoding $false))
   Write-Host "Wrote local deploy config $DeployWranglerToml with KV namespace id $NamespaceId."
   Write-Host "$WranglerToml remains safe to commit with REPLACE_WITH_KV_ID."
 }

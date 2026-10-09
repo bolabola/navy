@@ -1,6 +1,7 @@
 import { requireAdmin } from "./auth";
 import { commitResponse } from "./boardRoutes";
-import { parseStoredBoardState, restoreContent, STATE_KEY } from "./boardStore";
+import { getBoardRepo } from "./boardRepo";
+import { parseStoredBoardState } from "./boardStore";
 import {
   BACKUP_FILE_PREFIX,
   CloudBackupProviderError,
@@ -227,7 +228,7 @@ function readStateMarker(rawState: string): string | undefined {
  * 避免产生大量重复的云端文件。
  */
 export async function runScheduledCloudBackups(env: Env, now = new Date()): Promise<void> {
-  const rawState = await env.BOARD_KV.get(STATE_KEY);
+  const rawState = await getBoardRepo(env).readRaw();
   if (!rawState) return;
   const marker = readStateMarker(rawState);
 
@@ -311,7 +312,7 @@ export async function handleCloudBackupRun(request: Request, env: Env, providerI
 
   const provider = requireProvider(providerId);
   const { record, config } = await requireConnected(env, provider);
-  const rawState = await env.BOARD_KV.get(STATE_KEY);
+  const rawState = await getBoardRepo(env).readRaw();
   if (!rawState) return text("Board has no saved state yet", 409);
 
   const status = await backupToProvider(env, provider, record, config, rawState, readStateMarker(rawState), new Date());
@@ -358,7 +359,7 @@ export async function handleCloudBackupRestore(request: Request, env: Env, provi
   const restored = parseStoredBoardState(backupRaw);
   if (!restored) return text("Cloud backup is invalid", 500);
 
-  const result = await restoreContent(env, restored);
+  const result = await getBoardRepo(env).restoreContent(restored);
   return commitResponse(result, { provider: provider.id, restoredBackup: backup });
 }
 
@@ -414,7 +415,7 @@ export async function handleCloudBackupCallback(
     const config = connectedConfig(provider, record);
     if (ctx && config) {
       ctx.waitUntil((async () => {
-        const rawState = await env.BOARD_KV.get(STATE_KEY);
+        const rawState = await getBoardRepo(env).readRaw();
         if (rawState) await backupToProvider(env, provider, record, config, rawState, readStateMarker(rawState), new Date());
       })().catch(() => {}));
     }

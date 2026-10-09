@@ -1,5 +1,9 @@
+import type { BoardStateObject } from "./boardRepo";
+
 export interface Env {
   BOARD_KV: KVNamespace;
+  /** 看板状态的 Durable Object（强一致）。未绑定时退回直接读写 KV。 */
+  BOARD_STATE?: DurableObjectNamespace<BoardStateObject>;
   ADMIN_PASSWORD: string;
   SESSION_SECRET: string;
   ASSETS: Fetcher;

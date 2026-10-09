@@ -1,20 +1,15 @@
-import { requireAdmin } from "./auth";
-import {
-  cleanBoardContent,
-  commitState,
-  listBackups,
-  readBackup,
-  readState,
-  restoreContent,
-  toClientState,
-  type CommitResult
-} from "./boardStore";
+import { getSession, requireAdmin } from "./auth";
+import { getBoardRepo, getPublicBoardRepo } from "./boardRepo";
+import { cleanBoardContent, toClientState, type CommitResult } from "./boardStore";
 import { isPlainObject, json, readJsonBody, text, type Env } from "./shared";
 
 const BOARD_BODY_MAX_BYTES = 1024 * 1024;
 
-export async function handleGetBoard(env: Env): Promise<Response> {
-  const { state } = await readState(env);
+export async function handleGetBoard(request: Request, env: Env): Promise<Response> {
+  // 带会话 cookie 的管理员读取权威数据；匿名访客读取 KV 镜像（边缘缓存，更快）。
+  const isAdmin = request.headers.has("Cookie") && (await getSession(request, env)) !== null;
+  const repo = isAdmin ? getBoardRepo(env) : getPublicBoardRepo(env);
+  const state = await repo.read();
   return json(state ? toClientState(state) : null);
 }
 
@@ -38,19 +33,17 @@ export async function handlePutBoard(request: Request, env: Env): Promise<Respon
   const content = cleanBoardContent(input);
   if (typeof content === "string") return text(content, 400);
 
-  const current = await readState(env);
-  const currentVersion = current.state ? current.state.version : null;
-  if (version !== currentVersion) {
-    return json({ ok: false, error: "version_conflict", currentVersion }, 409);
+  const outcome = await getBoardRepo(env).save(version, content);
+  if (!outcome.ok) {
+    return json({ ok: false, error: "version_conflict", currentVersion: outcome.currentVersion }, 409);
   }
-
-  return commitResponse(await commitState(env, current, content));
+  return commitResponse(outcome.result);
 }
 
 export async function handleListBackups(request: Request, env: Env): Promise<Response> {
   const auth = await requireAdmin(request, env, { csrf: false });
   if (auth instanceof Response) return auth;
-  return json({ backups: await listBackups(env) });
+  return json({ backups: await getBoardRepo(env).listBackups() });
 }
 
 export async function handleRestoreBackup(request: Request, env: Env): Promise<Response> {
@@ -59,9 +52,7 @@ export async function handleRestoreBackup(request: Request, env: Env): Promise<R
 
   const payload = await readJsonBody<{ key?: unknown }>(request);
   if (!isPlainObject(payload) || typeof payload.key !== "string") return text("Invalid backup key", 400);
-
-  const backup = await readBackup(env, payload.key);
-  return commitResponse(await restoreContent(env, backup));
+  return commitResponse(await getBoardRepo(env).restoreBackup(payload.key));
 }
 
 export function commitResponse(result: CommitResult, extra: Record<string, unknown> = {}): Response {

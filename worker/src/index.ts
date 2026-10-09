@@ -35,7 +35,7 @@ const routes: Route[] = [
   {
     pattern: /^\/api\/board$/,
     methods: {
-      GET: (c) => handleGetBoard(c.env),
+      GET: (c) => handleGetBoard(c.request, c.env),
       PUT: (c) => handlePutBoard(c.request, c.env)
     }
   },
@@ -107,4 +107,5 @@ const worker = {
 };
 
 export { routeApi };
+export { BoardStateObject } from "./boardRepo";
 export default worker;

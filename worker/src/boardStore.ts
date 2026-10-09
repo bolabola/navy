@@ -1,10 +1,4 @@
-import {
-  backupSuffixToIso,
-  HttpError,
-  isoToBackupSuffix,
-  isPlainObject,
-  type Env
-} from "./shared";
+import { backupSuffixToIso, HttpError, isoToBackupSuffix, isPlainObject } from "./shared";
 import {
   cleanActivePageId,
   cleanBoards,
@@ -37,6 +31,14 @@ export interface StoredState extends BoardContent {
   updatedAt: string;
   /** 最近一次 KV 历史备份的时间（ISO）。 */
   lastBackupAt?: string;
+}
+
+/** boardStore 只依赖这几个 KV 方法，Durable Object 存储通过适配器同样满足。 */
+export interface KvLike {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(options: { prefix: string }): Promise<{ keys: Array<{ name: string }> }>;
 }
 
 export interface CurrentState {
@@ -138,8 +140,8 @@ export function parseStoredBoardState(raw: string): StoredState | null {
   return state;
 }
 
-export async function readState(env: Env): Promise<CurrentState> {
-  const raw = await env.BOARD_KV.get(STATE_KEY);
+export async function readState(store: KvLike): Promise<CurrentState> {
+  const raw = await store.get(STATE_KEY);
   if (!raw) return { raw: null, state: null };
   const state = parseStoredBoardState(raw);
   if (!state) throw new HttpError(500, "Stored board state is invalid");
@@ -152,7 +154,7 @@ export async function readState(env: Env): Promise<CurrentState> {
  * - 普通保存距离上次备份超过 BACKUP_MIN_INTERVAL_MS 才备份。
  */
 export async function commitState(
-  env: Env,
+  store: KvLike,
   current: CurrentState,
   content: BoardContent,
   options: { forceBackup?: boolean; now?: Date } = {}
@@ -165,7 +167,7 @@ export async function commitState(
   let lastBackupAt = previous?.lastBackupAt;
   if (current.raw && previous && shouldBackup(previous, now, options.forceBackup === true)) {
     backupKey = BACKUP_PREFIX + isoToBackupSuffix(nowIso);
-    await env.BOARD_KV.put(backupKey, current.raw);
+    await store.put(backupKey, current.raw);
     lastBackupAt = nowIso;
   }
 
@@ -176,8 +178,8 @@ export async function commitState(
   };
   if (lastBackupAt) state.lastBackupAt = lastBackupAt;
 
-  await env.BOARD_KV.put(STATE_KEY, JSON.stringify(state));
-  if (backupKey) await pruneBackups(env);
+  await store.put(STATE_KEY, JSON.stringify(state));
+  if (backupKey) await pruneBackups(store);
   return { state, backupKey };
 }
 
@@ -193,21 +195,21 @@ export interface BackupEntry {
   createdAt: string;
 }
 
-export async function listBackups(env: Env): Promise<BackupEntry[]> {
-  const listed = await env.BOARD_KV.list({ prefix: BACKUP_PREFIX });
+export async function listBackups(store: KvLike): Promise<BackupEntry[]> {
+  const listed = await store.list({ prefix: BACKUP_PREFIX });
   return listed.keys
     .map((key) => ({ key: key.name, createdAt: backupSuffixToIso(key.name.slice(BACKUP_PREFIX.length)) }))
     .sort((a, b) => b.key.localeCompare(a.key));
 }
 
-async function pruneBackups(env: Env): Promise<void> {
-  const stale = (await listBackups(env)).slice(BACKUP_KEEP_COUNT);
-  await Promise.all(stale.map((entry) => env.BOARD_KV.delete(entry.key)));
+async function pruneBackups(store: KvLike): Promise<void> {
+  const stale = (await listBackups(store)).slice(BACKUP_KEEP_COUNT);
+  await Promise.all(stale.map((entry) => store.delete(entry.key)));
 }
 
-export async function readBackup(env: Env, key: string): Promise<StoredState> {
+export async function readBackup(store: KvLike, key: string): Promise<StoredState> {
   if (!key.startsWith(BACKUP_PREFIX)) throw new HttpError(400, "Invalid backup key");
-  const raw = await env.BOARD_KV.get(key);
+  const raw = await store.get(key);
   if (!raw) throw new HttpError(404, "Backup not found");
   const state = parseStoredBoardState(raw);
   if (!state) throw new HttpError(500, "Backup is invalid");
@@ -215,9 +217,9 @@ export async function readBackup(env: Env, key: string): Promise<StoredState> {
 }
 
 /** 用一份备份内容覆盖当前状态（总是先备份当前状态）。 */
-export async function restoreContent(env: Env, backup: BoardContent): Promise<CommitResult> {
-  const current = await readState(env);
-  return commitState(env, current, {
+export async function restoreContent(store: KvLike, backup: BoardContent): Promise<CommitResult> {
+  const current = await readState(store);
+  return commitState(store, current, {
     boards: backup.boards,
     pages: backup.pages,
     activePageId: backup.activePageId,
