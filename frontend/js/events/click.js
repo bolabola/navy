@@ -1,4 +1,5 @@
 // 点击事件代理
+import { alertDialog, confirmDialog } from "../dialog.js";
 import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, MIN_BOARD_HEIGHT } from "../../../shared/limits";
 import { openPalette } from "../search.js";
 import { loadBackupStatus, openCloudBackupsModal, openKvBackupsModal } from "../backup.js";
@@ -202,9 +203,11 @@ export function installClickHandlers() {
       const key = button.getAttribute("data-backup-key");
       const providerId = button.getAttribute("data-provider-id");
       const backupId = button.getAttribute("data-backup-id");
-      if ((!providerId && !key) || (providerId && !backupId) || !window.confirm(TEXT.backupRestoreConfirm)) {
+      if ((!providerId && !key) || (providerId && !backupId)) {
         return;
       }
+      confirmDialog({ title: "恢复这个备份？", message: TEXT.backupRestoreConfirm, confirmText: "恢复" }).then(function (ok) {
+      if (!ok) return;
       button.disabled = true;
       const restorePath = providerId
         ? "/cloud-backup/" + encodeURIComponent(providerId) + "/restore"
@@ -225,8 +228,9 @@ export function installClickHandlers() {
         render();
       }).catch(function (error) {
         const detail = error && error.responseText ? "\n\n" + error.responseText : "";
-        window.alert(TEXT.backupRestoreFailed + detail);
+        alertDialog(TEXT.backupRestoreFailed + detail);
         render();
+      });
       });
       return;
     }
@@ -335,7 +339,7 @@ export function installClickHandlers() {
         throw new Error("Missing authorization URL");
       }).catch(function () {
         button.disabled = false;
-        window.alert("Cloud backup authorization failed to start.");
+        alertDialog("无法开始云盘授权，请稍后再试。");
       });
       return;
     }
@@ -355,7 +359,7 @@ export function installClickHandlers() {
       apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/run", "POST", {}).then(finish).catch(function (error) {
         finish();
         const detail = error && error.responseText ? "\n\n" + error.responseText.slice(0, 300) : "";
-        window.alert("云备份失败。" + detail);
+        alertDialog("云备份失败。" + detail);
       });
       return;
     }
@@ -365,15 +369,23 @@ export function installClickHandlers() {
         return;
       }
       const providerId = button.getAttribute("data-provider-id");
-      if (!providerId || !window.confirm("断开这个云备份服务？云盘里已有的备份文件会保留。")) {
+      if (!providerId) {
         return;
       }
-      button.disabled = true;
-      apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/disconnect", "POST", {}).then(function () {
-        loadBackupStatus();
-      }).catch(function () {
-        button.disabled = false;
-        window.alert("Cloud backup disconnect failed.");
+      confirmDialog({
+        title: "断开这个云备份服务？",
+        message: "云盘里已有的备份文件会保留。",
+        confirmText: "断开",
+        danger: true
+      }).then(function (ok) {
+        if (!ok) return;
+        button.disabled = true;
+        apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/disconnect", "POST", {}).then(function () {
+          loadBackupStatus();
+        }).catch(function () {
+          button.disabled = false;
+          alertDialog("断开云备份失败，请稍后再试。");
+        });
       });
       return;
     }
@@ -583,13 +595,7 @@ export function installClickHandlers() {
         return;
       }
 
-      if (board.items.length > 0) {
-        const confirmed = window.confirm(TEXT.deleteBoardConfirm.replace("{count}", String(board.items.length)));
-        if (!confirmed) {
-          return;
-        }
-      }
-
+      const removeBoard = function () {
       state.boards = state.boards.filter(function (entry) {
         return entry.id !== boardId;
       });
@@ -601,6 +607,20 @@ export function installClickHandlers() {
       }
       saveBoards();
       render();
+      };
+
+      if (board.items.length > 0) {
+        confirmDialog({
+          title: "删除“" + board.title + "”？",
+          message: TEXT.deleteBoardConfirm.replace("{count}", String(board.items.length)),
+          confirmText: "删除",
+          danger: true
+        }).then(function (ok) {
+          if (ok) removeBoard();
+        });
+      } else {
+        removeBoard();
+      }
       return;
     }
 
@@ -660,7 +680,7 @@ export function installClickHandlers() {
       try {
         url = normalizeUrl(urlInput && urlInput.value);
       } catch (error) {
-        window.alert(TEXT.invalidUrl);
+        alertDialog(TEXT.invalidUrl);
         return;
       }
       if (urlInput) urlInput.value = url;
@@ -677,10 +697,10 @@ export function installClickHandlers() {
       }).catch(function (error) {
         if (error && (error.status === 401 || error.status === 403)) {
           handleAuthExpired();
-          window.alert(TEXT.autofillLoginExpired);
+          alertDialog(TEXT.autofillLoginExpired);
           return;
         }
-        window.alert(TEXT.autofillFailed);
+        alertDialog(TEXT.autofillFailed);
       }).finally(function () {
         button.disabled = false;
       });

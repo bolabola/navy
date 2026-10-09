@@ -1,4 +1,5 @@
 // board 数据修改
+import { alertDialog, confirmDialog } from "./dialog.js";
 import { BOARD_TAB_NAME_MAX_LENGTH } from "../../shared/limits";
 import { findBoard, getBoardActiveTab, getBoardActiveTabId, getBoardTabs } from "./boards.js";
 import { DEFAULT_TAB_ID } from "./constants.js";
@@ -85,12 +86,20 @@ export function deleteActiveBoardTab(boardId) {
   const activeTabId = getBoardActiveTabId(board);
   if (!board) return;
   if (activeTabId === DEFAULT_TAB_ID) {
-    window.alert("默认 tab 不能删除。");
+    alertDialog("默认分组不能删除。");
     return;
   }
-  if (!window.confirm("删除当前分组？里面的 item 会移动到默认分组。")) {
-    return;
-  }
+  confirmDialog({
+    title: "删除当前分组？",
+    message: "里面的条目会移动到默认分组，不会被删除。",
+    confirmText: "删除分组",
+    danger: true
+  }).then(function (ok) {
+    if (ok) removeBoardTab(boardId, activeTabId);
+  });
+}
+
+function removeBoardTab(boardId, activeTabId) {
   mutateBoard(boardId, function (entry) {
     return Object.assign({}, entry, {
       tabs: getBoardTabs(entry).filter(function (tab) {

@@ -1,4 +1,5 @@
 // 本地缓存、API 请求与保存同步
+import { confirmDialog } from "./dialog.js";
 import { PAGE_MAX_COUNT, PAGE_NAME_MAX_LENGTH } from "../../shared/limits";
 import { pickNewerLocalLastBackup, renderBackupMenu } from "./backup.js";
 import { API_BASE, DEFAULT_PAGE_ID, SAVE_DEBOUNCE_MS, STORAGE_KEY, TEXT, defaultBoards } from "./constants.js";
@@ -341,13 +342,19 @@ function noteBackupFromCommit(result) {
 
 export function handleSaveConflict() {
   cacheBoardsLocally();
-  if (window.confirm(TEXT.syncConflictConfirm)) {
+  confirmDialog({
+    title: "远端数据已更新",
+    message: TEXT.syncConflictConfirm,
+    confirmText: "加载远端版本",
+    cancelText: "保留本地版本"
+  }).then(function (ok) {
+    if (!ok) return;
     loadServerBoardState().then(function () {
       render();
     }).catch(function (error) {
       console.warn("Reload remote board failed:", error);
     });
-  }
+  });
 }
 
 export function updateSyncIndicator() {

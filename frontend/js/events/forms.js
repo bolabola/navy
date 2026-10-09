@@ -1,4 +1,5 @@
 // 表单事件代理
+import { alertDialog } from "../dialog.js";
 import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, BOARD_TAB_NAME_MAX_LENGTH } from "../../../shared/limits";
 import { loadBackupStatus } from "../backup.js";
 import { findBoard, getBoardActiveTabId, getBoardTabs, nextBoardAccent, nextBoardIcon } from "../boards.js";
@@ -148,7 +149,7 @@ export function installFormsHandlers() {
         try {
           url = normalizeUrl(rawUrl);
         } catch (error) {
-          window.alert(TEXT.invalidUrl);
+          alertDialog(TEXT.invalidUrl);
           return;
         }
 

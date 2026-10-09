@@ -136,7 +136,7 @@ export const TEXT = {
   createBoardPlaceholder: "例如：开发工具",
   editBoard: "编辑 Board",
   deleteBoard: "删除 Board",
-  deleteBoardConfirm: "这个 board 里还有 {count} 条网址，确认删除？",
+  deleteBoardConfirm: "里面的 {count} 条网址会一起删除。",
   save: "保存",
   cancel: "取消",
   empty: "拖一个网址到这里，或者新建。",
@@ -185,12 +185,12 @@ export const TEXT = {
   syncFailed: "保存失败，稍后重试",
   syncLoginExpired: "登录已过期，请重新登录",
   syncConflict: "远端数据已更新，本地改动已保留",
-  syncConflictConfirm: "远端数据已更新。本地改动已保留在浏览器缓存中。\n\n点击确定加载远端版本，点击取消继续保留本地版本。",
+  syncConflictConfirm: "其他地方保存了更新的版本。你的本地改动已保留在浏览器缓存中，加载远端版本会放弃这些改动。",
   backups: "备份",
   backupEmpty: "暂无可恢复的备份。",
   backupLoadFailed: "备份加载失败",
   backupRestore: "恢复",
-  backupRestoreConfirm: "确认恢复这个备份？当前状态会先自动备份。",
+  backupRestoreConfirm: "当前状态会先自动备份，之后随时可以再恢复回来。",
   backupRestoreFailed: "恢复失败，请稍后再试。",
   layout: "布局",
   layoutColumns: "列数",
@@ -214,7 +214,7 @@ export const TEXT = {
   addPage: "新建页面",
   renamePage: "重命名页面",
   deletePage: "删除页面",
-  deletePageConfirm: "确认删除这个页面？页面里的 board 也会一起删除。"
+  deletePageConfirm: "页面里的所有 Board 和网址会一起删除。"
 };
 
 export const defaultBoards = [];

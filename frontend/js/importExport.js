@@ -1,4 +1,5 @@
 // 导入导出（JSON / 书签 / CSV）
+import { alertDialog, confirmDialog } from "./dialog.js";
 import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, BOARD_ITEM_NAME_MAX_LENGTH, BOARD_TAB_NAME_MAX_LENGTH } from "../../shared/limits";
 import { findBoard, getBoardActiveTabId } from "./boards.js";
 import {
@@ -121,7 +122,7 @@ export function exportFullBackup() {
 export function handleFullBackupImport(file) {
   const reader = new FileReader();
   reader.onerror = function () {
-    window.alert("Import failed.");
+    alertDialog("导入失败。");
   };
   reader.onload = function () {
     try {
@@ -130,9 +131,12 @@ export function handleFullBackupImport(file) {
       const importedPages = parseFullBackupPages(parsed);
       const importedActivePageId = normalizeActivePageId(parsed && typeof parsed === "object" ? parsed.activePageId : null, importedPages);
       const importedLayout = normalizeLayoutSettings(parsed && typeof parsed === "object" ? parsed.layout : null);
-      if (!window.confirm("Import this JSON backup? Current remote state will be backed up first.")) {
-        return;
-      }
+      confirmDialog({
+        title: "导入这份 JSON 备份？",
+        message: "会用备份内容替换当前整个看板。导入前当前状态会先自动备份。",
+        confirmText: "导入"
+      }).then(function (ok) {
+      if (!ok) return;
       const previousBoards = state.boards;
       const previousPages = state.pages;
       const previousActivePageId = state.activePageId;
@@ -169,12 +173,13 @@ export function handleFullBackupImport(file) {
         state.layoutSettings = previousLayout;
         cacheBoardsLocally();
         setSyncState("failed", TEXT.syncFailed);
-        window.alert("Import failed.");
+        alertDialog("导入失败，看板已恢复为导入前的状态。");
         render();
       });
       render();
+      });
     } catch (error) {
-      window.alert("Invalid JSON backup.");
+      alertDialog("这不是有效的 JSON 备份文件。");
     }
   };
   reader.readAsText(file, "utf-8");
@@ -196,7 +201,7 @@ export function parseFullBackupPages(value) {
 export function handleBookmarksHtmlImport(file) {
   const reader = new FileReader();
   reader.onerror = function () {
-    window.alert("导入收藏 HTML 失败。");
+    alertDialog("导入收藏 HTML 失败。");
   };
   reader.onload = function () {
     try {
@@ -209,10 +214,10 @@ export function handleBookmarksHtmlImport(file) {
       }, 0);
       if (!importedBoards.length || importedCount === 0) {
         if (foundCount > 0 && state.boards.length >= BOOKMARK_IMPORT_MAX_BOARDS) {
-          window.alert("当前 board 数量已达到上限，无法继续导入。");
+          alertDialog("当前 board 数量已达到上限，无法继续导入。");
           return;
         }
-        window.alert("收藏 HTML 里没找到可导入的网址。");
+        alertDialog("收藏 HTML 里没找到可导入的网址。");
         return;
       }
       state.boards = state.boards.concat(importedBoards);
@@ -222,10 +227,10 @@ export function handleBookmarksHtmlImport(file) {
       uiState.editItemId = null;
       saveBoards();
       render();
-      window.alert("已导入 " + importedBoards.length + " 个 board，" + importedCount + " 个网址。"
+      alertDialog("已导入 " + importedBoards.length + " 个 board，" + importedCount + " 个网址。"
         + (foundCount > importedCount ? " 当前最多保存 100 个 board，已自动截断。" : ""));
     } catch (error) {
-      window.alert("导入收藏 HTML 失败。");
+      alertDialog("导入收藏 HTML 失败。");
     }
   };
   reader.readAsText(file, "utf-8");
@@ -501,18 +506,18 @@ export function handleImportFile(boardId, file) {
   if (uiState.importingBoardId) return;
   const reader = new FileReader();
   reader.onerror = function () {
-    window.alert(TEXT.importFailed);
+    alertDialog(TEXT.importFailed);
   };
   reader.onload = function () {
     const text = typeof reader.result === "string" ? reader.result : "";
     const found = extractUrlsFromText(text);
     if (found.length === 0) {
-      window.alert(TEXT.importNoUrls);
+      alertDialog(TEXT.importNoUrls);
       return;
     }
     const urls = found.slice(0, IMPORT_MAX_URLS);
     if (found.length > IMPORT_MAX_URLS) {
-      window.alert(TEXT.importTooMany.replace("{found}", String(found.length)).replace("{kept}", String(urls.length)));
+      alertDialog(TEXT.importTooMany.replace("{found}", String(found.length)).replace("{kept}", String(urls.length)));
     }
 
     uiState.importingBoardId = boardId;
@@ -545,7 +550,7 @@ export function handleImportFile(boardId, file) {
         saveBoards();
       }
     }).catch(function () {
-      window.alert(TEXT.importFailed);
+      alertDialog(TEXT.importFailed);
     }).finally(function () {
       uiState.importingBoardId = null;
       rerenderBoardInPlace(boardId);
@@ -578,7 +583,7 @@ export function csvEscape(value) {
 
 export function exportBoardToCsv(board) {
   if (!board || !Array.isArray(board.items) || board.items.length === 0) {
-    window.alert(TEXT.exportEmpty);
+    alertDialog(TEXT.exportEmpty);
     return;
   }
   const lines = board.items.map(function (item) {

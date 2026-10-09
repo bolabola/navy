@@ -1,6 +1,7 @@
 // 页面管理
-import { PAGE_MAX_COUNT } from "../../shared/limits";
+import { PAGE_MAX_COUNT, PAGE_NAME_MAX_LENGTH } from "../../shared/limits";
 import { TEXT } from "./constants.js";
+import { confirmDialog, promptDialog } from "./dialog.js";
 import { uid } from "./dom.js";
 import { saveBoards } from "./model.js";
 import { playIntro, render } from "./render.js";
@@ -33,8 +34,20 @@ export function closeTransientUi() {
 
 export function addPage() {
   if (!auth.isAdmin || state.pages.length >= PAGE_MAX_COUNT) return;
-  const name = normalizePageName(window.prompt(TEXT.addPage, "页面 " + (state.pages.length + 1)), "");
-  if (!name) return;
+  promptDialog({
+    title: "新建页面",
+    message: "用页面区分不同场景，比如工作、学习、娱乐。",
+    value: "页面 " + (state.pages.length + 1),
+    placeholder: "页面名称",
+    maxLength: PAGE_NAME_MAX_LENGTH,
+    confirmText: "创建"
+  }).then(function (value) {
+    const name = normalizePageName(value, "");
+    if (name) createPage(name);
+  });
+}
+
+function createPage(name) {
   syncActivePageBoards();
   const page = { id: uid("page"), name: name, boards: [] };
   state.pages = state.pages.concat(page);
@@ -49,18 +62,37 @@ export function renameActivePage() {
   if (!auth.isAdmin) return;
   const current = state.pages.find(function (page) { return page.id === state.activePageId; });
   if (!current) return;
-  const name = normalizePageName(window.prompt(TEXT.renamePage, current.name), "");
-  if (!name || name === current.name) return;
-  state.pages = state.pages.map(function (page) {
-    return page.id === state.activePageId ? Object.assign({}, page, { name: name }) : page;
+  promptDialog({
+    title: "重命名页面",
+    value: current.name,
+    placeholder: "页面名称",
+    maxLength: PAGE_NAME_MAX_LENGTH,
+    confirmText: "保存"
+  }).then(function (value) {
+    const name = normalizePageName(value, "");
+    if (!name || name === current.name) return;
+    state.pages = state.pages.map(function (page) {
+      return page.id === current.id ? Object.assign({}, page, { name: name }) : page;
+    });
+    saveBoards();
+    render();
   });
-  saveBoards();
-  render();
 }
 
 export function deleteActivePage() {
   if (!auth.isAdmin || state.pages.length <= 1) return;
-  if (!window.confirm(TEXT.deletePageConfirm)) return;
+  const current = state.pages.find(function (page) { return page.id === state.activePageId; });
+  confirmDialog({
+    title: "删除页面“" + (current ? current.name : "") + "”？",
+    message: TEXT.deletePageConfirm,
+    confirmText: "删除",
+    danger: true
+  }).then(function (ok) {
+    if (ok) removeActivePage();
+  });
+}
+
+function removeActivePage() {
   const index = Math.max(0, state.pages.findIndex(function (page) { return page.id === state.activePageId; }));
   state.pages = state.pages.filter(function (page) { return page.id !== state.activePageId; });
   state.activePageId = state.pages[Math.min(index, state.pages.length - 1)].id;
