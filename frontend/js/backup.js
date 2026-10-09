@@ -91,14 +91,7 @@ export function getRegularBackupEntry() {
       detail: syncState.message || "保存失败，未生成新备份"
     };
   }
-  if (syncState.status === "saving") {
-    return {
-      id: "kv-history",
-      label: "常规备份",
-      status: "saving",
-      detail: "正在保存"
-    };
-  }
+  // 普通保存不一定产生备份（每 10 分钟最多一次），保存中不改变备份状态，避免顶栏每次编辑都显示“备份中”。
   if (last) {
     return {
       id: "kv-history",
