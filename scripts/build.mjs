@@ -21,7 +21,8 @@ const minify = !process.argv.includes("--no-minify");
  */
 async function buildIconSubset() {
   const fontsDir = path.join(srcDir, "fonts");
-  const genDir = path.join(fontsDir, ".generated");
+  // 生成物放在 frontend/ 之外，避免触发 wrangler dev 的 watch_dir 造成重复构建。
+  const genDir = path.join(root, ".cache", "icons");
   await mkdir(genDir, { recursive: true });
 
   const css = await readFile(path.join(fontsDir, "lucide.css"), "utf8");
@@ -112,8 +113,7 @@ await build();
 if (watch) {
   const { watch: fsWatch } = await import("node:fs");
   let timer = null;
-  fsWatch(srcDir, { recursive: true }, (_event, file) => {
-    if (file && String(file).includes(".generated")) return;
+  fsWatch(srcDir, { recursive: true }, () => {
     clearTimeout(timer);
     timer = setTimeout(() => build().catch((error) => console.error(error)), 100);
   });

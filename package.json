@@ -4,10 +4,11 @@
   "license": "MIT",
   "scripts": {
     "dev": "wrangler dev",
+    "build": "node scripts/build.mjs",
     "deploy": "bash ./scripts/cloudflare.sh",
     "deploy:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cloudflare.ps1",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "node scripts/build.mjs && vitest run"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.2.8",

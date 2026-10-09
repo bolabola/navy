@@ -115,7 +115,7 @@ test("favicon returns a cacheable fallback when upstream sources fail", async ()
   await settle();
   assert.equal(first.headers.get("X-Favicon-Fallback"), "1");
   assert.match(first.headers.get("Content-Type")!, /image\/svg\+xml/);
-  assert.match(await first.text(), /<svg/);
+  assert.match(await first.text(), /<svg[^>]*width="1"[^>]*height="1"/);
   assert.equal(calls.length, 4);
 
   const cached = await call(env, "/api/favicon?d=missing.example");

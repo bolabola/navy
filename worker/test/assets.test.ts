@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { exports } from "cloudflare:workers";
 import { test } from "vitest";
-import headersFile from "../../src/_headers?raw";
+import headersFile from "../../frontend/_headers?raw";
 import { SECURITY_HEADERS } from "../src/shared";
 
-// 静态资源命中时不经过 Worker 代码，安全头由 src/_headers 提供；这里保证两处配置一致。
+// 静态资源命中时不经过 Worker 代码，安全头由 frontend/_headers 提供；这里保证两处配置一致。
 test("_headers declares the same security headers as the Worker", () => {
   const declared = new Map<string, string>();
   for (const line of headersFile.split("\n")) {

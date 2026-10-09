@@ -85,7 +85,7 @@ async function routeApi(request: Request, env: Env, url: URL, ctx?: ExecutionCon
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    // 静态资源默认由 Workers Static Assets 直接返回、不经过这里，安全头由 src/_headers 提供；
+    // 静态资源默认由 Workers Static Assets 直接返回、不经过这里，安全头由 frontend/_headers 提供；
     // 这里只兜底处理未命中静态资源的非 API 请求。
     if (!url.pathname.startsWith("/api/")) {
       return withSecurityHeaders(await env.ASSETS.fetch(request));
