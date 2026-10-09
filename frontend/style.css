@@ -1832,6 +1832,16 @@ body.is-board-dragging .board-drag-ghost {
   background: rgba(66, 82, 110, 0.54);
 }
 
+/* 未登录：没有拖动调整高度的能力，去掉抓手条和 ns-resize 光标，也不拦截触摸滚动。 */
+.board-resize-handle--static {
+  cursor: default;
+  touch-action: auto;
+}
+
+.board-resize-handle--static::before {
+  visibility: hidden;
+}
+
 .board-hidden-count {
   position: relative;
   z-index: 1;

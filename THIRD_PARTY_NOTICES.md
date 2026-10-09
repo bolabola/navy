@@ -17,4 +17,4 @@ Some Lucide icons are derived from Feather Icons.
 - Copyright: Cole Bemis, 2013-2023
 
 Keep the upstream license and copyright notices when redistributing the
-`src/fonts/lucide.css` and `src/fonts/lucide.woff2` assets.
+`frontend/fonts/lucide.css` and `frontend/fonts/lucide.woff2` assets (a subset of the font is generated at build time).

@@ -8,3 +8,5 @@ Thumbs.db
 .wrangler.deploy.toml
 .wrangler/
 .tmp-test/
+dist/
+.cache/

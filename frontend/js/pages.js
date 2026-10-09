@@ -1,0 +1,110 @@
+// 页面管理
+import { PAGE_MAX_COUNT } from "../../shared/limits";
+import { TEXT } from "./constants.js";
+import { uid } from "./dom.js";
+import { saveBoards } from "./model.js";
+import { render } from "./render.js";
+import { auth, state, uiState } from "./state.js";
+import { cacheBoardsLocally, loadActivePageBoards, normalizePageName, syncActivePageBoards } from "./sync.js";
+
+export function switchPage(pageId) {
+  if (!pageId || pageId === state.activePageId || !state.pages.some(function (page) { return page.id === pageId; })) return;
+  syncActivePageBoards();
+  state.activePageId = pageId;
+  loadActivePageBoards();
+  closeTransientUi();
+  cacheBoardsLocally();
+  render();
+}
+
+export function closeTransientUi() {
+  uiState.openBoardMenuId = null;
+  uiState.openAddBoardId = null;
+  uiState.editBoardId = null;
+  uiState.editItemId = null;
+  uiState.moveBoardId = null;
+  uiState.createBoardOpen = false;
+  uiState.dataMenuOpen = false;
+  uiState.backupMenuOpen = false;
+  uiState.layoutMenuOpen = false;
+  uiState.allCollapseSnapshot = null;
+}
+
+export function addPage() {
+  if (!auth.isAdmin || state.pages.length >= PAGE_MAX_COUNT) return;
+  const name = normalizePageName(window.prompt(TEXT.addPage, "页面 " + (state.pages.length + 1)), "");
+  if (!name) return;
+  syncActivePageBoards();
+  const page = { id: uid("page"), name: name, boards: [] };
+  state.pages = state.pages.concat(page);
+  state.activePageId = page.id;
+  state.boards = [];
+  closeTransientUi();
+  saveBoards();
+  render();
+}
+
+export function renameActivePage() {
+  if (!auth.isAdmin) return;
+  const current = state.pages.find(function (page) { return page.id === state.activePageId; });
+  if (!current) return;
+  const name = normalizePageName(window.prompt(TEXT.renamePage, current.name), "");
+  if (!name || name === current.name) return;
+  state.pages = state.pages.map(function (page) {
+    return page.id === state.activePageId ? Object.assign({}, page, { name: name }) : page;
+  });
+  saveBoards();
+  render();
+}
+
+export function deleteActivePage() {
+  if (!auth.isAdmin || state.pages.length <= 1) return;
+  if (!window.confirm(TEXT.deletePageConfirm)) return;
+  const index = Math.max(0, state.pages.findIndex(function (page) { return page.id === state.activePageId; }));
+  state.pages = state.pages.filter(function (page) { return page.id !== state.activePageId; });
+  state.activePageId = state.pages[Math.min(index, state.pages.length - 1)].id;
+  loadActivePageBoards();
+  closeTransientUi();
+  saveBoards();
+  render();
+}
+
+export function moveBoardToPage(boardId, targetPageId) {
+  if (!auth.isAdmin || !boardId || !targetPageId) return;
+  const sourceIndex = state.pages.findIndex(function (page) {
+    return page.id === state.activePageId;
+  });
+  const targetIndex = state.pages.findIndex(function (page) {
+    return page.id === targetPageId;
+  });
+  if (sourceIndex === -1 || targetIndex === -1) return;
+
+  syncActivePageBoards();
+  const source = state.pages[sourceIndex];
+  const board = source.boards.find(function (entry) {
+    return entry.id === boardId;
+  });
+  if (!board) return;
+
+  state.pages = state.pages.map(function (page) {
+    if (page.id === source.id) {
+      return Object.assign({}, page, {
+        boards: page.boards.filter(function (entry) {
+          return entry.id !== boardId;
+        })
+      });
+    }
+    if (page.id === targetPageId) {
+      return Object.assign({}, page, {
+        boards: page.boards.concat(board)
+      });
+    }
+    return page;
+  });
+
+  state.activePageId = targetPageId;
+  loadActivePageBoards();
+  closeTransientUi();
+  saveBoards();
+  render();
+}

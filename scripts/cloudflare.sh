@@ -466,6 +466,12 @@ invoke_deploy() {
   fi
 
   if [[ -f "$DEPLOY_WRANGLER_TOML" ]]; then
+    # 每次部署前都从 wrangler.toml 重新生成，避免沿用旧版本的部署配置（缺少构建、Durable Object、Cron 等新配置）。
+    local existing_id
+    existing_id="$(grep -Eo 'id = "[0-9a-fA-F]{32}"' "$DEPLOY_WRANGLER_TOML" | head -n 1 | grep -Eo '[0-9a-fA-F]{32}' || true)"
+    if [[ -n "$existing_id" ]]; then
+      update_deploy_wrangler_config "$existing_id"
+    fi
     node "$wrangler_cli" deploy --config "$DEPLOY_WRANGLER_TOML"
   else
     node "$wrangler_cli" deploy
