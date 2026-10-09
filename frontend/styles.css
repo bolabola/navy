@@ -1,0 +1,4 @@
+/* 构建入口：esbuild 会把下面的文件合并成一个带 hash 的样式表。 */
+@import "./fonts/.generated/core.css";
+@import "./fonts/lucide.css";
+@import "./style.css";

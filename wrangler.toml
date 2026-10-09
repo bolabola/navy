@@ -2,9 +2,14 @@ name = "board-trello"
 main = "worker/src/index.ts"
 compatibility_date = "2026-01-01"
 
+# 前端构建：wrangler dev / deploy 前自动执行，输出到 dist/
+[build]
+command = "node scripts/build.mjs"
+watch_dir = "frontend"
+
 # Static frontend assets — Workers Static Assets 自动响应非 /api/* 请求
 [assets]
-directory = "./src"
+directory = "./dist"
 binding = "ASSETS"
 
 # 每小时检查一次，看板有变化时备份到已连接的 Google Drive / Dropbox

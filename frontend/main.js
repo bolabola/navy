@@ -1,3 +1,24 @@
+// 数据限制与后端共享，修改请到 shared/limits.ts。
+import {
+  BOARD_ITEM_DESCRIPTION_MAX_LENGTH,
+  BOARD_ITEM_NAME_MAX_LENGTH,
+  BOARD_MAX_COUNT,
+  BOARD_MAX_ITEMS_PER_TAB,
+  BOARD_MAX_TABS,
+  BOARD_TAB_NAME_MAX_LENGTH,
+  ICON_NAME_PATTERN,
+  MAX_BOARD_HEIGHT,
+  MAX_LAYOUT_COLUMN_WIDTH,
+  MAX_LAYOUT_GAP,
+  MAX_MANUAL_COLUMNS,
+  MIN_BOARD_HEIGHT,
+  MIN_LAYOUT_COLUMN_WIDTH,
+  MIN_LAYOUT_GAP,
+  PAGE_MAX_COUNT,
+  PAGE_NAME_MAX_LENGTH,
+  URL_TITLES_MAX
+} from "../shared/limits";
+
 (function () {
   const STORAGE_KEY = "trello-nav-board-state-v4";
   const THEME_STORAGE_KEY = "trello-nav-theme-v1";
@@ -6,18 +27,11 @@
   const API_BASE = "/api";
   const GITHUB_URL = "https://github.com/bolabola/navy";
   const SAVE_DEBOUNCE_MS = 500;
-  const MIN_BOARD_HEIGHT = 160;
-  const MAX_BOARD_HEIGHT = 4096;
   const DEFAULT_NEW_BOARD_HEIGHT = 240;
   const BOARD_WIDTH = 250;
   const BOARD_GAP = 10;
   const MIN_TWO_COLUMN_WIDTH = BOARD_WIDTH * 2 + BOARD_GAP;
   const SINGLE_COLUMN_SIDE_GUTTER = 16;
-  const MIN_LAYOUT_COLUMN_WIDTH = 220;
-  const MAX_LAYOUT_COLUMN_WIDTH = 360;
-  const MIN_LAYOUT_GAP = 0;
-  const MAX_LAYOUT_GAP = 32;
-  const MAX_MANUAL_COLUMNS = 6;
   const DEFAULT_LAYOUT_SETTINGS = {
     columnMode: "auto",
     columns: 3,
@@ -47,22 +61,16 @@
   const DEFAULT_TAB_NAME = "默认";
   const DEFAULT_PAGE_ID = "default";
   const DEFAULT_PAGE_NAME = "首页";
-  const PAGE_NAME_MAX_LENGTH = 40;
-  const PAGE_MAX_COUNT = 30;
-  const BOARD_TAB_NAME_MAX_LENGTH = 40;
-  const BOARD_ITEM_NAME_MAX_LENGTH = 200;
-  const BOARD_ITEM_DESCRIPTION_MAX_LENGTH = 300;
-  const FAVICON_RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000];
   const BOARD_ACCENTS = ["#0079bf", "#42526e", "#00a3bf", "#5aac44", "#eb5a46", "#89609e", "#ff9f1a"];
   const DEFAULT_BOARD_ICONS = ["layout-grid", "zap", "code", "sparkles", "wrench", "file-text"];
   const LEGACY_ICON_MAP = { grid: "layout-grid", bolt: "zap", code: "code", spark: "sparkles", tool: "wrench", note: "file-text" };
-  const ICON_NAME_RE = /^[a-z0-9-]+$/;
+  const ICON_NAME_RE = new RegExp(ICON_NAME_PATTERN);
   const ICON_PICKER_OVERFLOW_LIMIT = 200;
   const IMPORT_MAX_URLS = 100;
-  const BOOKMARK_IMPORT_MAX_BOARDS = 100;
-  const BOOKMARK_IMPORT_MAX_ITEMS_PER_TAB = 500;
-  const BOOKMARK_IMPORT_MAX_TABS_PER_BOARD = 100;
-  const URL_TITLE_BATCH_SIZE = 30;
+  const BOOKMARK_IMPORT_MAX_BOARDS = BOARD_MAX_COUNT;
+  const BOOKMARK_IMPORT_MAX_ITEMS_PER_TAB = BOARD_MAX_ITEMS_PER_TAB;
+  const BOOKMARK_IMPORT_MAX_TABS_PER_BOARD = BOARD_MAX_TABS;
+  const URL_TITLE_BATCH_SIZE = URL_TITLES_MAX;
   const FULL_BACKUP_SCHEMA = "board-trello-v1";
   const URL_EXTRACT_RE = /https?:\/\/[^\s<>"'`]+/gi;
   const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]"'`]+$/;
@@ -81,7 +89,7 @@
     "map-pin", "anchor", "plane", "leaf", "sun", "moon"
   ];
   let allLucideIcons = [];
-  const faviconCache = new Map();
+  const failedFaviconDomains = new Set();
   const app = document.getElementById("app");
   let currentTheme = readThemePreference();
   applyTheme(currentTheme);
@@ -207,8 +215,7 @@
     localLastBackup: null,
     backupStatusLoading: false,
     backupStatusRequest: null,
-    pendingBackupKey: null,
-    backupStatusPollTimer: null,
+    cloudBackupRunning: {},
     backupsOpen: false,
     backupsLoading: false,
     backupsError: null,
@@ -479,7 +486,6 @@
       window.clearTimeout(saveTimer);
     }
     setSyncState("saving", TEXT.syncSaving);
-    startPendingCloudBackup(null);
     saveTimer = window.setTimeout(function () {
       saveTimer = null;
       flushPendingSave();
@@ -495,11 +501,10 @@
     saveInFlight = true;
     const payloadVersion = serverState.version;
     syncActivePageBoards();
-    const payloadBoards = boardStoragePayload();
 
+    // 只发送 pages：当前页的 boards 已包含在 pages 里，后端会按 activePageId 推导，避免数据重复一倍。
     apiSend("/board", "PUT", {
       version: payloadVersion,
-      boards: payloadBoards,
       pages: pageStoragePayload(),
       activePageId: activePageId,
       layout: layoutStoragePayload()
@@ -508,14 +513,8 @@
         serverState.version = result.version;
         serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
       }
-      if (result && typeof result.backupKey === "string") {
-        startPendingCloudBackup(result.backupKey);
-        setLocalLastBackupFromKey(result.backupKey);
-      } else {
-        clearPendingCloudBackup();
-      }
+      noteBackupFromCommit(result);
       setSyncState("saved", TEXT.syncSaved);
-      refreshBackupStatusAfterSave(result && typeof result.backupKey === "string" ? result.backupKey : null);
     }).catch(function (error) {
         if (error && error.status === 401) {
           auth.isAdmin = false;
@@ -530,7 +529,6 @@
           uiState.layoutMenuOpen = false;
           uiState.backupStatus = null;
           uiState.localLastBackup = null;
-          clearPendingCloudBackup();
           uiState.openBoardMenuId = null;
           uiState.openAddBoardId = null;
           uiState.editBoardId = null;
@@ -547,7 +545,6 @@
           return;
         }
         setSyncState("failed", TEXT.syncFailed);
-        clearPendingCloudBackup();
         console.warn("Sync to backend failed:", error);
     }).finally(function () {
       saveInFlight = false;
@@ -570,16 +567,14 @@
     updateSyncIndicator();
   }
 
-  function startPendingCloudBackup(backupKey) {
-    uiState.pendingBackupKey = backupKey || "__pending__";
-    updateBackupMenu();
-  }
-
-  function clearPendingCloudBackup() {
-    uiState.pendingBackupKey = null;
-    if (uiState.backupStatusPollTimer) {
-      window.clearTimeout(uiState.backupStatusPollTimer);
-      uiState.backupStatusPollTimer = null;
+  /** 保存 / 恢复接口返回的 lastBackupAt 就是最近一次 KV 历史备份时间，直接更新菜单，无需轮询。 */
+  function noteBackupFromCommit(result) {
+    if (result && typeof result.lastBackupAt === "string") {
+      uiState.localLastBackup = pickNewerLocalLastBackup(uiState.localLastBackup, {
+        status: "success",
+        at: result.lastBackupAt,
+        key: "state_backup:" + result.lastBackupAt.replace(/[:.]/g, "-")
+      });
     }
     updateBackupMenu();
   }
@@ -625,64 +620,9 @@
     }).finally(function () {
       uiState.backupStatusRequest = null;
       uiState.backupStatusLoading = false;
-      updatePendingCloudBackupState();
       updateBackupMenu();
     });
     return uiState.backupStatusRequest;
-  }
-
-  function refreshBackupStatusAfterSave(backupKey) {
-    if (!auth.isAdmin) return;
-    if (backupKey) {
-      pollCloudBackupStatus(backupKey, 0);
-      return;
-    }
-    window.setTimeout(function () {
-      loadBackupStatus();
-    }, 1200);
-  }
-
-  function pollCloudBackupStatus(backupKey, attempt) {
-    if (!auth.isAdmin || uiState.pendingBackupKey !== backupKey) return;
-    if (uiState.backupStatusPollTimer) {
-      window.clearTimeout(uiState.backupStatusPollTimer);
-    }
-    uiState.backupStatusPollTimer = window.setTimeout(function () {
-      uiState.backupStatusPollTimer = null;
-      loadBackupStatus().finally(function () {
-        if (!uiState.pendingBackupKey || uiState.pendingBackupKey !== backupKey || isPendingCloudBackupResolved()) {
-          updatePendingCloudBackupState();
-          updateBackupMenu();
-          return;
-        }
-        if (attempt < 8) {
-          pollCloudBackupStatus(backupKey, attempt + 1);
-        }
-      });
-    }, attempt === 0 ? 1200 : 1800);
-  }
-
-  function updatePendingCloudBackupState() {
-    if (!uiState.pendingBackupKey || uiState.pendingBackupKey === "__pending__") return;
-    if (isPendingCloudBackupResolved()) {
-      uiState.pendingBackupKey = null;
-      if (uiState.backupStatusPollTimer) {
-        window.clearTimeout(uiState.backupStatusPollTimer);
-        uiState.backupStatusPollTimer = null;
-      }
-    }
-  }
-
-  function isPendingCloudBackupResolved() {
-    const pendingKey = uiState.pendingBackupKey;
-    if (!pendingKey || pendingKey === "__pending__") return false;
-    const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers)
-      ? uiState.backupStatus.providers.filter(function (provider) { return provider.connected; })
-      : [];
-    if (!providers.length) return true;
-    return providers.every(function (provider) {
-      return provider.lastBackup && provider.lastBackup.key === pendingKey;
-    });
   }
 
   function renderBackupMenu() {
@@ -721,6 +661,11 @@
           providerId: entry.id,
           disabled: !entry.configured && !entry.connected,
           extraActions: entry.connected ? [{
+            action: "run-cloud-backup",
+            label: "立即备份",
+            providerId: entry.id,
+            disabled: Boolean(uiState.cloudBackupRunning[entry.id])
+          }, {
             action: "toggle-cloud-backups",
             label: "恢复",
             providerId: entry.id,
@@ -748,7 +693,7 @@
         id: "kv-history",
         label: "常规备份",
         status: "saving",
-        detail: "正在保存并写入历史备份"
+        detail: "正在保存"
       };
     }
     if (last) {
@@ -763,7 +708,7 @@
       id: "kv-history",
       label: "常规备份",
       status: "idle",
-      detail: "保存时自动保留最近 10 份"
+      detail: "保存时自动备份（每 10 分钟最多一次，保留最近 20 份）"
     };
   }
 
@@ -776,17 +721,14 @@
 
   function getCloudBackupEntry(provider) {
     const last = provider.lastBackup || null;
-    const pendingKey = uiState.pendingBackupKey;
-    const pendingKnown = pendingKey && pendingKey !== "__pending__";
-    const matchesPending = pendingKnown && last && last.key === pendingKey;
     let status = "idle";
     let detail = provider.configured ? "未连接" : "未配置 OAuth";
     if (provider.connected) {
       status = "pending";
-      detail = "尚无云备份结果";
-      if (pendingKey && (!pendingKnown || !matchesPending)) {
+      detail = "每小时自动备份，尚无结果";
+      if (uiState.cloudBackupRunning[provider.id]) {
         status = "saving";
-        detail = "正在备份本次修改";
+        detail = "正在备份...";
       } else if (last) {
         status = last.status === "success" ? "saved" : "failed";
         detail = formatCloudBackupLastBackup(last);
@@ -876,17 +818,6 @@
     return match[1] + "T" + match[2] + ":" + match[3] + ":" + match[4] + "." + match[5] + "Z";
   }
 
-  function localLastBackupFromKey(backupKey, status) {
-    if (typeof backupKey !== "string" || !backupKey.startsWith("state_backup:")) return null;
-    const at = backupKeyToCreatedAt(backupKey);
-    if (!at) return null;
-    return {
-      status: status || "success",
-      at: at,
-      key: backupKey
-    };
-  }
-
   function pickNewerLocalLastBackup(current, candidate) {
     if (!candidate) return current || null;
     if (!current) return candidate;
@@ -894,12 +825,7 @@
   }
 
   function resolveLocalLastBackup() {
-    let last = uiState.localLastBackup || null;
-    const pendingKey = uiState.pendingBackupKey;
-    if (pendingKey && pendingKey !== "__pending__") {
-      last = pickNewerLocalLastBackup(last, localLastBackupFromKey(pendingKey, "success"));
-    }
-    return last;
+    return uiState.localLastBackup || null;
   }
 
   function deriveLocalLastBackup(backupsResult) {
@@ -920,24 +846,11 @@
     };
   }
 
-  function setLocalLastBackupFromKey(backupKey) {
-    const next = localLastBackupFromKey(backupKey, "success");
-    if (!next) return;
-    uiState.localLastBackup = pickNewerLocalLastBackup(uiState.localLastBackup, next);
-  }
-
   function syncLocalLastBackupFromApi(backupsResult) {
     uiState.localLastBackup = pickNewerLocalLastBackup(
       uiState.localLastBackup,
       deriveLocalLastBackup(backupsResult)
     );
-    const pendingKey = uiState.pendingBackupKey;
-    if (pendingKey && pendingKey !== "__pending__") {
-      uiState.localLastBackup = pickNewerLocalLastBackup(
-        uiState.localLastBackup,
-        localLastBackupFromKey(pendingKey, "success")
-      );
-    }
   }
 
   function openKvBackupsModal() {
@@ -1823,81 +1736,28 @@
     return svg;
   }
 
-  function faviconUrlForDomain(domain, forceRefresh) {
-    const url = "/api/favicon?d=" + encodeURIComponent(domain || "example.com");
-    return forceRefresh ? url + "&refresh=1" : url;
+  function faviconUrlForDomain(domain) {
+    return "/api/favicon?d=" + encodeURIComponent(domain || "example.com");
   }
 
-  function blobToDataUrl(blob) {
-    return new Promise(function (resolve, reject) {
-      const reader = new FileReader();
-      reader.onload = function () { resolve(String(reader.result || "")); };
-      reader.onerror = function () { reject(reader.error || new Error("Failed to read favicon")); };
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  function setFaviconFallback(domain) {
-    app.querySelectorAll('img[data-favicon-domain="' + cssEscape(domain) + '"]').forEach(function (node) {
-      const wrapper = node.closest(".link-row__icon");
-      if (wrapper) wrapper.classList.add("is-fallback");
-    });
-  }
-
-  function applyFaviconDataUrl(domain, dataUrl) {
-    app.querySelectorAll('img[data-favicon-domain="' + cssEscape(domain) + '"]').forEach(function (node) {
-      node.src = dataUrl;
-      const wrapper = node.closest(".link-row__icon");
-      if (wrapper) wrapper.classList.remove("is-fallback");
-    });
-  }
-
-  function scheduleFaviconRetry(domain, attempts) {
-    const delay = FAVICON_RETRY_DELAYS_MS[Math.min(attempts, FAVICON_RETRY_DELAYS_MS.length - 1)];
-    const retryAt = Date.now() + delay;
-    const timer = setTimeout(function () {
-      const cached = faviconCache.get(domain);
-      if (cached && cached.status === "failed" && cached.retryAt <= Date.now()) {
-        loadFaviconDomain(domain, true, attempts + 1);
-      }
-    }, delay);
-    faviconCache.set(domain, { status: "failed", retryAt: retryAt, attempts: attempts, timer: timer });
-  }
-
-  function loadFaviconDomain(domain, forceRefresh, attempts) {
-    setFaviconFallback(domain);
-    const pending = fetch(faviconUrlForDomain(domain, forceRefresh), { cache: forceRefresh ? "reload" : "force-cache" }).then(function (res) {
-      if (!res.ok) throw new Error("Favicon request failed");
-      if (res.headers.get("X-Favicon-Fallback") === "1") throw new Error("Favicon fallback");
-      return res.blob();
-    }).then(blobToDataUrl);
-    faviconCache.set(domain, { status: "pending", promise: pending });
-
-    pending.then(function (dataUrl) {
-      if (!dataUrl) throw new Error("Empty favicon");
-      faviconCache.set(domain, dataUrl);
-      applyFaviconDataUrl(domain, dataUrl);
-    }).catch(function () {
-      scheduleFaviconRetry(domain, attempts);
-      setFaviconFallback(domain);
-    });
-  }
-
+  /**
+   * 直接用 <img src> 加载图标：走浏览器 HTTP 缓存，并且 loading="lazy" 真正生效
+   * （折叠的 board、被裁掉的行、其他标签页的图标不会提前请求）。
+   * 服务端找不到图标时返回 1×1 占位图，这里识别出来后显示主题化的首字母。
+   */
   function hydrateFaviconImage(img, icon, url) {
     const domain = faviconDomain(url);
-    const cached = faviconCache.get(domain);
-    if (cached && cached.status === "failed") {
+    if (failedFaviconDomains.has(domain)) {
       icon.classList.add("is-fallback");
       return;
     }
-    if (typeof cached === "string") {
-      img.src = cached;
-      return;
-    }
-    if (cached && cached.status === "pending") return;
-
-    icon.classList.add("is-fallback");
-    loadFaviconDomain(domain, false, 0);
+    img.addEventListener("load", function () {
+      if (img.naturalWidth <= 1) {
+        failedFaviconDomains.add(domain);
+        icon.classList.add("is-fallback");
+      }
+    }, { once: true });
+    img.src = faviconUrlForDomain(domain);
   }
 
   function faviconPreviewNode(url) {
@@ -1914,10 +1774,12 @@
     img.loading = "lazy";
     img.referrerPolicy = "no-referrer";
     img.dataset.faviconDomain = domain;
-    const cached = faviconCache.get(domain);
-    img.src = typeof cached === "string" ? cached : faviconUrlForDomain(domain, false);
+    img.src = faviconUrlForDomain(domain);
     img.addEventListener("error", function () {
       img.replaceWith(defaultFaviconPreviewNode());
+    }, { once: true });
+    img.addEventListener("load", function () {
+      if (img.naturalWidth <= 1) img.replaceWith(defaultFaviconPreviewNode());
     }, { once: true });
     return img;
   }
@@ -3571,20 +3433,23 @@
     const slots = root.matches && root.matches('.board-slot[data-board-id]')
       ? [root]
       : Array.from(root.querySelectorAll('.board-slot[data-board-id]'));
-    slots.forEach(function (slot) {
+
+    // 先统一读取布局，再统一写 DOM。读写交错会让每个 board 都触发一次强制重排。
+    const measured = slots.map(function (slot) {
       const card = slot.querySelector(".board-card");
       const list = slot.querySelector('[data-role="board-list"]');
       const badge = slot.querySelector('[data-role="hidden-count"]');
       if (!card || !list || !badge) {
-        return;
+        return null;
       }
+      return { card: card, badge: badge, hiddenCount: countHiddenRows(list) };
+    });
 
-      const listRect = list.getBoundingClientRect();
-      const hiddenCount = Array.from(list.querySelectorAll('[data-role="link-row"]')).filter(function (row) {
-        const rowRect = row.getBoundingClientRect();
-        return rowRect.bottom > listRect.bottom + 1;
-      }).length;
-
+    measured.forEach(function (entry) {
+      if (!entry) return;
+      const card = entry.card;
+      const badge = entry.badge;
+      const hiddenCount = entry.hiddenCount;
       card.classList.toggle("has-hidden-items", hiddenCount > 0);
       badge.hidden = hiddenCount === 0;
       if (hiddenCount > 0) {
@@ -3598,6 +3463,27 @@
         badge.removeAttribute("aria-label");
       }
     });
+  }
+
+  /**
+   * 统计被列表底部裁掉的行数。行按文档顺序排列，底边位置单调不减（列表和图标网格都是），
+   * 所以用二分查找第一个超出可视区域的行，只需 O(log n) 次布局读取。
+   */
+  function countHiddenRows(list) {
+    const rows = list.querySelectorAll('[data-role="link-row"]');
+    if (!rows.length) return 0;
+    const limit = list.getBoundingClientRect().bottom + 1;
+    let lo = 0;
+    let hi = rows.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (rows[mid].getBoundingClientRect().bottom > limit) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return rows.length - lo;
   }
 
   function expandBoardToFit(boardId) {
@@ -4603,16 +4489,13 @@
           serverState.version = result.version;
           serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
         }
-        if (result && typeof result.backupKey === "string") {
-          startPendingCloudBackup(result.backupKey);
-        }
+        noteBackupFromCommit(result);
         return loadServerBoardState();
       }).then(function () {
         uiState.backupsOpen = false;
         uiState.backupsProviderId = null;
         uiState.backupsProviderLabel = "";
         setSyncState("saved", TEXT.syncSaved);
-        refreshBackupStatusAfterSave(uiState.pendingBackupKey && uiState.pendingBackupKey !== "__pending__" ? uiState.pendingBackupKey : null);
         render();
       }).catch(function (error) {
         const detail = error && error.responseText ? "\n\n" + error.responseText : "";
@@ -4727,6 +4610,26 @@
       }).catch(function () {
         button.disabled = false;
         window.alert("Cloud backup authorization failed to start.");
+      });
+      return;
+    }
+
+    if (action === "run-cloud-backup") {
+      if (!auth.isAdmin) {
+        return;
+      }
+      const providerId = button.getAttribute("data-provider-id");
+      if (!providerId || uiState.cloudBackupRunning[providerId]) return;
+      uiState.cloudBackupRunning[providerId] = true;
+      updateBackupMenu();
+      const finish = function () {
+        delete uiState.cloudBackupRunning[providerId];
+        loadBackupStatus();
+      };
+      apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/run", "POST", {}).then(finish).catch(function (error) {
+        finish();
+        const detail = error && error.responseText ? "\n\n" + error.responseText.slice(0, 300) : "";
+        window.alert("云备份失败。" + detail);
       });
       return;
     }
@@ -5345,7 +5248,6 @@
         syncActivePageBoards();
         apiSend("/board", "PUT", {
           version: serverState.version,
-          boards: boardStoragePayload(),
           pages: pageStoragePayload(),
           activePageId: activePageId,
           layout: layoutStoragePayload()
@@ -5354,11 +5256,8 @@
             serverState.version = result.version;
             serverState.updatedAt = typeof result.updatedAt === "string" ? result.updatedAt : serverState.updatedAt;
           }
-          if (result && typeof result.backupKey === "string") {
-            startPendingCloudBackup(result.backupKey);
-          }
+          noteBackupFromCommit(result);
           setSyncState("saved", TEXT.syncSaved);
-          refreshBackupStatusAfterSave(result && typeof result.backupKey === "string" ? result.backupKey : null);
           render();
         }).catch(function (error) {
           if (error && error.status === 409) {

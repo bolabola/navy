@@ -5,3 +5,7 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# 构建产物文件名带内容 hash，可以长期缓存。
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

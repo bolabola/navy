@@ -39,7 +39,7 @@ export async function handleFavicon(request: Request, url: URL, env: Env, ctx?: 
   }
 
   const icon = await fetchFaviconUpstream(domain);
-  const response = icon ? imageResponse(icon) : fallbackFaviconResponse(domain);
+  const response = icon ? imageResponse(icon) : fallbackFaviconResponse();
   const put = cache.put(cacheKey, response.clone());
   if (ctx) ctx.waitUntil(put.catch(() => {}));
   else await put;
@@ -177,10 +177,12 @@ function resolveFaviconHref(href: string, baseUrl: string): string | null {
   }
 }
 
-function fallbackFaviconResponse(domain: string): Response {
-  const match = domain.replace(/^www\./i, "").match(/[a-z0-9]/i);
-  const label = (match ? match[0] : "?").toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${FAVICON_SIZE}" height="${FAVICON_SIZE}" viewBox="0 0 ${FAVICON_SIZE} ${FAVICON_SIZE}"><rect width="${FAVICON_SIZE}" height="${FAVICON_SIZE}" rx="12" fill="#f1f2f4"/><text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-family="Arial,sans-serif" font-size="30" font-weight="700" fill="#6b778c">${label}</text></svg>`;
+/**
+ * 找不到图标时返回 1×1 透明占位图。前端据 naturalWidth <= 1 识别后显示主题化的首字母，
+ * 用 <img> 直接加载也能区分“真实图标”和“占位”，不需要读取响应头。
+ */
+function fallbackFaviconResponse(): Response {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>`;
   return new Response(svg, {
     status: 200,
     headers: {
