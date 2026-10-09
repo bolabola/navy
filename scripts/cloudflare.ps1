@@ -317,6 +317,13 @@ function Invoke-Deploy {
   }
   $deployArgs = @("deploy")
   if (Test-Path $DeployWranglerToml) {
+    # Regenerate from wrangler.toml before every deploy so an old deploy config
+    # (missing build / Durable Object / cron settings) is never reused.
+    $existing = [System.IO.File]::ReadAllText((Resolve-Path $DeployWranglerToml), [System.Text.Encoding]::UTF8)
+    $match = [regex]::Match($existing, 'id = "([0-9a-fA-F]{32})"')
+    if ($match.Success) {
+      Update-DeployWranglerConfig $match.Groups[1].Value
+    }
     $deployArgs += @("--config", $DeployWranglerToml)
   }
   & $node.Source $wranglerCli @deployArgs
