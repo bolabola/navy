@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["worker/src/**/*.ts"]
+  "include": ["worker/src/**/*.ts", "shared/**/*.ts"]
 }

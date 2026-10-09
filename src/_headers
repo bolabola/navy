@@ -1,0 +1,7 @@
+# Workers Static Assets 的响应头配置。
+# 命中静态资源的请求不会经过 Worker 代码，所以安全头必须在这里声明（与 worker/src/shared.ts 中的 SECURITY_HEADERS 保持一致）。
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

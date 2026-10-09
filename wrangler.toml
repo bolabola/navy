@@ -5,6 +5,11 @@ compatibility_date = "2026-01-01"
 # Static frontend assets — Workers Static Assets 自动响应非 /api/* 请求
 [assets]
 directory = "./src"
+binding = "ASSETS"
+
+# 每小时检查一次，看板有变化时备份到已连接的 Google Drive / Dropbox
+[triggers]
+crons = ["17 * * * *"]
 
 # KV namespace for board state. id 在首次部署前用 `npx wrangler kv namespace create BOARD_KV` 创建后填入
 [[kv_namespaces]]

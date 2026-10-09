@@ -1,8 +1,10 @@
+import { text, type Env } from "./shared";
+
 const COOKIE_NAME = "__Host-board_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const SESSION_PREFIX = "session:";
 
-interface SessionPayload {
+export interface SessionPayload {
   sid: string;
   exp: number;
   csrf: string;
@@ -30,20 +32,35 @@ function base64UrlDecode(input: string): Uint8Array {
   return bytes;
 }
 
-async function importKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"]
-  );
+// isolate 级缓存：同一个 Worker 实例内复用 HMAC key 和密码标签，避免每个请求重复计算。
+const keyCache = new Map<string, Promise<CryptoKey>>();
+const passwordTagCache = new Map<string, Promise<string>>();
+
+function importKey(secret: string): Promise<CryptoKey> {
+  let key = keyCache.get(secret);
+  if (!key) {
+    key = crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"]
+    );
+    keyCache.set(secret, key);
+  }
+  return key;
 }
 
-async function createPasswordTag(secret: string, adminPassword: string): Promise<string> {
-  const key = await importKey(secret);
-  const sigBuf = await crypto.subtle.sign("HMAC", key, encoder.encode("admin-password:" + adminPassword));
-  return base64UrlEncode(new Uint8Array(sigBuf));
+function createPasswordTag(secret: string, adminPassword: string): Promise<string> {
+  const cacheKey = secret + "\u0000" + adminPassword;
+  let tag = passwordTagCache.get(cacheKey);
+  if (!tag) {
+    tag = importKey(secret)
+      .then((key) => crypto.subtle.sign("HMAC", key, encoder.encode("admin-password:" + adminPassword)))
+      .then((sig) => base64UrlEncode(new Uint8Array(sig)));
+    passwordTagCache.set(cacheKey, tag);
+  }
+  return tag;
 }
 
 export interface CreatedSession {
@@ -75,18 +92,13 @@ export async function createSessionToken(secret: string, adminPassword: string, 
 function readCookie(request: Request, name: string): string | null {
   const header = request.headers.get("Cookie");
   if (!header) return null;
-  const parts = header.split(";");
-  for (const part of parts) {
+  for (const part of header.split(";")) {
     const [rawKey, ...rest] = part.split("=");
     if (rawKey && rawKey.trim() === name) {
       return rest.join("=").trim();
     }
   }
   return null;
-}
-
-export async function isAuthenticated(request: Request, secret: string, adminPassword: string, kv: KVNamespace): Promise<boolean> {
-  return (await getAuthenticatedSession(request, secret, adminPassword, kv)) !== null;
 }
 
 export async function getAuthenticatedSession(request: Request, secret: string, adminPassword: string, kv: KVNamespace): Promise<SessionPayload | null> {
@@ -123,17 +135,31 @@ export async function getAuthenticatedSession(request: Request, secret: string, 
   }
 }
 
-export async function isCsrfTokenValid(request: Request, secret: string, adminPassword: string, kv: KVNamespace): Promise<boolean> {
-  const session = await getAuthenticatedSession(request, secret, adminPassword, kv);
-  if (!session) return false;
-  const header = request.headers.get("X-CSRF-Token");
-  return typeof header === "string" && header === session.csrf;
+export function getSession(request: Request, env: Env): Promise<SessionPayload | null> {
+  return getAuthenticatedSession(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV);
 }
 
-export async function revokeSession(request: Request, secret: string, adminPassword: string, kv: KVNamespace): Promise<void> {
-  const session = await getAuthenticatedSession(request, secret, adminPassword, kv);
+/**
+ * 校验管理员会话（以及可选的 CSRF token），一次完成。
+ * 成功返回 session，失败返回可以直接交给客户端的 Response。
+ */
+export async function requireAdmin(
+  request: Request,
+  env: Env,
+  options: { csrf: boolean }
+): Promise<SessionPayload | Response> {
+  const session = await getSession(request, env);
+  if (!session) return text("Unauthorized", 401);
+  if (options.csrf && request.headers.get("X-CSRF-Token") !== session.csrf) {
+    return text("Invalid CSRF token", 403);
+  }
+  return session;
+}
+
+export async function revokeSession(request: Request, env: Env): Promise<void> {
+  const session = await getSession(request, env);
   if (!session) return;
-  await kv.delete(SESSION_PREFIX + session.sid);
+  await env.BOARD_KV.delete(SESSION_PREFIX + session.sid);
 }
 
 export function buildSetCookieHeader(token: string): string {

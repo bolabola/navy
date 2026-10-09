@@ -1,239 +1,76 @@
-import { isAuthenticated, isCsrfTokenValid } from "./auth";
-import { scheduleCloudBackups } from "./cloudBackup";
-import { jsonResponse, isPlainObject, type BoardPutPayload, type BoardStateEnvelope, type Env } from "./shared";
-import { validateBoardState, validateLayoutSettings, validatePagesState } from "./validation";
+import { requireAdmin } from "./auth";
+import {
+  cleanBoardContent,
+  commitState,
+  listBackups,
+  readBackup,
+  readState,
+  restoreContent,
+  toClientState,
+  type CommitResult
+} from "./boardStore";
+import { isPlainObject, json, readJsonBody, text, type Env } from "./shared";
 
-const STATE_KEY = "state";
-const BACKUP_PREFIX = "state_backup:";
-const BACKUP_KEEP_COUNT = 10;
 const BOARD_BODY_MAX_BYTES = 1024 * 1024;
-const encoder = new TextEncoder();
 
 export async function handleGetBoard(env: Env): Promise<Response> {
-  const data = await env.BOARD_KV.get(STATE_KEY);
-  if (!data) return jsonResponse("null", 200, { "Cache-Control": "no-store" });
-
-  const state = parseStoredBoardState(data);
-  if (!state) return new Response("Stored board state is invalid", { status: 500 });
-  return jsonResponse(JSON.stringify(state), 200, { "Cache-Control": "no-store" });
+  const { state } = await readState(env);
+  return json(state ? toClientState(state) : null);
 }
 
-export async function handlePutBoard(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
-  if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-  if (!(await isCsrfTokenValid(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
-    return new Response("Invalid CSRF token", { status: 403 });
-  }
-  const body = await request.text();
-  if (encoder.encode(body).byteLength > BOARD_BODY_MAX_BYTES) {
-    return new Response("Payload too large", { status: 413 });
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    return new Response("Invalid JSON", { status: 400 });
+export async function handlePutBoard(request: Request, env: Env): Promise<Response> {
+  const auth = await requireAdmin(request, env, { csrf: true });
+  if (auth instanceof Response) return auth;
+
+  const parsed = await readJsonBody(request, BOARD_BODY_MAX_BYTES);
+  let version: number | null;
+  let input: { boards?: unknown; pages?: unknown; activePageId?: unknown; layout?: unknown };
+  if (Array.isArray(parsed)) {
+    version = null;
+    input = { boards: parsed };
+  } else if (isPlainObject(parsed) && (parsed.version === null || Number.isInteger(parsed.version))) {
+    version = parsed.version as number | null;
+    input = parsed;
+  } else {
+    return text("Expected board state payload", 400);
   }
 
-  const payload = parseBoardPutPayload(parsed);
-  if (!payload) {
-    return new Response("Expected board state payload", { status: 400 });
+  const content = cleanBoardContent(input);
+  if (typeof content === "string") return text(content, 400);
+
+  const current = await readState(env);
+  const currentVersion = current.state ? current.state.version : null;
+  if (version !== currentVersion) {
+    return json({ ok: false, error: "version_conflict", currentVersion }, 409);
   }
 
-  const validationError = validateBoardState(payload.boards);
-  if (validationError) {
-    return new Response(validationError, { status: 400 });
-  }
-  const layoutValidationError = validateLayoutSettings(payload.layout);
-  if (layoutValidationError) {
-    return new Response(layoutValidationError, { status: 400 });
-  }
-  const pagesValidationError = validatePagesState(payload.pages);
-  if (pagesValidationError) {
-    return new Response(pagesValidationError, { status: 400 });
-  }
-  if (payload.activePageId !== undefined && payload.activePageId !== null && typeof payload.activePageId !== "string") {
-    return new Response("Invalid active page id", { status: 400 });
-  }
-
-  const existingRaw = await env.BOARD_KV.get(STATE_KEY);
-  const existing = existingRaw ? parseStoredBoardState(existingRaw) : null;
-  if (existingRaw && !existing) {
-    return new Response("Stored board state is invalid", { status: 500 });
-  }
-
-  const currentVersion = existing ? existing.version : null;
-  if (payload.version !== currentVersion) {
-    return jsonResponse(JSON.stringify({
-      ok: false,
-      error: "version_conflict",
-      currentVersion
-    }), 409, { "Cache-Control": "no-store" });
-  }
-
-  const backupKey = existingRaw ? await writeBoardBackup(env, existingRaw, ctx) : null;
-
-  const nextState: BoardStateEnvelope = {
-    version: currentVersion == null ? 1 : currentVersion + 1,
-    updatedAt: new Date().toISOString(),
-    boards: payload.boards,
-    pages: payload.pages,
-    activePageId: payload.activePageId,
-    layout: payload.layout
-  };
-
-  await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
-  await pruneBoardBackups(env);
-
-  return jsonResponse(JSON.stringify({
-    ok: true,
-    version: nextState.version,
-    updatedAt: nextState.updatedAt,
-    backupKey
-  }), 200, { "Cache-Control": "no-store" });
+  return commitResponse(await commitState(env, current, content));
 }
 
 export async function handleListBackups(request: Request, env: Env): Promise<Response> {
-  if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const listed = await env.BOARD_KV.list({ prefix: BACKUP_PREFIX });
-  const backups = listed.keys
-    .map((key) => ({
-      key: key.name,
-      createdAt: parseBackupCreatedAt(key.name)
-    }))
-    .sort((a, b) => b.key.localeCompare(a.key));
-
-  return jsonResponse(JSON.stringify({ backups }), 200, { "Cache-Control": "no-store" });
+  const auth = await requireAdmin(request, env, { csrf: false });
+  if (auth instanceof Response) return auth;
+  return json({ backups: await listBackups(env) });
 }
 
-export async function handleRestoreBackup(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
-  if (!(await isAuthenticated(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-  if (!(await isCsrfTokenValid(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV))) {
-    return new Response("Invalid CSRF token", { status: 403 });
-  }
-  let payload: { key?: unknown };
-  try {
-    payload = (await request.json()) as { key?: unknown };
-  } catch {
-    return new Response("Invalid JSON", { status: 400 });
-  }
+export async function handleRestoreBackup(request: Request, env: Env): Promise<Response> {
+  const auth = await requireAdmin(request, env, { csrf: true });
+  if (auth instanceof Response) return auth;
 
-  if (typeof payload.key !== "string" || !payload.key.startsWith(BACKUP_PREFIX)) {
-    return new Response("Invalid backup key", { status: 400 });
-  }
+  const payload = await readJsonBody<{ key?: unknown }>(request);
+  if (!isPlainObject(payload) || typeof payload.key !== "string") return text("Invalid backup key", 400);
 
-  const backupRaw = await env.BOARD_KV.get(payload.key);
-  if (!backupRaw) return new Response("Backup not found", { status: 404 });
+  const backup = await readBackup(env, payload.key);
+  return commitResponse(await restoreContent(env, backup));
+}
 
-  const backup = parseStoredBoardState(backupRaw);
-  if (!backup) return new Response("Backup is invalid", { status: 500 });
-
-  const existingRaw = await env.BOARD_KV.get(STATE_KEY);
-  const existing = existingRaw ? parseStoredBoardState(existingRaw) : null;
-  if (existingRaw && !existing) return new Response("Stored board state is invalid", { status: 500 });
-
-  const backupKey = existingRaw ? await writeBoardBackup(env, existingRaw, ctx) : null;
-
-  const nextVersion = existing ? existing.version + 1 : 1;
-  const nextState: BoardStateEnvelope = {
-    version: nextVersion,
-    updatedAt: new Date().toISOString(),
-    boards: backup.boards,
-    pages: backup.pages,
-    activePageId: backup.activePageId,
-    layout: backup.layout
-  };
-  await env.BOARD_KV.put(STATE_KEY, JSON.stringify(nextState));
-  await pruneBoardBackups(env);
-
-  return jsonResponse(JSON.stringify({
+export function commitResponse(result: CommitResult, extra: Record<string, unknown> = {}): Response {
+  return json({
     ok: true,
-    version: nextState.version,
-    updatedAt: nextState.updatedAt,
-    backupKey
-  }), 200, { "Cache-Control": "no-store" });
-}
-
-async function writeBoardBackup(env: Env, existingRaw: string, ctx?: ExecutionContext): Promise<string> {
-  const suffix = new Date().toISOString().replace(/[:.]/g, "-");
-  const key = BACKUP_PREFIX + suffix;
-  await env.BOARD_KV.put(key, existingRaw);
-  scheduleCloudBackups(env, key, existingRaw, ctx);
-  return key;
-}
-
-async function pruneBoardBackups(env: Env): Promise<void> {
-  const listed = await env.BOARD_KV.list({ prefix: BACKUP_PREFIX });
-  const stale = listed.keys
-    .map((key) => key.name)
-    .sort()
-    .reverse()
-    .slice(BACKUP_KEEP_COUNT);
-
-  await Promise.all(stale.map((key) => env.BOARD_KV.delete(key)));
-}
-
-function parseBackupCreatedAt(key: string): string {
-  const raw = key.slice(BACKUP_PREFIX.length);
-  const match = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/);
-  if (!match) return "";
-  return `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`;
-}
-
-function parseStoredBoardState(raw: string): BoardStateEnvelope | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-
-  if (Array.isArray(parsed)) {
-    const error = validateBoardState(parsed);
-    return error ? null : { version: 0, updatedAt: "", boards: parsed };
-  }
-
-  if (!isPlainObject(parsed)) return null;
-  const version = parsed.version;
-  const updatedAt = parsed.updatedAt;
-  const boards = parsed.boards;
-  const pages = parsed.pages;
-  const activePageId = parsed.activePageId;
-  const layout = parsed.layout;
-  if (typeof version !== "number" || !Number.isInteger(version) || version < 0) return null;
-  if (typeof updatedAt !== "string") return null;
-  if (!Array.isArray(boards)) return null;
-  const error = validateBoardState(boards);
-  if (error) return null;
-  const pagesError = validatePagesState(pages);
-  if (pagesError) return null;
-  if (activePageId !== undefined && activePageId !== null && typeof activePageId !== "string") return null;
-  const layoutError = validateLayoutSettings(layout);
-  return layoutError ? null : { version, updatedAt, boards, pages, activePageId, layout };
-}
-
-function parseBoardPutPayload(value: unknown): { version: number | null; boards: unknown[]; pages?: unknown; activePageId?: unknown; layout?: unknown } | null {
-  if (Array.isArray(value)) {
-    return { version: null, boards: value };
-  }
-
-  if (!isPlainObject(value)) return null;
-  const payload = value as BoardPutPayload;
-  const version = payload.version;
-  if (version !== null && !Number.isInteger(version)) return null;
-  if (!Array.isArray(payload.boards)) return null;
-
-  return {
-    version: version as number | null,
-    boards: payload.boards,
-    pages: payload.pages,
-    activePageId: payload.activePageId,
-    layout: payload.layout
-  };
+    ...extra,
+    version: result.state.version,
+    updatedAt: result.state.updatedAt,
+    backupKey: result.backupKey,
+    lastBackupAt: result.state.lastBackupAt ?? null
+  });
 }

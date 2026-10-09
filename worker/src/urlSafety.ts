@@ -25,6 +25,9 @@ export function isUrlSafe(raw: string): boolean {
     if (a === 169 && b === 254) return false;
     if (a === 172 && b >= 16 && b <= 31) return false;
     if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false; // 100.64.0.0/10 运营商级 NAT
+    if (a === 198 && (b === 18 || b === 19)) return false; // 198.18.0.0/15 基准测试网段
+    if (a === 192 && b === 0 && (c === 0 || c === 2)) return false; // 192.0.0.0/24、192.0.2.0/24
     if (a >= 224) return false;
   }
   return true;
