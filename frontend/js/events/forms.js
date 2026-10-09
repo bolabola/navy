@@ -8,18 +8,31 @@ import { uid } from "../dom.js";
 import { getNextBoardColumn } from "../layout.js";
 import { normalizeIconName, saveBoards } from "../model.js";
 import { mutateBoard } from "../mutations.js";
-import { focusField, render, rerenderBoardInPlace } from "../render.js";
+import { focusField, render, rerenderBoardInPlace, rerenderBoardWall } from "../render.js";
 import { app, auth, state, uiState } from "../state.js";
 import { apiSend, loadServerBoardState } from "../sync.js";
 import { displayName, normalizeUrl } from "../urls.js";
 import { applyLayoutSettingsFromForm } from "../wall.js";
+
+function syncLayoutMenuControls(form) {
+  form.querySelectorAll(".layout-menu__segment").forEach(function (label) {
+    const input = label.querySelector("input");
+    label.classList.toggle("is-active", Boolean(input && input.checked));
+  });
+  form.querySelectorAll(".layout-menu__toggle").forEach(function (label) {
+    const input = label.querySelector("input");
+    label.classList.toggle("is-on", Boolean(input && input.checked));
+  });
+}
 
 export function installFormsHandlers() {
   app.addEventListener("change", function (event) {
     const form = event.target.closest('[data-role="layout-settings-form"]');
     if (!form) return;
     applyLayoutSettingsFromForm(form);
-    render();
+    // 只就地更新面板的选中状态和看板墙，避免整页重建导致面板闪烁。
+    syncLayoutMenuControls(form);
+    rerenderBoardWall(true);
   });
 
   app.addEventListener("input", function (event) {
@@ -86,7 +99,7 @@ export function installFormsHandlers() {
         icon: normalizeIconName(icon),
         height: DEFAULT_NEW_BOARD_HEIGHT,
         collapsed: false,
-        column: getNextBoardColumn(state.masonryLayout.columns),
+        column: getNextBoardColumn(state.masonryLayout.maxColumns || state.masonryLayout.columns),
         displayMode: "list",
         tabs: [{ id: DEFAULT_TAB_ID, name: DEFAULT_TAB_NAME }],
         activeTabId: DEFAULT_TAB_ID,

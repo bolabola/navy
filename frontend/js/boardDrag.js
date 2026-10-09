@@ -69,13 +69,17 @@ export function hydrateBoardDragRuntime() {
     wallHeight: state.masonryLayout.height
   };
 
+  const layout = state.masonryLayout;
+  // 列数和左边距沿用开始拖拽时定下的值（可能临时多放了一列），拖拽期间重复渲染也不会再变。
+  const previous = uiState.boardDragging.metrics;
   uiState.boardDragging.metrics = {
     contentWidth: scrollNode ? scrollNode.clientWidth : window.innerWidth - 20,
-    columns: state.masonryLayout.columns,
-    columnWidth: state.masonryLayout.positions[0] ? state.masonryLayout.positions[0].width : BOARD_WIDTH,
-    columnGap: state.masonryLayout.columnGap != null ? state.masonryLayout.columnGap : getLayoutColumnGap(),
-    rowGap: state.masonryLayout.rowGap != null ? state.masonryLayout.rowGap : getLayoutRowGap(),
-    sideGutter: state.masonryLayout.sideGutter != null ? state.masonryLayout.sideGutter : 0
+    columns: previous ? previous.columns : layout.columns,
+    maxColumns: previous ? previous.maxColumns : layout.maxColumns,
+    columnWidth: layout.positions[0] ? layout.positions[0].width : BOARD_WIDTH,
+    columnGap: layout.columnGap != null ? layout.columnGap : getLayoutColumnGap(),
+    rowGap: layout.rowGap != null ? layout.rowGap : getLayoutRowGap(),
+    sideGutter: previous ? previous.sideGutter : (layout.sideGutter != null ? layout.sideGutter : 0)
   };
 }
 
@@ -167,6 +171,29 @@ export function getBoardDropPositionFromPoint(clientX, clientY) {
   };
 }
 
+/** 开始拖拽时的列布局。居中时右侧空列被收起了，这里临时多放一列，方便把看板拖到新的一列。 */
+function getDragStartMetrics(scrollNode, columnWidth) {
+  const layout = state.masonryLayout;
+  const contentWidth = scrollNode ? scrollNode.clientWidth : window.innerWidth - 20;
+  const columnGap = layout.columnGap != null ? layout.columnGap : getLayoutColumnGap();
+  let columns = layout.columns;
+  let sideGutter = layout.sideGutter != null ? layout.sideGutter : 0;
+  if (layout.maxColumns && layout.maxColumns > columns) {
+    columns += 1;
+    const widened = columns * columnWidth + (columns - 1) * columnGap;
+    sideGutter = Math.max(0, Math.min(sideGutter, contentWidth - widened));
+  }
+  return {
+    contentWidth: contentWidth,
+    columns: columns,
+    maxColumns: layout.maxColumns || columns,
+    columnWidth: columnWidth,
+    columnGap: columnGap,
+    rowGap: layout.rowGap != null ? layout.rowGap : getLayoutRowGap(),
+    sideGutter: sideGutter
+  };
+}
+
 export function beginBoardDrag(boardId, event) {
   const card = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"] .board-card');
   if (!card) {
@@ -194,14 +221,7 @@ export function beginBoardDrag(boardId, event) {
     nextClientX: event.clientX,
     nextClientY: event.clientY,
     runtime: null,
-    metrics: {
-      contentWidth: scrollNode ? scrollNode.clientWidth : window.innerWidth - 20,
-      columns: state.masonryLayout.columns,
-      columnWidth: layoutEntry ? layoutEntry.width : rect.width,
-      columnGap: state.masonryLayout.columnGap != null ? state.masonryLayout.columnGap : getLayoutColumnGap(),
-      rowGap: state.masonryLayout.rowGap != null ? state.masonryLayout.rowGap : getLayoutRowGap(),
-      sideGutter: state.masonryLayout.sideGutter != null ? state.masonryLayout.sideGutter : 0
-    },
+    metrics: getDragStartMetrics(scrollNode, layoutEntry ? layoutEntry.width : rect.width),
     dropColumn: layoutEntry ? layoutEntry.column : 0,
     dropRow: layoutEntry ? layoutEntry.row : 0
   };

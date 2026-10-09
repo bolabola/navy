@@ -136,6 +136,15 @@ export function reflowBoardColumns(columns) {
   state.boards = materializeColumnBuckets(buckets);
 }
 
+/** 从左数，最后一个放了看板的列是第几列（没有看板时返回 columns）。 */
+export function getOccupiedColumnCount(columns) {
+  const buckets = createColumnBuckets(state.boards.slice(), columns);
+  for (let index = buckets.length - 1; index >= 0; index -= 1) {
+    if (buckets[index].length) return index + 1;
+  }
+  return columns;
+}
+
 export function getPreviewColumnBuckets(columns) {
   const buckets = createColumnBuckets(state.boards.slice(), columns);
   if (!uiState.boardDragging) {
@@ -169,6 +178,7 @@ export function buildMasonryLayout() {
     : (scroll ? scroll.clientWidth : window.innerWidth - 20);
 
   let columns;
+  let maxColumns;
   let columnWidth;
   let columnGap;
   let rowGap;
@@ -180,18 +190,26 @@ export function buildMasonryLayout() {
     columnGap = dragging.metrics.columnGap;
     rowGap = dragging.metrics.rowGap;
     sideGutter = dragging.metrics.sideGutter != null ? dragging.metrics.sideGutter : 0;
+    maxColumns = dragging.metrics.maxColumns || columns;
   } else {
     columns = getColumnCount(contentWidth);
+    maxColumns = columns;
     columnGap = getLayoutColumnGap();
     rowGap = getLayoutRowGap();
 
-    if (columns === 1) {
+    // 自动列数 + 居中：右侧没有看板的空列不参与宽度计算，否则居中几乎看不出效果。
+    if (columns > 1 && state.layoutSettings.columnMode !== "manual" && state.layoutSettings.align === "center") {
+      columns = Math.max(1, Math.min(columns, getOccupiedColumnCount(columns)));
+    }
+
+    if (maxColumns === 1) {
       sideGutter = getLayoutSideGutter(1, contentWidth, 0);
       columnWidth = getColumnWidth(1, contentWidth, sideGutter);
     } else {
-      columnWidth = getColumnWidth(columns, contentWidth, 0);
+      // 用 maxColumns 判断：居中收起空列后即使只剩 1 列，也保持设定的列宽并居中，而不是铺满。
+      columnWidth = getColumnWidth(maxColumns, contentWidth, 0);
       const rawWidth = columns * columnWidth + Math.max(0, columns - 1) * columnGap;
-      sideGutter = getLayoutSideGutter(columns, contentWidth, rawWidth);
+      sideGutter = getLayoutSideGutter(maxColumns, contentWidth, rawWidth);
     }
   }
 
@@ -237,6 +255,7 @@ export function buildMasonryLayout() {
     width: actualWidth,
     height: Math.max(0, Math.max.apply(null, heights) - rowGap),
     columns: columns,
+    maxColumns: maxColumns,
     sideGutter: sideGutter,
     columnGap: columnGap,
     rowGap: rowGap

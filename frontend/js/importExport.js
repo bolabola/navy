@@ -498,7 +498,7 @@ export function uniqueBookmarkName(rawName, usedNames, maxLength) {
 }
 
 export function getImportBoardColumn(importIndex) {
-  const columns = state.masonryLayout.columns;
+  const columns = state.masonryLayout.maxColumns || state.masonryLayout.columns;
   return columns && columns > 0 ? (state.boards.length + importIndex) % columns : null;
 }
 
