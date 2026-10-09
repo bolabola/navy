@@ -55,6 +55,11 @@ export function bootstrap() {
       loadActivePageBoards();
       state.layoutSettings = normalizeLayoutSettings(local.layout);
     }
+    // 每次打开都从第一个页面开始，而不是上次保存时所在的页面。
+    if (state.pages.length && state.activePageId !== state.pages[0].id) {
+      state.activePageId = state.pages[0].id;
+      loadActivePageBoards();
+    }
     playIntro("is-boot");
     render();
     if (auth.isAdmin) {
