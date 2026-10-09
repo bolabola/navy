@@ -1,6 +1,6 @@
 # board-trello
 
-基于 Cloudflare Workers + KV 的网址导航看板。前端使用 vanilla JS，无构建步骤；后端提供数据读写、鉴权、备份、图标代理和云端备份接口。
+基于 Cloudflare Workers + Durable Objects + KV 的网址导航看板。前端使用 vanilla JS（ES 模块，esbuild 打包）；后端提供数据读写、鉴权、备份、图标代理和云端备份接口。
 
 ![网址导航看板暗色主题预览](./docs/preview.png)
 
@@ -9,14 +9,14 @@
 ## 功能
 
 - 公开只读访问：未登录用户可以浏览网址、打开链接、切换显示模式、折叠/展开 board、调整本地视图和拖拽查看，但不会保存；管理员登录后可新增、编辑、删除和拖拽排序并保存到云端。
-- 看板数据存储在 Cloudflare KV，浏览器 localStorage 作为只读缓存和迁移兜底。
+- 看板数据以 Durable Object 为权威存储（强一致，并发保存不会互相覆盖），并镜像到 Cloudflare KV 供匿名访客在边缘快速读取；浏览器 localStorage 作为只读缓存和迁移兜底。旧版本存放在 KV 中的数据会在首次访问时自动迁移。
 - 支持列表、图标、纯网址三种显示模式。
 - 支持顶部浅色/暗色主题切换，主题偏好会保存在浏览器 localStorage。
 - 网站图标通过 Worker 代理获取并缓存；GitHub 链接使用内置 GitHub 图标。
-- 每次覆盖数据前自动写入 KV 历史备份，默认保留最近 10 份。
-- 支持 Google Drive 和 Dropbox 云端备份；云端默认保留最近 100 份，恢复列表只展示最近 10 份。
+- 保存时自动写入历史备份：连续编辑期间每 10 分钟最多备份一次（恢复备份时总是先备份），保留最近 20 份。
+- 支持 Google Drive 和 Dropbox 云端备份：每小时由 Cron Trigger 检查一次，看板有变化才上传，也可在备份菜单中“立即备份”；云端默认保留最近 100 份，恢复列表只展示最近 10 份。
 - 支持从 KV 历史备份、Google Drive、Dropbox 恢复整份看板数据。
-- 本地托管 Lucide 图标字体，无 CDN 依赖。
+- 本地托管 Lucide 图标字体，无 CDN 依赖；首屏只加载界面用到的约 20KB 子集，其余图标按需加载完整字体。
 
 项目采用 MIT License。第三方资源声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 
@@ -30,7 +30,7 @@ copy .dev.vars.example .dev.vars
 npm run dev
 ```
 
-访问 `http://127.0.0.1:8787`。
+访问 `http://127.0.0.1:8787`。`wrangler dev` 会自动执行前端构建（`scripts/build.mjs`），并在修改 `frontend/` 后重新构建。
 
 `.dev.vars` 不会提交到 Git。请将其中的 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 替换为本地开发值。后端会拒绝空密码、`change-me-now`、少于 12 位的 `ADMIN_PASSWORD`，以及少于 32 位的 `SESSION_SECRET`。
 
@@ -88,7 +88,9 @@ npx wrangler secret put DROPBOX_CLIENT_SECRET
 
 ## 云端备份
 
-应用每次覆盖 `state` 前会先写入一份 KV 历史备份 `state_backup:*`。如果已连接 Google Drive 或 Dropbox，同一份备份会异步上传到对应云端目录。云端上传或清理失败不会阻断正常保存。
+保存时如果距上次历史备份已超过 10 分钟，会先把旧状态写入一份历史备份 `state_backup:*`（存放在 Durable Object 中）。
+
+云端备份由 Cron Trigger（`wrangler.toml` 的 `[triggers]`，默认每小时一次）执行：看板内容自上次成功备份后有变化时，把当前状态上传到已连接的 Google Drive / Dropbox；失败会在下次定时任务时重试。连接成功后会立即做一次首份备份，也可以在备份菜单里点击“立即备份”。云端上传失败不会影响正常保存。
 
 云端备份文件名格式：
 
@@ -148,7 +150,7 @@ files.metadata.write
 2. 打开顶栏云备份菜单。
 3. 对已配置的 Google Drive 或 Dropbox 点击连接。
 4. 完成 OAuth 授权后返回看板。
-5. 连接成功后可查看状态、断开连接、打开云端恢复列表。
+5. 连接成功后可查看状态、立即备份、断开连接、打开云端恢复列表。
 
 断开连接只删除本应用保存在 KV 中的 token 和连接状态，不删除云端已有备份文件。
 
@@ -156,18 +158,19 @@ files.metadata.write
 
 | 路径 | 方法 | 鉴权 | 说明 |
 |---|---|---|---|
-| `/api/board` | GET | 否 | 返回 `{version, updatedAt, boards}`；首次访问返回 `null` |
-| `/api/board` | PUT | 是 | 版本一致时整体替换看板数据 |
+| `/api/board` | GET | 否 | 返回 `{version, updatedAt, pages, activePageId, layout, boards}`（`boards` 为当前页）；首次访问返回 `null` |
+| `/api/board` | PUT | 是 | 版本一致时整体替换看板数据；只需发送 `pages`，返回 `lastBackupAt` |
 | `/api/backups` | GET | 是 | 列出最近 KV 历史备份 |
 | `/api/backups/restore` | POST | 是 | 从 KV 历史备份恢复 |
 | `/api/cloud-backup/status` | GET | 是 | 返回云备份配置、连接和最近备份状态 |
 | `/api/cloud-backup/:provider/connect` | POST | 是 | 返回 OAuth 授权地址 |
 | `/api/cloud-backup/:provider/callback` | GET | 否 | OAuth 回调 |
+| `/api/cloud-backup/:provider/run` | POST | 是 | 立即备份当前看板到该云盘 |
 | `/api/cloud-backup/:provider/disconnect` | POST | 是 | 断开云备份连接 |
 | `/api/cloud-backup/:provider/backups` | GET | 是 | 列出云端最近 10 份备份 |
 | `/api/cloud-backup/:provider/restore` | POST | 是 | 从云端备份恢复 |
-| `/api/favicon` | GET | 否 | 获取并缓存网站 favicon |
-| `/api/url-titles` | POST | 否 | 获取 URL 标题 |
+| `/api/favicon` | GET | 否 | 获取并缓存网站 favicon（`refresh=1` 仅管理员生效；找不到时返回 1×1 占位图） |
+| `/api/url-titles` | POST | 是 | 获取 URL 标题和描述 |
 | `/api/login` | POST | 否 | 管理员登录 |
 | `/api/logout` | POST | 是 | 登出 |
 | `/api/auth` | GET | 否 | 返回登录状态和 CSRF token |
@@ -190,48 +193,53 @@ files.metadata.write
 - [ ] 未登录访问可以浏览网址、打开链接、切换显示模式、折叠/展开 board 和调整本地视图，但刷新后恢复云端状态。
 - [ ] 顶部主题按钮可以在浅色/暗色主题之间切换，并在刷新后保留主题偏好。
 - [ ] 管理员登录后可以新增、编辑、删除、拖拽排序、保存和恢复备份。
-- [ ] 保存数据后生成 KV 历史备份。
-- [ ] 已连接云端备份时，保存后生成对应云端备份。
+- [ ] 保存数据后生成历史备份（10 分钟内的连续保存只备份一次）。
+- [ ] 已连接云端备份时，点击“立即备份”或等待定时任务后生成对应云端备份。
 - [ ] Google Drive 和 Dropbox 的 OAuth 回调地址与控制台配置完全一致。
 
 ## 架构
 
 ```text
 Browser
-  ├─ src/                         vanilla JS frontend
-  └─ fetch
-       └─ Cloudflare Worker
-            ├─ boardRoutes        board state and KV backups
-            ├─ cloudBackup        Google Drive / Dropbox backup and restore
-            ├─ authRoutes         login, logout, auth status
-            ├─ miscRoutes         favicon and URL title proxy
-            └─ Cloudflare KV      state, sessions, backup metadata
+  ├─ dist/                        前端构建产物（Workers Static Assets，frontend/_headers 提供安全头）
+  └─ fetch /api/*
+       └─ Cloudflare Worker (worker/src/index.ts)
+            ├─ boardRoutes        看板读写、历史备份
+            │    └─ BoardStateObject (Durable Object)  看板状态与历史备份（强一致）
+            │         └─ 每次提交镜像到 KV state，供匿名访客读取
+            ├─ cloudBackup        Google Drive / Dropbox 备份与恢复；scheduled() 定时备份
+            ├─ authRoutes         登录、登出、登录状态
+            ├─ miscRoutes         favicon 与网址标题代理
+            └─ Cloudflare KV      会话、登录限流、云备份配置、state 镜像
 ```
 
-数据模型以整份 boards 数组为单位保存，并带有版本号。写入时会校验版本，避免覆盖并发更新。保存冲突时，本地数据会保留在浏览器缓存中。
+数据模型以整份页面数据为单位保存，并带有版本号。版本检查和写入都在同一个 Durable Object 内串行执行，因此并发保存时只会有一个成功，另一个返回 409。保存冲突时，本地数据会保留在浏览器缓存中。
 
 ## 项目结构
 
 ```text
 .
-├── src/                  前端静态资源
+├── frontend/             前端源码（构建后输出到 dist/）
 │   ├── index.html
-│   ├── script.js
-│   ├── style.css
+│   ├── main.js           入口：初始化状态、注册事件、启动
+│   ├── js/               按职责拆分的模块（sync、backup、render、layout、events/ …）
+│   ├── styles.css        样式入口（字体 + style.css）
+│   ├── _headers          静态资源响应头（安全头、长期缓存）
 │   └── fonts/
+├── shared/limits.ts      前后端共享的数据限制
 ├── worker/src/           Worker 源码
-│   ├── auth.ts
-│   ├── authRoutes.ts
+│   ├── index.ts          路由表、scheduled 入口
+│   ├── boardRepo.ts      Durable Object 与看板仓储
+│   ├── boardStore.ts     状态读写、历史备份节流与清理
 │   ├── boardRoutes.ts
-│   ├── cloudBackup.ts
-│   ├── config.ts
-│   ├── index.ts
-│   ├── miscRoutes.ts
-│   ├── shared.ts
-│   ├── urlSafety.ts
-│   └── validation.ts
-├── worker/test/          Node 测试
-├── scripts/              部署脚本
+│   ├── cloudBackup.ts    云备份业务（定时任务、状态、恢复）
+│   ├── cloudProviders.ts Google Drive / Dropbox API
+│   ├── auth.ts / authRoutes.ts
+│   ├── miscRoutes.ts     favicon / 网址标题
+│   ├── validation.ts     校验与白名单清洗
+│   └── shared.ts / urlSafety.ts / config.ts
+├── worker/test/          Vitest 测试（运行在 workerd 中）
+├── scripts/              构建与部署脚本
 ├── wrangler.toml
 ├── package.json
 └── tsconfig.json
@@ -241,9 +249,10 @@ Browser
 
 | 命令 | 说明 |
 |---|---|
-| `npm run dev` | 启动本地开发服务 |
+| `npm run dev` | 启动本地开发服务（自动构建前端） |
+| `npm run build` | 构建前端到 `dist/` |
 | `npm run typecheck` | TypeScript 类型检查 |
-| `npm test` | 编译 Worker 并运行测试 |
+| `npm test` | 构建前端并在 workerd 中运行 Vitest 测试 |
 | `npm run deploy` | 运行 Cloudflare 部署脚本（macOS / Linux） |
 | `npm run deploy:win` | 运行 Cloudflare 部署脚本（Windows） |
 
@@ -251,7 +260,7 @@ Browser
 
 ### `/api/board` 返回 500
 
-检查 KV namespace id、`ADMIN_PASSWORD`、`SESSION_SECRET` 是否正确配置。
+检查 KV namespace id、`ADMIN_PASSWORD`、`SESSION_SECRET` 是否正确配置，以及 Durable Object 迁移（`[[migrations]]`）是否已随部署生效。
 
 ### 登录后仍为只读
 
