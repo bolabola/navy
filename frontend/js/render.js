@@ -20,7 +20,7 @@ import {
   BOARD_TABS_HEIGHT,
   TEXT
 } from "./constants.js";
-import { clampHeight, cssEscape } from "./dom.js";
+import { actionButton, clampHeight, cssEscape, staticIconNode } from "./dom.js";
 import { buildMasonryLayout, renderBoardLayer } from "./layout.js";
 import { getBoardIconTileSize, saveBoards } from "./model.js";
 import { renderCreateBoardModal, renderLoginModal, renderMoveBoardModal, renderNavbar } from "./navbar.js";
@@ -98,6 +98,7 @@ export function render() {
   const wall = document.createElement("div");
   wall.className = "board-wall";
   scroll.appendChild(wall);
+  if (!state.boards.length) scroll.appendChild(renderEmptyPage());
   content.appendChild(scroll);
   main.appendChild(content);
 
@@ -119,6 +120,46 @@ export function render() {
   updateBoardOverflowIndicators();
   animateBoardFlip(previousRects);
   restoreScrollState(scrollState);
+}
+
+let introTimer = null;
+
+/** 让接下来一次渲染的看板依次浮现（首屏和切换页面时使用）。 */
+export function playIntro(extraClass) {
+  const root = document.documentElement;
+  if (introTimer) window.clearTimeout(introTimer);
+  root.classList.add("is-intro");
+  if (extraClass) root.classList.add(extraClass);
+  introTimer = window.setTimeout(function () {
+    root.classList.remove("is-intro");
+    if (extraClass) root.classList.remove(extraClass);
+    introTimer = null;
+  }, 1100);
+}
+
+function renderEmptyPage() {
+  const empty = document.createElement("div");
+  empty.className = "board-wall-empty";
+  const mark = document.createElement("div");
+  mark.className = "board-wall-empty__mark";
+  mark.setAttribute("aria-hidden", "true");
+  mark.appendChild(staticIconNode("icon-layout-grid"));
+  empty.appendChild(mark);
+  const title = document.createElement("h2");
+  title.className = "board-wall-empty__title";
+  title.textContent = TEXT.emptyPageTitle;
+  empty.appendChild(title);
+  const hint = document.createElement("p");
+  hint.className = "board-wall-empty__hint";
+  hint.textContent = auth.isAdmin ? TEXT.emptyPageHintAdmin : TEXT.emptyPageHintGuest;
+  empty.appendChild(hint);
+  if (auth.isAdmin) {
+    empty.appendChild(actionButton("board-save-button board-wall-empty__action", "toggle-create-board", null, "", [
+      staticIconNode("icon-plus"),
+      TEXT.createBoard
+    ]));
+  }
+  return empty;
 }
 
 export function captureScrollState() {

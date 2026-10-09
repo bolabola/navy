@@ -17,13 +17,13 @@ export const SAVE_DEBOUNCE_MS = 500;
 
 export const DEFAULT_NEW_BOARD_HEIGHT = 240;
 
-export const BOARD_WIDTH = 250;
+export const BOARD_WIDTH = 260;
 
-export const BOARD_GAP = 10;
+export const BOARD_GAP = 16;
 
 export const MIN_TWO_COLUMN_WIDTH = BOARD_WIDTH * 2 + BOARD_GAP;
 
-export const SINGLE_COLUMN_SIDE_GUTTER = 16;
+export const SINGLE_COLUMN_SIDE_GUTTER = 0;
 
 export const DEFAULT_LAYOUT_SETTINGS = {
   columnMode: "auto",
@@ -31,7 +31,7 @@ export const DEFAULT_LAYOUT_SETTINGS = {
   columnWidth: BOARD_WIDTH,
   columnGap: BOARD_GAP,
   rowGap: BOARD_GAP,
-  align: "left",
+  align: "center",
   showBoardIcon: true,
   showBoardCount: true,
   showItemDragHandle: true
@@ -140,6 +140,9 @@ export const TEXT = {
   save: "保存",
   cancel: "取消",
   empty: "拖一个网址到这里，或者新建。",
+  emptyPageTitle: "这一页还是空的",
+  emptyPageHintAdmin: "新建一个 Board，把常用的网址收进来。",
+  emptyPageHintGuest: "这里暂时还没有内容。",
   urlCount: "个网址",
   expand: "展开",
   collapse: "折叠",

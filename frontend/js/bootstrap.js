@@ -1,7 +1,7 @@
 // 启动流程
 import { loadBackupStatus } from "./backup.js";
 import { discoverLucideIcons, normalizeLayoutSettings } from "./model.js";
-import { render } from "./render.js";
+import { playIntro, render } from "./render.js";
 import { auth, serverState, state } from "./state.js";
 import {
   apiGet,
@@ -55,6 +55,7 @@ export function bootstrap() {
       loadActivePageBoards();
       state.layoutSettings = normalizeLayoutSettings(local.layout);
     }
+    playIntro("is-boot");
     render();
     if (auth.isAdmin) {
       loadBackupStatus();

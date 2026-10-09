@@ -100,6 +100,8 @@ async function build() {
     .replace("<!-- build:js -->", `<script src="/${js}" defer></script>`);
   await writeFile(path.join(outDir, "index.html"), html);
   await copyFile(path.join(srcDir, "_headers"), path.join(outDir, "_headers"));
+  await copyFile(path.join(srcDir, "favicon.svg"), path.join(outDir, "favicon.svg"));
+  await copyFile(path.join(srcDir, "theme-init.js"), path.join(outDir, "theme-init.js"));
 
   const keep = new Set(outputs.map((file) => path.basename(file)));
   for (const file of await readdir(assetsDir)) {

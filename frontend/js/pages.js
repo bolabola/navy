@@ -3,7 +3,7 @@ import { PAGE_MAX_COUNT } from "../../shared/limits";
 import { TEXT } from "./constants.js";
 import { uid } from "./dom.js";
 import { saveBoards } from "./model.js";
-import { render } from "./render.js";
+import { playIntro, render } from "./render.js";
 import { auth, state, uiState } from "./state.js";
 import { cacheBoardsLocally, loadActivePageBoards, normalizePageName, syncActivePageBoards } from "./sync.js";
 
@@ -14,6 +14,7 @@ export function switchPage(pageId) {
   loadActivePageBoards();
   closeTransientUi();
   cacheBoardsLocally();
+  playIntro();
   render();
 }
 

@@ -1,5 +1,6 @@
 // 点击事件代理
 import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, MIN_BOARD_HEIGHT } from "../../../shared/limits";
+import { openPalette } from "../search.js";
 import { loadBackupStatus, openCloudBackupsModal, openKvBackupsModal } from "../backup.js";
 import { findBoard, getBoardTabs } from "../boards.js";
 import { TEXT, THEME_DARK, THEME_LIGHT } from "../constants.js";
@@ -79,9 +80,20 @@ export function installClickHandlers() {
     const action = button.getAttribute("data-action");
     const boardId = button.getAttribute("data-board-id");
 
+    if (action === "open-search") {
+      openPalette();
+      return;
+    }
+
     if (action === "toggle-theme") {
       state.currentTheme = state.currentTheme === THEME_DARK ? THEME_LIGHT : THEME_DARK;
-      applyTheme(state.currentTheme);
+      if (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        document.startViewTransition(function () {
+          applyTheme(state.currentTheme);
+        });
+      } else {
+        applyTheme(state.currentTheme);
+      }
       saveThemePreference(state.currentTheme);
       syncThemeToggleButton(button);
       return;

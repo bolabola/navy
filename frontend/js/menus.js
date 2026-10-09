@@ -7,7 +7,7 @@ import { state, uiState } from "./state.js";
 export function renderDataMenu() {
   const wrapper = document.createElement("div");
   wrapper.className = "workspace__menu";
-  wrapper.appendChild(actionButton("workspace__create-button", "toggle-data-menu", null, "Data tools", [
+  wrapper.appendChild(actionButton("workspace__create-button", "toggle-data-menu", null, "数据工具", [
     staticIconNode("icon-database"),
     " ",
     (function () {

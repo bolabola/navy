@@ -5,7 +5,13 @@ import { app, state } from "./state.js";
 
 export function readThemePreference() {
   try {
-    return window.localStorage.getItem(THEME_STORAGE_KEY) === THEME_DARK ? THEME_DARK : THEME_LIGHT;
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === THEME_DARK || stored === THEME_LIGHT) return stored;
+  } catch (error) {
+    // localStorage may be unavailable in private mode.
+  }
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? THEME_DARK : THEME_LIGHT;
   } catch (error) {
     return THEME_LIGHT;
   }
@@ -20,6 +26,7 @@ export function saveThemePreference(theme) {
 }
 
 export function applyTheme(theme) {
+  document.documentElement.classList.toggle("is-dark-theme", theme === THEME_DARK);
   document.body.classList.toggle("is-dark-theme", theme === THEME_DARK);
   syncIconPickerTheme();
 }

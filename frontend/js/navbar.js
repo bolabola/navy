@@ -7,6 +7,7 @@ import { renderDataMenu, renderLayoutMenu } from "./menus.js";
 import { renderIconPickerWidget } from "./renderBoard.js";
 import { app, auth, state, uiState } from "./state.js";
 import { createModalHeader, renderThemeToggleButton } from "./theme.js";
+import { isMacPlatform } from "./search.js";
 import { githubIconNode } from "./urls.js";
 
 export function renderNavbar() {
@@ -15,6 +16,19 @@ export function renderNavbar() {
 
   const left = document.createElement("div");
   left.className = "workspace__navbar-left";
+  const brand = document.createElement("span");
+  brand.className = "workspace__brand";
+  brand.setAttribute("aria-label", "navy");
+  brand.append("navy");
+  const brandDot = document.createElement("span");
+  brandDot.className = "workspace__brand-dot";
+  brandDot.textContent = ".";
+  brand.appendChild(brandDot);
+  left.appendChild(brand);
+  const divider = document.createElement("span");
+  divider.className = "workspace__divider";
+  divider.setAttribute("aria-hidden", "true");
+  left.appendChild(divider);
   left.appendChild(renderPageBar());
   if (!auth.isAdmin) {
     const notice = document.createElement("span");
@@ -26,6 +40,18 @@ export function renderNavbar() {
 
   const right = document.createElement("div");
   right.className = "workspace__navbar-right";
+  const search = actionButton("workspace__search", "open-search", null, "搜索链接", [staticIconNode("icon-search")]);
+  const searchLabel = document.createElement("span");
+  searchLabel.className = "workspace__search-label";
+  searchLabel.textContent = "搜索";
+  search.appendChild(searchLabel);
+  const searchKey = document.createElement("kbd");
+  searchKey.className = "workspace__search-kbd";
+  searchKey.textContent = isMacPlatform() ? "⌘K" : "Ctrl K";
+  search.appendChild(searchKey);
+  search.setAttribute("aria-label", "搜索链接");
+  search.setAttribute("aria-keyshortcuts", isMacPlatform() ? "Meta+K" : "Control+K");
+  right.appendChild(search);
   const collapseAll = actionButton("workspace__collapse-all-button", "toggle-all-collapse", null, getAllCollapseButtonLabel(), [
     staticIconNode(getAllCollapseButtonIcon()),
     getAllCollapseButtonLabel()
