@@ -122,7 +122,7 @@ export const TEXT = {
   design: "设计",
   tools: "工具",
   news: "资讯",
-  title: "网址导航看板",
+  title: "我的书签看板",
   subtitle: "所有 board 按列堆叠，纵向和横向间距都是固定值。",
   addRow: "+ Add 新行",
   addItem: "添加 item",
