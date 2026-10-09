@@ -3,7 +3,7 @@
 import * as esbuild from "esbuild";
 import subsetFont from "subset-font";
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,7 +32,8 @@ async function buildIconSubset() {
   }
 
   const used = new Set();
-  const sources = await Promise.all(["main.js"].map((file) => readFile(path.join(srcDir, file), "utf8")));
+  const files = (await readdir(srcDir, { recursive: true })).filter((file) => file.endsWith(".js"));
+  const sources = await Promise.all(files.map((file) => readFile(path.join(srcDir, file), "utf8")));
   for (const source of sources) {
     for (const match of source.matchAll(/["'`](?:icon-)?([a-z0-9]+(?:-[a-z0-9]+)*)["'`\s]/g)) {
       if (codepoints.has(match[1])) used.add(codepoints.get(match[1]));
@@ -59,7 +60,7 @@ async function buildIconSubset() {
 }
 
 async function build() {
-  await rm(outDir, { recursive: true, force: true });
+  // 不先清空 dist/：wrangler dev 正在读取时删除目录会导致资源清单失效。先写新文件，最后删除旧文件。
   await mkdir(assetsDir, { recursive: true });
   const icons = await buildIconSubset();
   console.log(`[build] icon subset: ${icons.count} glyphs, ${(icons.bytes / 1024).toFixed(1)} KB`);
@@ -99,6 +100,11 @@ async function build() {
     .replace("<!-- build:js -->", `<script src="/${js}" defer></script>`);
   await writeFile(path.join(outDir, "index.html"), html);
   await copyFile(path.join(srcDir, "_headers"), path.join(outDir, "_headers"));
+
+  const keep = new Set(outputs.map((file) => path.basename(file)));
+  for (const file of await readdir(assetsDir)) {
+    if (!keep.has(file)) await rm(path.join(assetsDir, file), { force: true });
+  }
 
   const sizes = await Promise.all(outputs.filter((f) => !f.endsWith(".map")).map(async (file) => {
     const data = await readFile(path.join(outDir, file));
