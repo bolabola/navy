@@ -109,7 +109,7 @@ export function exportFullBackup() {
   const stamp = payload.exportedAt.replace(/[:.]/g, "-");
   const a = document.createElement("a");
   a.href = objUrl;
-  a.download = "board-trello-backup-" + stamp + ".json";
+  a.download = "navy-backup-" + stamp + ".json";
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();

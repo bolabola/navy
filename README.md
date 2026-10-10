@@ -16,6 +16,8 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bolabola/navy)
 
+**简体中文** · [English](./README.en.md)
+
 [功能](#-功能) · [快速开始](#-快速开始) · [部署](#-部署到-cloudflare) · [备份](#-备份与恢复) · [API](#-api) · [故障排查](#-故障排查)
 
 <br>
@@ -253,6 +255,8 @@ npx wrangler secret put ADMIN_PASSWORD
 
 在网站里保存的凭据只有管理员能修改，Secret 不会再显示出来。想换一个应用，点 **设置** 重新填写或移除即可（会同时断开连接）。断开连接只删除授权信息，不会删除云盘里已有的备份文件。
 
+Client Secret 和云盘的刷新令牌写入 KV 前会先加密（AES-256-GCM）。加密密钥由网站自动生成、保存在 Durable Object 里的随机密钥派生，只能读到 KV 的人看到的只是密文。
+
 <br>
 
 ## 🏗 架构
@@ -298,10 +302,12 @@ npx wrangler secret put ADMIN_PASSWORD
 │   ├── boardStore.ts      状态读写、历史备份节流与清理
 │   ├── cloudBackup.ts     云备份业务（定时任务、状态、恢复）
 │   ├── cloudProviders.ts  Google Drive / Dropbox API
+│   ├── sealing.ts         KV 中敏感值的加密
 │   ├── auth.ts · authRoutes.ts · boardRoutes.ts · miscRoutes.ts
 │   ├── validation.ts      校验与白名单清洗
 │   └── shared.ts · urlSafety.ts · config.ts
 ├── worker/test/           Vitest 测试（运行在 workerd 中）
+├── docs/demo/             公开演示站的示例数据和搭建说明
 ├── scripts/               构建与部署脚本
 └── wrangler.toml
 ```

@@ -1,0 +1,476 @@
+{
+  "schema": "board-trello-v1",
+  "exportedAt": "2026-10-10T00:00:00.000Z",
+  "layout": {
+    "columnMode": "auto",
+    "columns": 3,
+    "columnWidth": 260,
+    "columnGap": 16,
+    "rowGap": 16,
+    "align": "center",
+    "showBoardIcon": true,
+    "showBoardCount": true,
+    "showItemDragHandle": true
+  },
+  "activePageId": "start",
+  "pages": [
+    {
+      "id": "start",
+      "name": "Start",
+      "boards": [
+        {
+          "id": "daily",
+          "title": "Daily",
+          "accent": "#ff9f1a",
+          "icon": "layout-grid",
+          "height": 200,
+          "column": 0,
+          "items": [
+            {
+              "id": "daily-1",
+              "url": "https://mail.google.com",
+              "name": "Gmail"
+            },
+            {
+              "id": "daily-2",
+              "url": "https://calendar.google.com",
+              "name": "Google Calendar"
+            },
+            {
+              "id": "daily-3",
+              "url": "https://www.notion.so",
+              "name": "Notion"
+            },
+            {
+              "id": "daily-4",
+              "url": "https://www.youtube.com",
+              "name": "YouTube"
+            },
+            {
+              "id": "daily-5",
+              "url": "https://open.spotify.com",
+              "name": "Spotify"
+            },
+            {
+              "id": "daily-6",
+              "url": "https://www.reddit.com",
+              "name": "Reddit"
+            },
+            {
+              "id": "daily-7",
+              "url": "https://www.wikipedia.org",
+              "name": "Wikipedia"
+            }
+          ]
+        },
+        {
+          "id": "dev",
+          "title": "Dev",
+          "accent": "#0079bf",
+          "icon": "code",
+          "height": 280,
+          "column": 1,
+          "items": [
+            {
+              "id": "dev-1",
+              "url": "https://github.com",
+              "name": "GitHub"
+            },
+            {
+              "id": "dev-2",
+              "url": "https://developer.mozilla.org",
+              "name": "MDN Web Docs"
+            },
+            {
+              "id": "dev-3",
+              "url": "https://stackoverflow.com",
+              "name": "Stack Overflow"
+            },
+            {
+              "id": "dev-4",
+              "url": "https://dash.cloudflare.com",
+              "name": "Cloudflare"
+            },
+            {
+              "id": "dev-5",
+              "url": "https://vercel.com",
+              "name": "Vercel"
+            },
+            {
+              "id": "dev-6",
+              "url": "https://www.npmjs.com",
+              "name": "npm"
+            },
+            {
+              "id": "dev-7",
+              "url": "https://caniuse.com",
+              "name": "Can I use"
+            },
+            {
+              "id": "dev-8",
+              "url": "https://regex101.com",
+              "name": "regex101"
+            },
+            {
+              "id": "dev-9",
+              "url": "https://tailwindcss.com",
+              "name": "Tailwind CSS"
+            },
+            {
+              "id": "dev-10",
+              "url": "https://react.dev",
+              "name": "React"
+            }
+          ]
+        },
+        {
+          "id": "ai",
+          "title": "AI",
+          "accent": "#89609e",
+          "icon": "zap",
+          "height": 160,
+          "column": 2,
+          "tabs": [
+            {
+              "id": "default",
+              "name": "Chat"
+            },
+            {
+              "id": "image",
+              "name": "Image"
+            }
+          ],
+          "activeTabId": "default",
+          "items": [
+            {
+              "id": "ai-1",
+              "url": "https://claude.ai",
+              "name": "Claude",
+              "tabId": "default"
+            },
+            {
+              "id": "ai-2",
+              "url": "https://chatgpt.com",
+              "name": "ChatGPT",
+              "tabId": "default"
+            },
+            {
+              "id": "ai-3",
+              "url": "https://gemini.google.com",
+              "name": "Gemini",
+              "tabId": "default"
+            },
+            {
+              "id": "ai-4",
+              "url": "https://www.perplexity.ai",
+              "name": "Perplexity",
+              "tabId": "default"
+            },
+            {
+              "id": "ai-img-1",
+              "url": "https://www.midjourney.com",
+              "name": "Midjourney",
+              "tabId": "image"
+            },
+            {
+              "id": "ai-img-2",
+              "url": "https://ideogram.ai",
+              "name": "Ideogram",
+              "tabId": "image"
+            }
+          ]
+        },
+        {
+          "id": "design",
+          "title": "Design",
+          "accent": "#eb5a46",
+          "icon": "sparkles",
+          "displayMode": "icons",
+          "iconSize": "medium",
+          "height": 120,
+          "column": 0,
+          "items": [
+            {
+              "id": "design-1",
+              "url": "https://www.figma.com",
+              "name": "Figma"
+            },
+            {
+              "id": "design-2",
+              "url": "https://dribbble.com",
+              "name": "Dribbble"
+            },
+            {
+              "id": "design-3",
+              "url": "https://www.behance.net",
+              "name": "Behance"
+            },
+            {
+              "id": "design-4",
+              "url": "https://www.awwwards.com",
+              "name": "Awwwards"
+            },
+            {
+              "id": "design-5",
+              "url": "https://www.pinterest.com",
+              "name": "Pinterest"
+            },
+            {
+              "id": "design-6",
+              "url": "https://unsplash.com",
+              "name": "Unsplash"
+            },
+            {
+              "id": "design-7",
+              "url": "https://fonts.google.com",
+              "name": "Google Fonts"
+            },
+            {
+              "id": "design-8",
+              "url": "https://coolors.co",
+              "name": "Coolors"
+            },
+            {
+              "id": "design-9",
+              "url": "https://lucide.dev",
+              "name": "Lucide"
+            },
+            {
+              "id": "design-10",
+              "url": "https://www.framer.com",
+              "name": "Framer"
+            }
+          ]
+        },
+        {
+          "id": "reading",
+          "title": "Reading",
+          "accent": "#5aac44",
+          "icon": "file-text",
+          "displayMode": "urls",
+          "height": 250,
+          "column": 1,
+          "items": [
+            {
+              "id": "reading-1",
+              "url": "https://news.ycombinator.com",
+              "name": "Hacker News",
+              "description": "Tech news and discussion"
+            },
+            {
+              "id": "reading-2",
+              "url": "https://www.theverge.com",
+              "name": "The Verge",
+              "description": "Technology and culture"
+            },
+            {
+              "id": "reading-3",
+              "url": "https://arstechnica.com",
+              "name": "Ars Technica",
+              "description": "In-depth tech journalism"
+            },
+            {
+              "id": "reading-4",
+              "url": "https://www.smashingmagazine.com",
+              "name": "Smashing Magazine",
+              "description": "Web design and development"
+            },
+            {
+              "id": "reading-5",
+              "url": "https://css-tricks.com",
+              "name": "CSS-Tricks",
+              "description": "Front-end tips and guides"
+            }
+          ]
+        },
+        {
+          "id": "selfhost",
+          "title": "Self-hosting",
+          "accent": "#00a3bf",
+          "icon": "wrench",
+          "height": 150,
+          "column": 2,
+          "items": [
+            {
+              "id": "selfhost-1",
+              "url": "https://github.com/awesome-selfhosted/awesome-selfhosted",
+              "name": "awesome-selfhosted"
+            },
+            {
+              "id": "selfhost-2",
+              "url": "https://www.reddit.com/r/selfhosted",
+              "name": "r/selfhosted"
+            },
+            {
+              "id": "selfhost-3",
+              "url": "https://developers.cloudflare.com/workers",
+              "name": "Cloudflare Workers docs"
+            },
+            {
+              "id": "selfhost-4",
+              "url": "https://developers.cloudflare.com/durable-objects",
+              "name": "Durable Objects docs"
+            },
+            {
+              "id": "selfhost-5",
+              "url": "https://github.com/bolabola/navy",
+              "name": "navy on GitHub"
+            }
+          ]
+        },
+        {
+          "id": "later",
+          "title": "Read later",
+          "accent": "#42526e",
+          "icon": "bookmark",
+          "height": 64,
+          "column": 2,
+          "items": []
+        }
+      ]
+    },
+    {
+      "id": "cn",
+      "name": "中文",
+      "boards": [
+        {
+          "id": "cn-daily",
+          "title": "常用",
+          "accent": "#ff9f1a",
+          "icon": "star",
+          "height": 150,
+          "column": 0,
+          "items": [
+            {
+              "id": "cn-daily-1",
+              "url": "https://www.zhihu.com",
+              "name": "知乎"
+            },
+            {
+              "id": "cn-daily-2",
+              "url": "https://www.bilibili.com",
+              "name": "哔哩哔哩"
+            },
+            {
+              "id": "cn-daily-3",
+              "url": "https://weibo.com",
+              "name": "微博"
+            },
+            {
+              "id": "cn-daily-4",
+              "url": "https://www.douban.com",
+              "name": "豆瓣"
+            },
+            {
+              "id": "cn-daily-5",
+              "url": "https://music.163.com",
+              "name": "网易云音乐"
+            }
+          ]
+        },
+        {
+          "id": "cn-read",
+          "title": "阅读",
+          "accent": "#5aac44",
+          "icon": "file-text",
+          "displayMode": "urls",
+          "height": 200,
+          "column": 1,
+          "items": [
+            {
+              "id": "cn-read-1",
+              "url": "https://sspai.com",
+              "name": "少数派",
+              "description": "高效工作，品质生活"
+            },
+            {
+              "id": "cn-read-2",
+              "url": "https://www.v2ex.com",
+              "name": "V2EX",
+              "description": "创意工作者们的社区"
+            },
+            {
+              "id": "cn-read-3",
+              "url": "https://www.ruanyifeng.com/blog",
+              "name": "阮一峰的网络日志",
+              "description": "科技爱好者周刊"
+            },
+            {
+              "id": "cn-read-4",
+              "url": "https://www.ifanr.com",
+              "name": "爱范儿",
+              "description": "让未来触手可及"
+            }
+          ]
+        },
+        {
+          "id": "cn-dev",
+          "title": "开发",
+          "accent": "#0079bf",
+          "icon": "code",
+          "height": 130,
+          "column": 2,
+          "items": [
+            {
+              "id": "cn-dev-1",
+              "url": "https://juejin.cn",
+              "name": "掘金"
+            },
+            {
+              "id": "cn-dev-2",
+              "url": "https://leetcode.cn",
+              "name": "力扣"
+            },
+            {
+              "id": "cn-dev-3",
+              "url": "https://www.runoob.com",
+              "name": "菜鸟教程"
+            },
+            {
+              "id": "cn-dev-4",
+              "url": "https://www.yuque.com",
+              "name": "语雀"
+            }
+          ]
+        },
+        {
+          "id": "cn-tools",
+          "title": "工具",
+          "accent": "#89609e",
+          "icon": "wrench",
+          "displayMode": "icons",
+          "iconSize": "medium",
+          "height": 40,
+          "column": 0,
+          "items": [
+            {
+              "id": "cn-tools-1",
+              "url": "https://docs.qq.com",
+              "name": "腾讯文档"
+            },
+            {
+              "id": "cn-tools-2",
+              "url": "https://www.feishu.cn",
+              "name": "飞书"
+            },
+            {
+              "id": "cn-tools-3",
+              "url": "https://www.deepseek.com",
+              "name": "DeepSeek"
+            },
+            {
+              "id": "cn-tools-4",
+              "url": "https://tongyi.aliyun.com",
+              "name": "通义"
+            },
+            {
+              "id": "cn-tools-5",
+              "url": "https://www.kimi.com",
+              "name": "Kimi"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
