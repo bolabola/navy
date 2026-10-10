@@ -2968,36 +2968,28 @@ html.is-intro .board-wall-empty {
   touch-action: none;
 }
 
+/* 拖拽调整高度的把手：管理员始终可见，悬停时加深加宽 */
 .board-resize-handle::before {
   content: "";
   order: 2;
-  width: 28px;
-  height: 3px;
+  width: 32px;
+  height: 4px;
   flex: 0 0 auto;
   border-radius: var(--r-pill);
-  background: var(--line-strong);
-  opacity: 0;
+  background: var(--ink-4);
+  opacity: 0.55;
   transition: opacity var(--dur-2) ease, width var(--dur-2) var(--ease-out), background-color var(--dur-1) ease;
 }
 
 .board-card:hover .board-resize-handle::before {
-  opacity: 1;
+  opacity: 0.9;
 }
 
 .board-resize-handle:hover::before,
 body.is-resizing .board-resize-handle::before {
-  width: 44px;
+  width: 48px;
   background: var(--ink-3);
-}
-
-/* 未登录：不能拖动调整高度 */
-.board-resize-handle--static {
-  cursor: default;
-  touch-action: auto;
-}
-
-.board-resize-handle--static::before {
-  visibility: hidden;
+  opacity: 1;
 }
 
 .board-hidden-count,
@@ -3661,10 +3653,6 @@ html.is-boot .workspace__navbar {
   .link-row__grab,
   .board-shrink-button {
     opacity: 0.6;
-  }
-
-  .board-resize-handle::before {
-    opacity: 1;
   }
 }
 

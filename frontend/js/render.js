@@ -26,6 +26,7 @@ import { getBoardIconTileSize, saveBoards } from "./model.js";
 import { renderCreateBoardModal, renderLoginModal, renderMoveBoardModal, renderNavbar } from "./navbar.js";
 import { animateBoardFlip, bindIconPickers, captureBoardRects, renderBoard } from "./renderBoard.js";
 import { app, auth, state, uiState } from "./state.js";
+import { rememberBoardView } from "./viewPrefs.js";
 import { applyBoardWallLayoutStyles, syncBoardWallLayout } from "./wall.js";
 
 export function scheduleRowDragLayoutSync() {
@@ -320,7 +321,13 @@ export function updateBoardHeightInPlace(boardId, height) {
   state.boards = state.boards.map(function (board) {
     return board.id === boardId ? Object.assign({}, board, { height: nextHeight }) : board;
   });
-  saveBoards();
+  if (auth.isAdmin) {
+    // 管理员的高度保存到服务器，清掉可能残留的本机记录。
+    rememberBoardView(boardId, { height: undefined });
+    saveBoards();
+  } else {
+    rememberBoardView(boardId, { height: nextHeight });
+  }
 
   const board = findBoard(boardId);
   const slot = app.querySelector('.board-slot[data-board-id="' + cssEscape(boardId) + '"]');

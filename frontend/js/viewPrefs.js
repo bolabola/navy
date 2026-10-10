@@ -1,11 +1,12 @@
-// 访客本机的查看偏好：折叠状态、显示模式、图标大小、当前标签页。
+// 访客本机的查看偏好：折叠状态、显示模式、图标大小、当前标签页、看板高度。
 // 保存在 localStorage，按 board id 记录；board 被删除或改名后，对不上的记录会被忽略。
 //
 // - 折叠状态对所有人都只存本机（它纯粹是“怎么看”，从不写入服务器）。
-// - 显示模式 / 图标大小 / 当前标签页：管理员的修改照常保存到服务器；
+// - 显示模式 / 图标大小 / 当前标签页 / 看板高度：管理员的修改照常保存到服务器；
 //   未登录访客的修改只存本机，加载时覆盖服务器上的值。
-import { normalizeActiveTabId, normalizeDisplayMode, normalizeIconSize } from "./model.js";
 import { getBoardTabs } from "./boards.js";
+import { clampHeight } from "./dom.js";
+import { normalizeActiveTabId, normalizeDisplayMode, normalizeIconSize } from "./model.js";
 
 const VIEW_PREFS_KEY = "trello-nav-view-prefs-v1";
 const MAX_REMEMBERED_BOARDS = 500;
@@ -85,6 +86,7 @@ export function applyViewPrefs(boards, includeViewFields) {
     if (includeViewFields) {
       if (typeof entry.displayMode === "string") next.displayMode = normalizeDisplayMode(entry.displayMode);
       if (typeof entry.iconSize === "string") next.iconSize = normalizeIconSize(entry.iconSize);
+      if (typeof entry.height === "number" && Number.isFinite(entry.height)) next.height = clampHeight(entry.height);
       if (typeof entry.activeTabId === "string") {
         const tabs = getBoardTabs(next);
         if (tabs.some(function (tab) { return tab.id === entry.activeTabId; })) {

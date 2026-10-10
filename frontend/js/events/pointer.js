@@ -98,14 +98,15 @@ export function installPointerHandlers() {
     if (event.target.closest("[data-action]")) {
       return;
     }
-    // 拖拽排序和调整高度会修改布局，只对管理员开放。
-    if (!auth.isAdmin) {
-      return;
-    }
-
+    // 调整高度对所有人开放：访客的高度只保存在本机。
     const resizeHandle = event.target.closest('[data-role="resize-handle"]');
     if (resizeHandle) {
       beginResize(resizeHandle.getAttribute("data-board-id"), resizeHandle, event);
+      return;
+    }
+
+    // 拖拽排序会改变看板的位置，只对管理员开放。
+    if (!auth.isAdmin) {
       return;
     }
 

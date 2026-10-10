@@ -676,13 +676,9 @@ export function renderBoard(board, extraClass) {
     const resize = document.createElement("div");
     resize.className = "board-resize-handle";
     resize.dataset.boardId = board.id;
-    if (auth.isAdmin) {
-      resize.dataset.role = "resize-handle";
-      resize.title = TEXT.resize;
-    } else {
-      // 未登录：不能拖动调整高度，只保留“展开查看全部 / 收起”按钮（不保存）。
-      resize.classList.add("board-resize-handle--static");
-    }
+    // 访客也可以拖动调整高度：只保存在访客自己的浏览器里（见 viewPrefs.js）。
+    resize.dataset.role = "resize-handle";
+    resize.title = TEXT.resize;
     const shrink = actionButton("board-shrink-button", "shrink-board-to-min", board.id, TEXT.shrinkBoard, [
       staticIconNode("icon-chevrons-up")
     ]);
