@@ -224,14 +224,13 @@ Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。
 | 名称 | 必需 | 说明 |
 |---|:---:|---|
 | `ADMIN_PASSWORD` | ✅ | 管理员密码，建议 16 位以上随机字符串。修改后无需重新部署 |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |  | 开启 Google Drive 云备份 |
-| `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |  | 开启 Dropbox 云备份 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |  | 可选。Google Drive 云备份一般直接在网站里配置（见“备份与恢复”）；在这里设置的话优先使用，网站里不能再修改 |
+| `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |  | 可选。同上，用于 Dropbox |
 
 本地开发写在 `.dev.vars`。生产环境的密钥由部署脚本设置，也可以手动设置：
 
 ```bash
 npx wrangler secret put ADMIN_PASSWORD
-npx wrangler secret put GOOGLE_CLIENT_ID
 ```
 
 <br>
@@ -245,59 +244,48 @@ npx wrangler secret put GOOGLE_CLIENT_ID
 
 两种备份都可以在顶栏的备份菜单里一键恢复整份看板。云端上传失败不会影响正常保存，下次定时任务会重试。云端备份文件名形如 `state_backup_2026-05-11T08-30-00-000Z.json`。
 
+### 配置云端备份
+
+不需要去 Cloudflare 后台加变量，全部在网站里完成：
+
+1. 管理员登录后，打开顶栏的备份菜单。
+2. 在 Google Drive 或 Dropbox 一栏点 **配置**，按向导操作：向导里会显示**你这个站点专属的回调地址**（带复制按钮），以及 Google Cloud / Dropbox 后台的直达链接。
+3. 把创建好的 Client ID 和 Client secret（Dropbox 叫 App key 和 App secret）粘贴进去，保存。
+4. 点 **连接** 完成授权，之后每小时自动备份一次，也可以随时“立即备份”。
+
+在网站里保存的凭据只有管理员能修改，Secret 不会再显示出来。想换一个应用，点 **设置** 重新填写或移除即可（会同时断开连接）。断开连接只删除授权信息，不会删除云盘里已有的备份文件。
+
 <details>
-<summary><b>配置 Google Drive</b></summary>
+<summary><b>Google Drive 需要的配置（向导里也有）</b></summary>
 
 <br>
 
 | 配置项 | 值 |
 |---|---|
-| 创建入口 | <https://console.cloud.google.com/> |
-| 回调地址 | `https://你的域名/api/cloud-backup/google/callback` |
-| Secrets | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
-| OAuth scope | `https://www.googleapis.com/auth/drive.file` |
+| 创建入口 | <https://console.cloud.google.com/apis/credentials> |
+| 需要启用的 API | Google Drive API |
+| 应用类型 | Web 应用 |
+| 已获授权的 JavaScript 来源 | `https://你的域名` |
+| 已获授权的重定向 URI | `https://你的域名/api/cloud-backup/google/callback` |
+| 权限范围 | `drive.file`（只能访问 navy 自己创建的文件） |
 
-1. 打开 Google Cloud Console，进入 **APIs & Services → Credentials**。
-2. 创建 **OAuth client ID**，Application type 选择 **Web application**。
-3. 在 **Authorized JavaScript origins** 添加站点来源，例如 `https://你的域名`。
-4. 在 **Authorized redirect URIs** 添加完整回调地址。
-5. 把 Client ID 和 Client Secret 写入 Cloudflare secrets。
-6. 如果 OAuth consent screen 处于 Testing 状态，把授权账号加入 **Test users**。
+如果 OAuth 同意屏幕处于“测试”状态，记得把自己的 Google 账号加入“测试用户”。
 
 </details>
 
 <details>
-<summary><b>配置 Dropbox</b></summary>
+<summary><b>Dropbox 需要的配置（向导里也有）</b></summary>
 
 <br>
 
 | 配置项 | 值 |
 |---|---|
 | 创建入口 | <https://www.dropbox.com/developers/apps> |
-| 回调地址 | `https://你的域名/api/cloud-backup/dropbox/callback` |
-| Secrets | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |
-| OAuth scopes | `files.content.read` `files.content.write` `files.metadata.read` `files.metadata.write` |
+| API / 访问类型 | Scoped access / App folder |
+| 权限 | `files.content.read` `files.content.write` `files.metadata.read` `files.metadata.write` |
+| Redirect URI | `https://你的域名/api/cloud-backup/dropbox/callback` |
 
-1. 打开 Dropbox App Console，点击 **Create app**。
-2. API 选择 **Scoped access**，Access type 建议选 **App folder**。
-3. 在 **Permissions** 中勾选上面四个权限。
-4. 在 **Settings → OAuth 2 Redirect URIs** 中添加完整回调地址。
-5. 把 **App key** 和 **App secret** 分别写入 `DROPBOX_CLIENT_ID` 和 `DROPBOX_CLIENT_SECRET`。
-
-如果连接是在权限变更前授权的，需要在看板中断开 Dropbox 后重新连接，旧的 refresh token 不会获得新增权限。
-
-</details>
-
-<details>
-<summary><b>在看板中连接云盘</b></summary>
-
-<br>
-
-1. 管理员登录看板，打开顶栏的备份菜单。
-2. 对已配置的 Google Drive 或 Dropbox 点击 **连接**。完成 OAuth 授权后会回到看板，并立即做第一份备份。
-3. 之后可以在同一个菜单里查看状态、立即备份、断开连接、打开云端恢复列表。
-
-断开连接只删除本应用保存的 token 和连接状态，不会删除云端已有的备份文件。
+修改权限后需要在网站里断开 Dropbox 再重新连接，旧的授权不会获得新增权限。
 
 </details>
 
@@ -383,7 +371,9 @@ npx wrangler secret put GOOGLE_CLIENT_ID
 | `/api/board` | PUT | 🔒 | 版本一致时整体替换看板数据；只需发送 `pages`，返回 `lastBackupAt` |
 | `/api/backups` | GET | 🔒 | 列出最近的历史备份 |
 | `/api/backups/restore` | POST | 🔒 | 从历史备份恢复 |
-| `/api/cloud-backup/status` | GET | 🔒 | 云备份配置、连接和最近备份状态 |
+| `/api/cloud-backup/status` | GET | 🔒 | 云备份配置来源、回调地址、连接和最近备份状态（不返回 Secret） |
+| `/api/cloud-backup/:provider/client` | PUT | 🔒 | 在网站里保存 OAuth 客户端凭据（`clientId`、`clientSecret`），凭据变化时会断开旧连接 |
+| `/api/cloud-backup/:provider/client` | DELETE | 🔒 | 移除网站里保存的凭据，同时断开连接 |
 | `/api/cloud-backup/:provider/connect` | POST | 🔒 | 返回 OAuth 授权地址 |
 | `/api/cloud-backup/:provider/callback` | GET |  | OAuth 回调 |
 | `/api/cloud-backup/:provider/run` | POST | 🔒 | 立即备份到该云盘 |

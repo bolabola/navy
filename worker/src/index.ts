@@ -3,10 +3,12 @@ import { handleGetBoard, handleListBackups, handlePutBoard, handleRestoreBackup 
 import {
   handleCloudBackupCallback,
   handleCloudBackupConnect,
+  handleCloudBackupDeleteClient,
   handleCloudBackupDisconnect,
   handleCloudBackupListBackups,
   handleCloudBackupRestore,
   handleCloudBackupRun,
+  handleCloudBackupSaveClient,
   handleCloudBackupStatus,
   runScheduledCloudBackups
 } from "./cloudBackup";
@@ -46,6 +48,13 @@ const routes: Route[] = [
     pattern: /^\/api\/cloud-backup\/([^/]+)\/callback$/,
     allowCrossOrigin: true,
     methods: { GET: (c) => handleCloudBackupCallback(c.request, c.env, c.url, c.params[0], c.ctx) }
+  },
+  {
+    pattern: /^\/api\/cloud-backup\/([^/]+)\/client$/,
+    methods: {
+      PUT: (c) => handleCloudBackupSaveClient(c.request, c.env, c.params[0]),
+      DELETE: (c) => handleCloudBackupDeleteClient(c.request, c.env, c.params[0])
+    }
   },
   { pattern: /^\/api\/cloud-backup\/([^/]+)\/connect$/, methods: { POST: (c) => handleCloudBackupConnect(c.request, c.env, c.params[0]) } },
   { pattern: /^\/api\/cloud-backup\/([^/]+)\/disconnect$/, methods: { POST: (c) => handleCloudBackupDisconnect(c.request, c.env, c.params[0]) } },

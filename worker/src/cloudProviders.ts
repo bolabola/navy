@@ -297,15 +297,51 @@ export function getProvider(providerId: string): CloudProvider | null {
   return PROVIDERS.find((provider) => provider.id === providerId) || null;
 }
 
-export function isProviderClientConfigured(env: Env, provider: CloudProvider): boolean {
-  return Boolean(env[provider.clientIdEnv] && env[provider.clientSecretEnv]);
+// ---------------- OAuth 客户端凭据 ----------------
+
+export interface ClientCredentials {
+  clientId: string;
+  clientSecret: string;
+  /** env：来自 Cloudflare 运行时变量；app：管理员在网站里填写并保存在 KV。 */
+  source: "env" | "app";
+}
+
+export const CLIENT_ID_MAX_LENGTH = 512;
+
+export function clientCredentialsKey(provider: ProviderId): string {
+  return `cloud_backup:${provider}:client`;
+}
+
+/** 运行时变量优先；没有设置时使用管理员在网站里保存的凭据。都没有时返回 null。 */
+export async function getClientCredentials(env: Env, provider: CloudProvider): Promise<ClientCredentials | null> {
+  const envId = env[provider.clientIdEnv];
+  const envSecret = env[provider.clientSecretEnv];
+  if (typeof envId === "string" && envId && typeof envSecret === "string" && envSecret) {
+    return { clientId: envId, clientSecret: envSecret, source: "env" };
+  }
+  const raw = await env.BOARD_KV.get(clientCredentialsKey(provider.id));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { clientId?: unknown; clientSecret?: unknown };
+    if (typeof parsed.clientId === "string" && parsed.clientId && typeof parsed.clientSecret === "string" && parsed.clientSecret) {
+      return { clientId: parsed.clientId, clientSecret: parsed.clientSecret, source: "app" };
+    }
+  } catch {
+    // 损坏的记录按未配置处理
+  }
+  return null;
+}
+
+async function requireClientCredentials(env: Env, provider: CloudProvider): Promise<ClientCredentials> {
+  const credentials = await getClientCredentials(env, provider);
+  if (!credentials) throw new Error(`${provider.label} OAuth client is not configured`);
+  return credentials;
 }
 
 // ---------------- OAuth token ----------------
 
-function tokenRequestInit(env: Env, provider: CloudProvider, params: Record<string, string>): RequestInit {
-  const clientId = String(env[provider.clientIdEnv] || "");
-  const clientSecret = String(env[provider.clientSecretEnv] || "");
+function tokenRequestInit(credentials: ClientCredentials, provider: CloudProvider, params: Record<string, string>): RequestInit {
+  const { clientId, clientSecret } = credentials;
   const body = new URLSearchParams(params);
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
   if (provider.tokenAuth === "basic") {
@@ -352,7 +388,8 @@ export async function getAccessToken(env: Env, provider: CloudProvider, refreshT
   const cached = accessTokenCache.get(cacheKey);
   if (cached && cached.expiresAt - TOKEN_EXPIRY_MARGIN_MS > Date.now()) return cached.token;
 
-  const response = await fetch(provider.tokenUrl, tokenRequestInit(env, provider, {
+  const credentials = await requireClientCredentials(env, provider);
+  const response = await fetch(provider.tokenUrl, tokenRequestInit(credentials, provider, {
     refresh_token: refreshToken,
     grant_type: "refresh_token"
   }));
@@ -372,7 +409,8 @@ export async function getAccessToken(env: Env, provider: CloudProvider, refreshT
 }
 
 export async function exchangeAuthorizationCode(env: Env, provider: CloudProvider, code: string, redirectUri: string): Promise<TokenResponse> {
-  const response = await fetch(provider.tokenUrl, tokenRequestInit(env, provider, {
+  const credentials = await requireClientCredentials(env, provider);
+  const response = await fetch(provider.tokenUrl, tokenRequestInit(credentials, provider, {
     code,
     redirect_uri: redirectUri,
     grant_type: "authorization_code"

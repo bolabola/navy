@@ -6,9 +6,11 @@ import {
   BACKUP_FILE_PREFIX,
   CloudBackupProviderError,
   exchangeAuthorizationCode,
+  CLIENT_ID_MAX_LENGTH,
+  clientCredentialsKey,
   getAccessToken,
+  getClientCredentials,
   getProvider,
-  isProviderClientConfigured,
   PROVIDERS,
   type CloudProvider,
   type ProviderId,
@@ -79,7 +81,7 @@ async function loadRecord(env: Env, provider: CloudProvider): Promise<ProviderRe
 
 /** 兼容旧版本分散存储的 key（以及更早的 google_drive:* 和环境变量），读到后迁移为单条记录。 */
 async function migrateLegacyRecord(env: Env, provider: CloudProvider): Promise<ProviderRecord> {
-  if (!isProviderClientConfigured(env, provider)) return {};
+  if (!(await getClientCredentials(env, provider))) return {};
   const [refreshToken, folderId, connectedAt, lastBackupRaw] = await Promise.all([
     env.BOARD_KV.get(legacyKey(provider.id, "refresh_token")),
     env.BOARD_KV.get(legacyKey(provider.id, "folder_id")),
@@ -160,7 +162,7 @@ function connectedConfig(provider: CloudProvider, record: ProviderRecord): Conne
 }
 
 async function requireConnected(env: Env, provider: CloudProvider): Promise<{ record: ProviderRecord; config: ConnectedConfig }> {
-  if (!isProviderClientConfigured(env, provider)) {
+  if (!(await getClientCredentials(env, provider))) {
     throw new HttpError(500, `${provider.label} OAuth client is not configured`);
   }
   const record = await loadRecord(env, provider);
@@ -233,7 +235,7 @@ export async function runScheduledCloudBackups(env: Env, now = new Date()): Prom
   const marker = readStateMarker(rawState);
 
   await Promise.all(PROVIDERS.map(async (provider) => {
-    if (!isProviderClientConfigured(env, provider)) return;
+    if (!(await getClientCredentials(env, provider))) return;
     const record = await loadRecord(env, provider);
     const config = connectedConfig(provider, record);
     if (!config) return;
@@ -249,12 +251,17 @@ export async function handleCloudBackupStatus(request: Request, env: Env): Promi
   const auth = await requireAdmin(request, env, { csrf: false });
   if (auth instanceof Response) return auth;
 
+  const origin = new URL(request.url).origin;
   const providers = await Promise.all(PROVIDERS.map(async (provider) => {
-    const record = await loadRecord(env, provider);
+    const [record, credentials] = await Promise.all([loadRecord(env, provider), getClientCredentials(env, provider)]);
     return {
       id: provider.id,
       label: provider.label,
-      configured: isProviderClientConfigured(env, provider),
+      configured: credentials !== null,
+      /** env：在 Cloudflare 后台配置；app：在网站里配置，可以在网站里修改。 */
+      configuredBy: credentials ? credentials.source : null,
+      /** 配置 OAuth 应用时要填写的回调地址 */
+      callbackUrl: callbackUrl(origin, provider.id),
       connected: connectedConfig(provider, record) !== null,
       connectedAt: record.connectedAt || null,
       lastBackup: record.lastBackup || null
@@ -269,11 +276,12 @@ export async function handleCloudBackupConnect(request: Request, env: Env, provi
   if (auth instanceof Response) return auth;
 
   const provider = requireProvider(providerId);
-  if (!isProviderClientConfigured(env, provider)) {
+  const credentials = await getClientCredentials(env, provider);
+  if (!credentials) {
     return text(`${provider.label} OAuth client is not configured`, 500);
   }
 
-  const redirectUri = `${new URL(request.url).origin}/api/cloud-backup/${provider.id}/callback`;
+  const redirectUri = callbackUrl(new URL(request.url).origin, provider.id);
   const state = randomState();
   const oauthState: OAuthState = { provider: provider.id, redirectUri };
   await env.BOARD_KV.put(OAUTH_STATE_PREFIX + state, JSON.stringify(oauthState), {
@@ -281,7 +289,7 @@ export async function handleCloudBackupConnect(request: Request, env: Env, provi
   });
 
   const authUrl = new URL(provider.authorizeUrl);
-  authUrl.searchParams.set("client_id", String(env[provider.clientIdEnv] || ""));
+  authUrl.searchParams.set("client_id", credentials.clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("scope", provider.scope);
@@ -291,6 +299,53 @@ export async function handleCloudBackupConnect(request: Request, env: Env, provi
   }
 
   return json({ url: authUrl.toString() });
+}
+
+function callbackUrl(origin: string, provider: ProviderId): string {
+  return `${origin}/api/cloud-backup/${provider}/callback`;
+}
+
+function readClientField(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > CLIENT_ID_MAX_LENGTH || /\s/.test(trimmed)) return null;
+  return trimmed;
+}
+
+/** 管理员在网站里保存 OAuth 客户端凭据。凭据变了，旧的授权就失效了，一并断开。 */
+export async function handleCloudBackupSaveClient(request: Request, env: Env, providerId: string): Promise<Response> {
+  const auth = await requireAdmin(request, env, { csrf: true });
+  if (auth instanceof Response) return auth;
+
+  const provider = requireProvider(providerId);
+  const existing = await getClientCredentials(env, provider);
+  if (existing && existing.source === "env") {
+    return text(`${provider.label} OAuth client is configured in Cloudflare and cannot be changed here`, 409);
+  }
+
+  const payload = await readJsonBody<{ clientId?: unknown; clientSecret?: unknown }>(request);
+  const clientId = isPlainObject(payload) ? readClientField(payload.clientId) : null;
+  const clientSecret = isPlainObject(payload) ? readClientField(payload.clientSecret) : null;
+  if (!clientId || !clientSecret) return text("Invalid client id or secret", 400);
+
+  await env.BOARD_KV.put(clientCredentialsKey(provider.id), JSON.stringify({ clientId, clientSecret }));
+  if (!existing || existing.clientId !== clientId || existing.clientSecret !== clientSecret) {
+    await env.BOARD_KV.delete(recordKey(provider.id));
+  }
+  return json({ ok: true });
+}
+
+/** 移除网站里保存的 OAuth 客户端凭据，同时断开连接。 */
+export async function handleCloudBackupDeleteClient(request: Request, env: Env, providerId: string): Promise<Response> {
+  const auth = await requireAdmin(request, env, { csrf: true });
+  if (auth instanceof Response) return auth;
+
+  const provider = requireProvider(providerId);
+  await Promise.all([
+    env.BOARD_KV.delete(clientCredentialsKey(provider.id)),
+    env.BOARD_KV.delete(recordKey(provider.id))
+  ]);
+  return json({ ok: true });
 }
 
 export async function handleCloudBackupDisconnect(request: Request, env: Env, providerId: string): Promise<Response> {
@@ -335,7 +390,7 @@ export async function handleCloudBackupRestore(request: Request, env: Env, provi
   if (auth instanceof Response) return auth;
 
   const provider = requireProvider(providerId);
-  if (!isProviderClientConfigured(env, provider)) {
+  if (!(await getClientCredentials(env, provider))) {
     return text(`${provider.label} OAuth client is not configured`, 500);
   }
   const payload = await readJsonBody<{ id?: unknown }>(request);
@@ -373,7 +428,7 @@ export async function handleCloudBackupCallback(
   const provider = getProvider(providerId);
   if (!provider) return htmlResponse("Backup authorization failed", "Unknown backup provider.");
   const failed = `${provider.label} authorization failed`;
-  if (!isProviderClientConfigured(env, provider)) {
+  if (!(await getClientCredentials(env, provider))) {
     return htmlResponse(failed, `${provider.label} OAuth client is not configured.`);
   }
 

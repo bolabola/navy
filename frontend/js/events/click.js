@@ -1,4 +1,5 @@
 // 点击事件代理
+import { openCloudSetup } from "../cloudSetup.js";
 import { alertDialog, confirmDialog } from "../dialog.js";
 import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, MIN_BOARD_HEIGHT } from "../../../shared/limits";
 import { openPalette } from "../search.js";
@@ -337,16 +338,29 @@ export function installClickHandlers() {
       }
       const providerId = button.getAttribute("data-provider-id");
       if (!providerId) return;
-      button.disabled = true;
-      apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/connect", "POST", {}).then(function (result) {
-        if (result && typeof result.url === "string") {
-          window.location.href = result.url;
-          return;
-        }
-        throw new Error("Missing authorization URL");
-      }).catch(function () {
-        button.disabled = false;
-        alertDialog("无法开始云盘授权，请稍后再试。");
+      startCloudBackupConnect(providerId, button);
+      return;
+    }
+
+    if (action === "configure-cloud-backup") {
+      if (!auth.isAdmin) return;
+      const providerId = button.getAttribute("data-provider-id");
+      const providers = uiState.backupStatus && Array.isArray(uiState.backupStatus.providers) ? uiState.backupStatus.providers : [];
+      const provider = providers.find(function (entry) { return entry.id === providerId; });
+      if (!provider) return;
+      uiState.backupMenuOpen = false;
+      updateBackupMenu();
+      openCloudSetup(provider, function (savedId, result) {
+        loadBackupStatus();
+        if (result && result.removed) return;
+        confirmDialog({
+          title: "配置已保存",
+          message: "现在去 " + provider.label + " 授权，连接后每小时自动备份一次。",
+          confirmText: "立即连接",
+          cancelText: "稍后"
+        }).then(function (ok) {
+          if (ok) startCloudBackupConnect(savedId, null);
+        });
       });
       return;
     }
@@ -713,5 +727,19 @@ export function installClickHandlers() {
       });
       return;
     }
+  });
+}
+
+function startCloudBackupConnect(providerId, button) {
+  if (button) button.disabled = true;
+  apiSend("/cloud-backup/" + encodeURIComponent(providerId) + "/connect", "POST", {}).then(function (result) {
+    if (result && typeof result.url === "string") {
+      window.location.href = result.url;
+      return;
+    }
+    throw new Error("Missing authorization URL");
+  }).catch(function () {
+    if (button) button.disabled = false;
+    alertDialog("无法开始云盘授权，请稍后再试。");
   });
 }

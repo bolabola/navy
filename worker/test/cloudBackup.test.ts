@@ -319,3 +319,53 @@ test("Dropbox restore falls back from file id to path", async () => {
   const paths = calls.filter((c) => c.url.includes("files/download")).map((c) => JSON.parse((c.init.headers as Record<string, string>)["Dropbox-API-Arg"]).path);
   assert.deepEqual(paths, ["id:dropbox-cloud-file", "/board-trello-backups/state_backup_2026-01-03t00-00-00-000z.json"]);
 });
+
+test("OAuth client credentials can be saved in the app and are used for connect and token refresh", async () => {
+  const env = createEnv({ state: stateWith() });
+  const auth = await login(env);
+
+  const before = await (await call(env, "/api/cloud-backup/status", { auth })).json() as { providers: Array<Record<string, unknown>> };
+  const googleBefore = before.providers.find((p) => p.id === "google")!;
+  assert.equal(googleBefore.configured, false);
+  assert.equal(googleBefore.callbackUrl, "https://example.com/api/cloud-backup/google/callback");
+
+  // 需要 CSRF；字段不能为空或带空白
+  assert.equal((await call(env, "/api/cloud-backup/google/client", { method: "PUT", headers: { Cookie: auth.cookie }, json: { clientId: "a", clientSecret: "b" } })).status, 403);
+  assert.equal((await call(env, "/api/cloud-backup/google/client", { method: "PUT", auth, json: { clientId: "has space", clientSecret: "b" } })).status, 400);
+
+  const saved = await call(env, "/api/cloud-backup/google/client", { method: "PUT", auth, json: { clientId: " app-client-id ", clientSecret: "app-secret" } });
+  assert.equal(saved.status, 200);
+
+  const statusRes = await call(env, "/api/cloud-backup/status", { auth });
+  const statusText = await statusRes.text();
+  assert.ok(!statusText.includes("app-secret"), "the client secret must never be returned");
+  const google = (JSON.parse(statusText) as { providers: Array<Record<string, unknown>> }).providers.find((p) => p.id === "google")!;
+  assert.equal(google.configured, true);
+  assert.equal(google.configuredBy, "app");
+
+  const connect = await call(env, "/api/cloud-backup/google/connect", { method: "POST", auth, json: {} });
+  const { url } = await connect.json() as { url: string };
+  assert.equal(new URL(url).searchParams.get("client_id"), "app-client-id");
+
+  // 刷新 access token 时也用网站里保存的凭据
+  env.BOARD_KV.dump().set("cloud_backup:google", googleRecord);
+  const calls = googleHappyPath();
+  assert.equal((await call(env, "/api/cloud-backup/google/run", { method: "POST", auth, json: {} })).status, 200);
+  const tokenCall = calls.find((c) => c.url.includes("oauth2.googleapis.com/token"))!;
+  assert.match(String(tokenCall.init?.body), /client_id=app-client-id/);
+  assert.match(String(tokenCall.init?.body), /client_secret=app-secret/);
+
+  // 移除配置会同时断开连接
+  assert.equal((await call(env, "/api/cloud-backup/google/client", { method: "DELETE", auth })).status, 200);
+  assert.equal(env.BOARD_KV.dump().has("cloud_backup:google:client"), false);
+  assert.equal(env.BOARD_KV.dump().has("cloud_backup:google"), false);
+});
+
+test("credentials from Cloudflare variables take priority and cannot be changed in the app", async () => {
+  const env = createEnv({ state: stateWith() }, googleClient);
+  const auth = await login(env);
+  const status = await (await call(env, "/api/cloud-backup/status", { auth })).json() as { providers: Array<Record<string, unknown>> };
+  assert.equal(status.providers.find((p) => p.id === "google")!.configuredBy, "env");
+  const res = await call(env, "/api/cloud-backup/google/client", { method: "PUT", auth, json: { clientId: "other", clientSecret: "other" } });
+  assert.equal(res.status, 409);
+});

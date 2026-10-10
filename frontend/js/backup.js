@@ -83,11 +83,17 @@ export function renderBackupMenu() {
     menu.appendChild(row);
   } else {
     cloudEntries.forEach(function (entry) {
+      if (!entry.configured && !entry.connected) {
+        menu.appendChild(renderBackupStatusRow(entry, { action: "configure-cloud-backup", label: "配置", providerId: entry.id }));
+        return;
+      }
+      const settings = entry.configuredBy === "app" && !entry.connected
+        ? [{ action: "configure-cloud-backup", label: "设置", providerId: entry.id }]
+        : [];
       menu.appendChild(renderBackupStatusRow(entry, {
         action: entry.connected ? "disconnect-cloud-backup" : "connect-cloud-backup",
         label: entry.connected ? "断开" : "连接",
         providerId: entry.id,
-        disabled: !entry.configured && !entry.connected,
         extraActions: entry.connected ? [{
           action: "run-cloud-backup",
           label: "立即备份",
@@ -98,7 +104,7 @@ export function renderBackupMenu() {
           label: "恢复",
           providerId: entry.id,
           providerLabel: entry.label
-        }] : []
+        }] : settings
       }));
     });
   }
@@ -143,7 +149,7 @@ export function getCloudBackupEntries() {
 export function getCloudBackupEntry(provider) {
   const last = provider.lastBackup || null;
   let status = "idle";
-  let detail = provider.configured ? "未连接" : "未配置 OAuth";
+  let detail = provider.configured ? "已配置，点“连接”授权" : "还没有配置，点“配置”按步骤设置";
   if (provider.connected) {
     status = "pending";
     detail = "每小时自动备份，尚无结果";
@@ -161,7 +167,8 @@ export function getCloudBackupEntry(provider) {
     status: status,
     detail: detail,
     connected: Boolean(provider.connected),
-    configured: Boolean(provider.configured)
+    configured: Boolean(provider.configured),
+    configuredBy: provider.configuredBy || null
   };
 }
 
