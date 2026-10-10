@@ -253,40 +253,6 @@ npx wrangler secret put ADMIN_PASSWORD
 
 在网站里保存的凭据只有管理员能修改，Secret 不会再显示出来。想换一个应用，点 **设置** 重新填写或移除即可（会同时断开连接）。断开连接只删除授权信息，不会删除云盘里已有的备份文件。
 
-<details>
-<summary><b>Google Drive 需要的配置（向导里也有）</b></summary>
-
-<br>
-
-| 配置项 | 值 |
-|---|---|
-| 创建入口 | <https://console.cloud.google.com/apis/credentials> |
-| 需要启用的 API | Google Drive API |
-| 应用类型 | Web 应用 |
-| 已获授权的 JavaScript 来源 | `https://你的域名` |
-| 已获授权的重定向 URI | `https://你的域名/api/cloud-backup/google/callback` |
-| 权限范围 | `drive.file`（只能访问 navy 自己创建的文件） |
-
-如果 OAuth 同意屏幕处于“测试”状态，记得把自己的 Google 账号加入“测试用户”。
-
-</details>
-
-<details>
-<summary><b>Dropbox 需要的配置（向导里也有）</b></summary>
-
-<br>
-
-| 配置项 | 值 |
-|---|---|
-| 创建入口 | <https://www.dropbox.com/developers/apps> |
-| API / 访问类型 | Scoped access / App folder |
-| 权限 | `files.content.read` `files.content.write` `files.metadata.read` `files.metadata.write` |
-| Redirect URI | `https://你的域名/api/cloud-backup/dropbox/callback` |
-
-修改权限后需要在网站里断开 Dropbox 再重新连接，旧的授权不会获得新增权限。
-
-</details>
-
 <br>
 
 ## 🏗 架构
