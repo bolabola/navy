@@ -142,7 +142,7 @@ npm run dev
 点上面的按钮，用 Cloudflare 账号登录后会自动：
 
 1. 把仓库复制到你的 GitHub 账号
-2. 创建 Worker、KV 命名空间和 Durable Object
+2. 创建 Worker、KV 命名空间和 Durable Object（默认名 `navy`，可以在表单里改）
 3. 提示你填写 `ADMIN_PASSWORD` 和 `SESSION_SECRET`（示例值会被拒绝，必须换成自己的）
 4. 构建并部署，之后你往自己的仓库推送代码会自动重新部署
 
@@ -166,6 +166,12 @@ npm run deploy -- --name my-navy     部署成另一个 Worker 名
 npm run deploy -- --skip-secrets     只部署，不检查密钥
 ```
 
+Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。想长期部署到别的名字（比如同一账号里部署多份），在项目根目录建一个 `.navy-deploy.json`（已被 Git 忽略）：
+
+```json
+{ "name": "my-navy" }
+```
+
 ### 方式三：推送代码自动部署（GitHub Actions）
 
 仓库自带的 CI 在 `master` 分支测试通过后会自动部署。在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中添加：
@@ -174,6 +180,7 @@ npm run deploy -- --skip-secrets     只部署，不检查密钥
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | 部署 token，至少需要 **Workers Scripts 编辑**、**Workers KV Storage 编辑**、**Account Settings 读取** 权限 |
 | `CLOUDFLARE_ACCOUNT_ID` | 可选，token 能访问多个账号时填写 |
+| `WORKER_NAME`（Variables 页） | 可选，Worker 名不是默认的 `navy` 时填写 |
 
 没有配置 `CLOUDFLARE_API_TOKEN` 时会自动跳过部署，fork 的仓库不受影响。
 

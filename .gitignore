@@ -10,3 +10,4 @@ Thumbs.db
 .tmp-test/
 dist/
 .cache/
+.navy-deploy.json

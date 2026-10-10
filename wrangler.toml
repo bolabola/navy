@@ -1,4 +1,4 @@
-name = "board-trello"
+name = "navy"
 main = "worker/src/index.ts"
 compatibility_date = "2026-01-01"
 
