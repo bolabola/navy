@@ -2,8 +2,4 @@
 # 管理员密码：至少 12 位，生产环境建议 16 位以上随机字符串。示例值会被后端拒绝，务必替换。
 ADMIN_PASSWORD=replace-with-your-admin-password
 
-# 可选：云端备份。需要时取消注释并填写，详见 README 的“备份与恢复”。
-# GOOGLE_CLIENT_ID=
-# GOOGLE_CLIENT_SECRET=
-# DROPBOX_CLIENT_ID=
-# DROPBOX_CLIENT_SECRET=
+# 云端备份（Google Drive / Dropbox）不需要在这里配置，登录网站后在备份菜单里点“配置”即可。

@@ -224,8 +224,6 @@ Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。
 | 名称 | 必需 | 说明 |
 |---|:---:|---|
 | `ADMIN_PASSWORD` | ✅ | 管理员密码，建议 16 位以上随机字符串。修改后无需重新部署 |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |  | 可选。Google Drive 云备份一般直接在网站里配置（见“备份与恢复”）；在这里设置的话优先使用，网站里不能再修改 |
-| `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |  | 可选。同上，用于 Dropbox |
 
 本地开发写在 `.dev.vars`。生产环境的密钥由部署脚本设置，也可以手动设置：
 
