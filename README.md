@@ -166,11 +166,7 @@ npm run deploy -- --name my-navy     部署成另一个 Worker 名
 npm run deploy -- --skip-secrets     只部署，不检查密钥
 ```
 
-Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。想长期部署到别的名字（比如同一账号里部署多份），在项目根目录建一个 `.navy-deploy.json`（已被 Git 忽略）：
-
-```json
-{ "name": "my-navy" }
-```
+Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。
 
 ### 方式三：推送代码自动部署（GitHub Actions）
 
@@ -180,7 +176,6 @@ Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。想长�
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | 部署 token，至少需要 **Workers Scripts 编辑**、**Workers KV Storage 编辑**、**Account Settings 读取** 权限 |
 | `CLOUDFLARE_ACCOUNT_ID` | 可选，token 能访问多个账号时填写 |
-| `WORKER_NAME`（Variables 页） | 可选，Worker 名不是默认的 `navy` 时填写 |
 
 没有配置 `CLOUDFLARE_API_TOKEN` 时会自动跳过部署，fork 的仓库不受影响。
 

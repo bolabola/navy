@@ -7,8 +7,7 @@
 //   npm run deploy -- --name my-navy       使用另一个 Worker 名
 //   npm run deploy -- --skip-secrets       只部署，不检查密钥
 //
-// Worker 名的优先级：--name > 环境变量 NAVY_WORKER_NAME > 本机的 .navy-deploy.json（{"name": "..."}，不提交）
-// > wrangler.toml 里的 name。KV 命名空间的名字会跟着 Worker 名生成（<Worker 名>-board-kv）。
+// Worker 名默认读取 wrangler.toml；KV 命名空间的名字会跟着 Worker 名生成（<Worker 名>-board-kv）。
 //
 // KV 命名空间和 Durable Object 由 Wrangler 在首次部署时自动创建，之后沿用。
 // 登录方式：交互环境下没有 CLOUDFLARE_API_TOKEN 时会调用 `wrangler login`（浏览器授权）；
@@ -46,8 +45,7 @@ for (let index = 0; index < args.length; index += 1) {
     fail(`未知参数：${arg}（用 --help 查看用法）`);
   }
 }
-if (options.name === null) options.name = process.env.NAVY_WORKER_NAME || readLocalDeployName();
-if (options.name && !/^[a-z0-9][a-z0-9-]{0,62}$/.test(options.name)) {
+if (options.name !== null && !/^[a-z0-9][a-z0-9-]{0,62}$/.test(options.name || "")) {
   fail(`Worker 名“${options.name}”无效：只能包含小写字母、数字和连字符。`);
 }
 
@@ -68,18 +66,6 @@ async function main() {
 
   if (options.skipSecrets) return;
   await ensureSecrets();
-}
-
-/** 本机专用的部署配置，例如让自己的站点继续部署到旧的 Worker 名。 */
-function readLocalDeployName() {
-  const file = path.join(root, ".navy-deploy.json");
-  if (!existsSync(file)) return null;
-  try {
-    const config = JSON.parse(readFileSync(file, "utf8"));
-    return typeof config.name === "string" && config.name.trim() ? config.name.trim() : null;
-  } catch {
-    fail(".navy-deploy.json 不是有效的 JSON。");
-  }
 }
 
 /** 兼容旧版部署脚本保存的 token。 */
@@ -227,8 +213,7 @@ function printHelp() {
 
   --set-password      部署后重新设置管理员密码
   --rotate-session    部署后重新生成 SESSION_SECRET（所有设备需重新登录）
-  --name <worker>     使用另一个 Worker 名（也可以用环境变量 NAVY_WORKER_NAME
-                      或本机的 .navy-deploy.json；默认读取 wrangler.toml）
+  --name <worker>     使用另一个 Worker 名（默认读取 wrangler.toml）
   --skip-secrets      只部署，不检查密钥
   -h, --help          显示帮助
 

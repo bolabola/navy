@@ -20,7 +20,7 @@ jobs:
 
   # 推送到 master 且测试通过后自动部署。
   # 需要在仓库 Settings → Secrets and variables → Actions 中添加 CLOUDFLARE_API_TOKEN
-  # （多账号时再添加 CLOUDFLARE_ACCOUNT_ID；Worker 名不是 wrangler.toml 里的 navy 时再添加变量 WORKER_NAME）。
+  # （多账号时再添加 CLOUDFLARE_ACCOUNT_ID）。
   # 没有配置 token 时这个任务会跳过部署步骤，fork 不受影响。
   deploy:
     needs: test
@@ -32,8 +32,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      # 可选：仓库变量 WORKER_NAME，用来部署到 wrangler.toml 以外的 Worker 名
-      NAVY_WORKER_NAME: ${{ vars.WORKER_NAME }}
     steps:
       - name: Skip when no Cloudflare token is configured
         if: env.CLOUDFLARE_API_TOKEN == ''
