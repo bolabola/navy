@@ -310,7 +310,6 @@ The dashboard is saved as one versioned document. The version check and the writ
 │   ├── validation.ts      Validation and allow-list sanitizing
 │   └── shared.ts · urlSafety.ts · config.ts
 ├── worker/test/           Vitest tests (run in workerd)
-├── docs/demo/             Sample data and instructions for a public demo site
 ├── scripts/               Build and deploy scripts
 └── wrangler.toml
 ```

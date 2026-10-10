@@ -307,7 +307,6 @@ Client Secret 和云盘的刷新令牌写入 KV 前会先加密（AES-256-GCM）
 │   ├── validation.ts      校验与白名单清洗
 │   └── shared.ts · urlSafety.ts · config.ts
 ├── worker/test/           Vitest 测试（运行在 workerd 中）
-├── docs/demo/             公开演示站的示例数据和搭建说明
 ├── scripts/               构建与部署脚本
 └── wrangler.toml
 ```
