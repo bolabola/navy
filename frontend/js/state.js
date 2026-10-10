@@ -39,6 +39,7 @@ export const uiState = {
   backupStatus: null,
   localLastBackup: null,
   backupStatusLoading: false,
+  backupStatusError: null,
   backupStatusRequest: null,
   cloudBackupRunning: {},
   backupsOpen: false,

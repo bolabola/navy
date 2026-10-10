@@ -81,6 +81,13 @@ export function installClickHandlers() {
     const action = button.getAttribute("data-action");
     const boardId = button.getAttribute("data-board-id");
 
+    if (action === "retry-backup-status") {
+      uiState.backupStatusError = null;
+      loadBackupStatus();
+      updateBackupMenu();
+      return;
+    }
+
     if (action === "open-search") {
       openPalette();
       return;

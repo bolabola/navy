@@ -95,9 +95,12 @@ export function layoutStoragePayload() {
 export function apiGet(path) {
   return fetch(API_BASE + path, { credentials: "same-origin", cache: "no-store" }).then(function (res) {
     if (!res.ok) {
-      const err = new Error("API " + path + " " + res.status);
-      err.status = res.status;
-      throw err;
+      return res.text().catch(function () { return ""; }).then(function (text) {
+        const err = new Error("API " + path + " " + res.status);
+        err.status = res.status;
+        err.responseText = text;
+        throw err;
+      });
     }
     return res.json();
   });

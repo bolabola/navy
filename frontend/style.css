@@ -734,6 +734,17 @@ i[class^="icon-"] {
   max-width: 190px;
 }
 
+/* 读取失败的原因要完整显示，不能截断 */
+.backup-menu__row--error {
+  align-items: flex-start;
+}
+
+.backup-menu__row--error .backup-menu__last {
+  max-width: none;
+  white-space: normal;
+  line-height: 1.5;
+}
+
 .backup-menu__actions {
   display: flex;
   flex: 0 0 auto;

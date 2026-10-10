@@ -15,10 +15,12 @@ export function loadBackupStatus() {
     apiGet("/backups").catch(function () { return { backups: [] }; })
   ]).then(function (results) {
     uiState.backupStatus = results[0] || null;
+    uiState.backupStatusError = null;
     syncLocalLastBackupFromApi(results[1]);
     return uiState.backupStatus;
-  }).catch(function () {
+  }).catch(function (error) {
     uiState.backupStatus = null;
+    uiState.backupStatusError = describeBackupStatusError(error);
     return null;
   }).finally(function () {
     uiState.backupStatusRequest = null;
@@ -28,12 +30,31 @@ export function loadBackupStatus() {
   return uiState.backupStatusRequest;
 }
 
+/** 把读取云备份状态失败的原因翻译成用户能看懂、能照着处理的话。 */
+export function describeBackupStatusError(error) {
+  const status = error && error.status;
+  const detail = String((error && error.responseText) || "");
+  if (!status) return "网络连接失败，请检查网络后重试";
+  if (status === 401 || status === 403) return "登录已失效，请重新登录";
+  if (/ADMIN_PASSWORD is not configured/i.test(detail)) {
+    return "服务端还没有配置管理员密码，请在 Cloudflare 后台的 Runtime variables and secrets 中添加 ADMIN_PASSWORD";
+  }
+  if (/ADMIN_PASSWORD is too weak/i.test(detail)) {
+    return "服务端的管理员密码太短或是示例值，请在 Cloudflare 后台重新设置 ADMIN_PASSWORD";
+  }
+  return "读取云备份状态失败（HTTP " + status + "）" + (detail ? "：" + detail.slice(0, 120) : "");
+}
+
 export function renderBackupMenu() {
   const wrapper = document.createElement("div");
   wrapper.className = "workspace__menu";
 
   const regularEntry = getRegularBackupEntry();
-  const cloudEntries = getCloudBackupEntries();
+  const statusError = !uiState.backupStatusLoading && uiState.backupStatusError;
+  const errorEntry = statusError
+    ? { id: "cloud-status", label: "云备份", status: "failed", detail: statusError, connected: true }
+    : null;
+  const cloudEntries = errorEntry ? [errorEntry] : getCloudBackupEntries();
   const summary = getBackupSummary(regularEntry, cloudEntries);
   const trigger = actionButton("workspace__save-status workspace__save-status--" + summary.status, "toggle-backup-menu", null, "Backup status", [
     staticIconNode(statusIcon(summary.status)),
@@ -56,6 +77,10 @@ export function renderBackupMenu() {
     loading.className = "backup-menu__message";
     loading.textContent = "正在读取云备份状态...";
     menu.appendChild(loading);
+  } else if (errorEntry) {
+    const row = renderBackupStatusRow(errorEntry, { action: "retry-backup-status", label: "重试" });
+    row.classList.add("backup-menu__row--error");
+    menu.appendChild(row);
   } else {
     cloudEntries.forEach(function (entry) {
       menu.appendChild(renderBackupStatusRow(entry, {
