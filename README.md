@@ -164,7 +164,6 @@ macOS、Linux、Windows 都用同一条命令，只需要 Node.js。部署脚本
 
 ```text
 npm run deploy -- --set-password     重新设置管理员密码
-npm run deploy -- --rotate-session   让所有设备重新登录（写入新的 SESSION_SECRET）
 npm run deploy -- --name my-navy     部署成另一个 Worker 名
 npm run deploy -- --skip-secrets     只部署，不检查密钥
 ```
@@ -205,7 +204,6 @@ Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。
 | 名称 | 必需 | 说明 |
 |---|:---:|---|
 | `ADMIN_PASSWORD` | ✅ | 管理员密码，建议 16 位以上随机字符串。修改后无需重新部署 |
-| `SESSION_SECRET` |  | 登录凭证的签名密钥。不设置时网站自动生成并保存，一般不需要填；手动设置时至少 32 位随机字符。修改会让所有登录失效 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |  | 开启 Google Drive 云备份 |
 | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |  | 开启 Dropbox 云备份 |
 
@@ -461,7 +459,7 @@ npx wrangler kv key delete --binding BOARD_KV state --remote   # 生产
 
 - [ ] `GET /api/auth` 未登录时返回 `{"isAdmin":false}`
 - [ ] 错误密码连续登录达到限制后返回 `429`
-- [ ] 弱 `ADMIN_PASSWORD`（或手动设置了过短的 `SESSION_SECRET`）会返回 `500`
+- [ ] 弱 `ADMIN_PASSWORD` 会返回 `500`
 - [ ] 未登录时可以浏览、打开链接、切换显示模式、折叠看板，刷新后恢复云端状态
 - [ ] 主题按钮可以切换浅色 / 暗色，刷新后保留选择
 - [ ] ⌘K 能搜到其他页面的链接，回车在新标签页打开

@@ -2,10 +2,6 @@
 # 管理员密码：至少 12 位，生产环境建议 16 位以上随机字符串。示例值会被后端拒绝，务必替换。
 ADMIN_PASSWORD=replace-with-your-admin-password
 
-# 可选：会话签名密钥。不设置时网站会自动生成并保存，一般不需要填。
-# 手动设置时至少 32 位随机字符，例如 `openssl rand -hex 32` 的输出。
-# SESSION_SECRET=
-
 # 可选：云端备份。需要时取消注释并填写，详见 README 的“备份与恢复”。
 # GOOGLE_CLIENT_ID=
 # GOOGLE_CLIENT_SECRET=

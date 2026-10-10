@@ -9,8 +9,7 @@ export default defineConfig({
         // 测试里使用 node:assert，需要 nodejs_compat；生产配置不受影响。
         compatibilityFlags: ["nodejs_compat"],
         bindings: {
-          ADMIN_PASSWORD: "strong-admin-password",
-          SESSION_SECRET: "0123456789abcdef0123456789abcdef"
+          ADMIN_PASSWORD: "strong-admin-password"
         }
       }
     })

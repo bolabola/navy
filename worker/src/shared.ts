@@ -5,8 +5,6 @@ export interface Env {
   /** 看板状态的 Durable Object（强一致）。未绑定时退回直接读写 KV。 */
   BOARD_STATE?: DurableObjectNamespace<BoardStateObject>;
   ADMIN_PASSWORD: string;
-  /** 可选：未设置时自动生成并保存在 Durable Object 中（见 auth.ts resolveSessionSecret）。 */
-  SESSION_SECRET?: string;
   ASSETS: Fetcher;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;

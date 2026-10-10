@@ -3,7 +3,7 @@ import {
   buildSetCookieHeader,
   createSessionToken,
   getSession,
-  resolveSessionSecret,
+  getSigningSecret,
   revokeSession
 } from "./auth";
 import { json, readJsonBody, text, timingSafeEqualString, type Env } from "./shared";
@@ -53,7 +53,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
     globalFailCountStr !== null ? env.BOARD_KV.delete(globalFailKey) : null
   ]);
 
-  const session = await createSessionToken(await resolveSessionSecret(env), env.ADMIN_PASSWORD, env.BOARD_KV);
+  const session = await createSessionToken(await getSigningSecret(env), env.ADMIN_PASSWORD, env.BOARD_KV);
   return json({ ok: true, csrfToken: session.csrfToken }, 200, {
     "Set-Cookie": buildSetCookieHeader(session.token)
   });

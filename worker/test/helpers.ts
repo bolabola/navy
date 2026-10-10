@@ -51,7 +51,6 @@ export function createEnv(initial: Record<string, string> = {}, overrides: Parti
   return {
     BOARD_KV: createKv(initial),
     ADMIN_PASSWORD: "strong-admin-password",
-    SESSION_SECRET: "0123456789abcdef0123456789abcdef",
     ASSETS: { fetch: async () => new Response("asset") } as unknown as Fetcher,
     ...overrides
   } as TestEnv;

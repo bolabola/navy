@@ -8,24 +8,22 @@ test("worker rejects weak production configuration", async () => {
   assert.equal(res.status, 500);
 });
 
-test("session secret is generated once and reused when SESSION_SECRET is not set", async () => {
-  const env = createEnv({}, { SESSION_SECRET: undefined });
+test("the session signing key is generated once and reused", async () => {
+  const env = createEnv();
   assert.equal((await call(env, "/api/auth")).status, 200);
   const auth = await login(env);
-  const generated = env.BOARD_KV.dump().get("meta:session_secret");
+  const generated = env.BOARD_KV.dump().get("meta:signing_key");
   assert.ok(generated && /^[0-9a-f]{64}$/.test(generated));
 
   const check = await call(env, "/api/auth", { headers: { Cookie: auth.cookie } });
   assert.equal((await check.json() as { isAdmin: boolean }).isAdmin, true);
   await login(env);
-  assert.equal(env.BOARD_KV.dump().get("meta:session_secret"), generated);
+  assert.equal(env.BOARD_KV.dump().get("meta:signing_key"), generated);
 });
 
-test("worker rejects the placeholder secrets from .dev.vars.example", async () => {
-  const password = createEnv({}, { ADMIN_PASSWORD: "replace-with-your-admin-password" });
-  assert.equal((await call(password, "/api/auth")).status, 500);
-  const secret = createEnv({}, { SESSION_SECRET: "replace-with-at-least-32-random-characters" });
-  assert.equal((await call(secret, "/api/auth")).status, 500);
+test("worker rejects the placeholder password from .dev.vars.example", async () => {
+  const env = createEnv({}, { ADMIN_PASSWORD: "replace-with-your-admin-password" });
+  assert.equal((await call(env, "/api/auth")).status, 500);
 });
 
 test("login sets a hardened session cookie", async () => {

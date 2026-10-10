@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // 部署到 Cloudflare Workers。跨平台（macOS / Linux / Windows），只依赖 Node。
 //
-//   npm run deploy                         部署；首次部署时引导设置管理员密码（SESSION_SECRET 由网站自动生成）
+//   npm run deploy                         部署；首次部署时引导设置管理员密码
 //   npm run deploy -- --set-password       部署后重新设置管理员密码
-//   npm run deploy -- --rotate-session     部署后重新生成 SESSION_SECRET（所有设备需重新登录）
 //   npm run deploy -- --name my-navy       使用另一个 Worker 名
 //   npm run deploy -- --skip-secrets       只部署，不检查密钥
 //
@@ -13,7 +12,6 @@
 // 登录方式：交互环境下没有 CLOUDFLARE_API_TOKEN 时会调用 `wrangler login`（浏览器授权）；
 // CI 中请设置 CLOUDFLARE_API_TOKEN（以及多账号时的 CLOUDFLARE_ACCOUNT_ID）。
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -28,7 +26,6 @@ const args = process.argv.slice(2);
 const options = {
   name: null,
   setPassword: false,
-  rotateSession: false,
   skipSecrets: false
 };
 for (let index = 0; index < args.length; index += 1) {
@@ -36,7 +33,6 @@ for (let index = 0; index < args.length; index += 1) {
   if (arg === "--name") options.name = args[++index];
   else if (arg.startsWith("--name=")) options.name = arg.slice("--name=".length);
   else if (arg === "--set-password") options.setPassword = true;
-  else if (arg === "--rotate-session") options.rotateSession = true;
   else if (arg === "--skip-secrets") options.skipSecrets = true;
   else if (arg === "-h" || arg === "--help") {
     printHelp();
@@ -116,11 +112,6 @@ async function ensureSecrets() {
       step(missingPassword ? "首次部署：设置管理员密码" : "重新设置管理员密码");
       updates.ADMIN_PASSWORD = await askPassword();
     }
-  }
-  // SESSION_SECRET 不需要设置：网站会自动生成。只有要求“所有设备重新登录”时才写入一个新值。
-  if (options.rotateSession) {
-    updates.SESSION_SECRET = randomBytes(32).toString("hex");
-    console.log("将写入新的 SESSION_SECRET，所有设备需要重新登录。");
   }
 
   const names = Object.keys(updates);
@@ -212,12 +203,10 @@ function printHelp() {
   console.log(`用法：npm run deploy -- [选项]
 
   --set-password      部署后重新设置管理员密码
-  --rotate-session    部署后重新生成 SESSION_SECRET（所有设备需重新登录）
   --name <worker>     使用另一个 Worker 名（默认读取 wrangler.toml）
   --skip-secrets      只部署，不检查密钥
   -h, --help          显示帮助
 
 首次部署会自动创建 KV 命名空间和 Durable Object，并引导设置管理员密码。
-SESSION_SECRET 由网站自动生成，不需要设置。
 CI 中请设置 CLOUDFLARE_API_TOKEN（多账号时再设置 CLOUDFLARE_ACCOUNT_ID）。`);
 }

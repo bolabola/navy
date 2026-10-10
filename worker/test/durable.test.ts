@@ -70,10 +70,10 @@ test("a fresh Durable Object imports existing state and backups from KV", async 
   assert.equal(await env.BOARD_KV.get("state_backup:2025-01-01T00-00-00-000Z"), null);
 });
 
-test("the Durable Object generates the session secret only once", async () => {
-  const stub = env.BOARD_STATE!.get(env.BOARD_STATE!.idFromName("session-secret-test"));
-  const [a, b] = await Promise.all([stub.getSessionSecret(), stub.getSessionSecret()]);
+test("the Durable Object generates the session signing key only once", async () => {
+  const stub = env.BOARD_STATE!.get(env.BOARD_STATE!.idFromName("signing-key-test"));
+  const [a, b] = await Promise.all([stub.getSigningSecret(), stub.getSigningSecret()]);
   assert.match(a, /^[0-9a-f]{64}$/);
   assert.equal(a, b);
-  assert.equal(await stub.getSessionSecret(), a);
+  assert.equal(await stub.getSigningSecret(), a);
 });
