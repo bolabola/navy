@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import worker from "../src/index";
+import { seal, unseal } from "../src/sealing";
+import type { Env } from "../src/shared";
 import { board, call, createCtx, createEnv, login, mockFetch, stateWith } from "./helpers";
+
+/** KV 里存的必须是密文，并且能解密回原值。 */
+async function assertSealed(env: Env, stored: string, expected: string) {
+  assert.match(stored, /^enc:v1:/);
+  assert.ok(!stored.includes(expected));
+  assert.equal(await unseal(env, stored), expected);
+}
 
 const googleClient = { GOOGLE_CLIENT_ID: "client-id", GOOGLE_CLIENT_SECRET: "client-secret" };
 const dropboxClient = { DROPBOX_CLIENT_ID: "dropbox-id", DROPBOX_CLIENT_SECRET: "dropbox-secret" };
@@ -48,7 +57,8 @@ test("cron uploads to Google Drive when the board changed, and skips when unchan
   assert.equal(record.lastBackup.status, "success");
   assert.match(record.lastBackup.fileName, /^state_backup_/);
   assert.equal(record.lastBackup.stateUpdatedAt, "2026-01-01T00:00:00.000Z");
-  assert.equal(record.refreshToken, "refresh-token");
+  // 旧的明文刷新令牌在保存时被换成密文
+  await assertSealed(env, record.refreshToken, "refresh-token");
 
   const before = calls.length;
   await runCron(env);
@@ -188,7 +198,7 @@ test("Google Drive callback stores a single record and runs the first backup", a
   assert.equal(res.status, 200);
   await settle();
   const record = JSON.parse((await env.BOARD_KV.get("cloud_backup:google"))!);
-  assert.equal(record.refreshToken, "refresh-token");
+  await assertSealed(env, record.refreshToken, "refresh-token");
   assert.equal(record.folderId, "folder-id");
   assert.equal(record.lastBackup.status, "success");
   assert.equal(await env.BOARD_KV.get("cloud_backup_oauth_state:state-1"), null);
@@ -216,7 +226,7 @@ test("Dropbox callback stores refresh token", async () => {
   }, dropboxClient);
   const res = await call(env, "/api/cloud-backup/dropbox/callback?state=dropbox-state&code=code-1");
   assert.equal(res.status, 200);
-  assert.equal(JSON.parse((await env.BOARD_KV.get("cloud_backup:dropbox"))!).refreshToken, "dropbox-refresh");
+  await assertSealed(env, JSON.parse((await env.BOARD_KV.get("cloud_backup:dropbox"))!).refreshToken, "dropbox-refresh");
 });
 
 test("legacy per-field keys are migrated into one record", async () => {
@@ -335,6 +345,9 @@ test("OAuth client credentials can be saved in the app and are used for connect 
 
   const saved = await call(env, "/api/cloud-backup/google/client", { method: "PUT", auth, json: { clientId: " app-client-id ", clientSecret: "app-secret" } });
   assert.equal(saved.status, 200);
+  const storedClient = JSON.parse(env.BOARD_KV.dump().get("cloud_backup:google:client")!);
+  assert.equal(storedClient.clientId, "app-client-id");
+  await assertSealed(env, storedClient.clientSecret, "app-secret");
 
   const statusRes = await call(env, "/api/cloud-backup/status", { auth });
   const statusText = await statusRes.text();
@@ -368,4 +381,17 @@ test("credentials from Cloudflare variables take priority and cannot be changed 
   assert.equal(status.providers.find((p) => p.id === "google")!.configuredBy, "env");
   const res = await call(env, "/api/cloud-backup/google/client", { method: "PUT", auth, json: { clientId: "other", clientSecret: "other" } });
   assert.equal(res.status, 409);
+});
+
+test("sealed values use a random IV and fail closed when tampered with", async () => {
+  const env = createEnv();
+  const a = await seal(env, "secret-value");
+  const b = await seal(env, "secret-value");
+  assert.notEqual(a, b);
+  assert.equal(await unseal(env, a), "secret-value");
+  assert.equal(await unseal(env, "plain-legacy-value"), "plain-legacy-value");
+  const tampered = a.slice(0, -2) + (a.endsWith("A") ? "BB" : "AA");
+  assert.equal(await unseal(env, tampered), null);
+  // 换了一个站点（签名密钥不同）就解不开
+  assert.equal(await unseal(createEnv(), a), null);
 });

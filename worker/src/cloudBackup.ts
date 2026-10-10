@@ -16,6 +16,7 @@ import {
   type ProviderId,
   type RemoteBackupFile
 } from "./cloudProviders";
+import { seal, unseal } from "./sealing";
 import {
   escapeHtml,
   HttpError,
@@ -68,13 +69,17 @@ function legacyKey(provider: ProviderId, key: string): string {
 async function loadRecord(env: Env, provider: CloudProvider): Promise<ProviderRecord> {
   const raw = await env.BOARD_KV.get(recordKey(provider.id));
   if (raw) {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (isPlainObject(parsed)) return sanitizeRecord(parsed);
+      parsed = JSON.parse(raw);
     } catch {
-      // 损坏的记录按未连接处理
+      return {}; // 损坏的记录按未连接处理
     }
-    return {};
+    if (!isPlainObject(parsed)) return {};
+    const record = sanitizeRecord(parsed);
+    // 刷新令牌加密保存；旧版本的明文也能读取，下次保存时会自动加密。
+    if (record.refreshToken) record.refreshToken = (await unseal(env, record.refreshToken)) || undefined;
+    return record;
   }
   return migrateLegacyRecord(env, provider);
 }
@@ -105,7 +110,7 @@ async function migrateLegacyRecord(env: Env, provider: CloudProvider): Promise<P
     if (!record.connectedAt) record.connectedAt = await env.BOARD_KV.get("google_drive:connected_at") || undefined;
   }
   if (record.refreshToken) {
-    await env.BOARD_KV.put(recordKey(provider.id), JSON.stringify(record));
+    await saveRecord(env, provider.id, record);
     await deleteLegacyKeys(env, provider.id);
   }
   return record;
@@ -147,7 +152,8 @@ function sanitizeStatus(value: unknown): ProviderBackupStatus | undefined {
 }
 
 async function saveRecord(env: Env, provider: ProviderId, record: ProviderRecord): Promise<void> {
-  await env.BOARD_KV.put(recordKey(provider), JSON.stringify(record));
+  const stored = { ...record, refreshToken: record.refreshToken ? await seal(env, record.refreshToken) : undefined };
+  await env.BOARD_KV.put(recordKey(provider), JSON.stringify(stored));
 }
 
 interface ConnectedConfig {
@@ -328,7 +334,7 @@ export async function handleCloudBackupSaveClient(request: Request, env: Env, pr
   const clientSecret = isPlainObject(payload) ? readClientField(payload.clientSecret) : null;
   if (!clientId || !clientSecret) return text("Invalid client id or secret", 400);
 
-  await env.BOARD_KV.put(clientCredentialsKey(provider.id), JSON.stringify({ clientId, clientSecret }));
+  await env.BOARD_KV.put(clientCredentialsKey(provider.id), JSON.stringify({ clientId, clientSecret: await seal(env, clientSecret) }));
   if (!existing || existing.clientId !== clientId || existing.clientSecret !== clientSecret) {
     await env.BOARD_KV.delete(recordKey(provider.id));
   }

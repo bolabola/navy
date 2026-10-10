@@ -1,3 +1,4 @@
+import { unseal } from "./sealing";
 import type { Env } from "./shared";
 
 export type ProviderId = "google" | "dropbox";
@@ -324,7 +325,8 @@ export async function getClientCredentials(env: Env, provider: CloudProvider): P
   try {
     const parsed = JSON.parse(raw) as { clientId?: unknown; clientSecret?: unknown };
     if (typeof parsed.clientId === "string" && parsed.clientId && typeof parsed.clientSecret === "string" && parsed.clientSecret) {
-      return { clientId: parsed.clientId, clientSecret: parsed.clientSecret, source: "app" };
+      const clientSecret = await unseal(env, parsed.clientSecret);
+      if (clientSecret) return { clientId: parsed.clientId, clientSecret, source: "app" };
     }
   } catch {
     // 损坏的记录按未配置处理
