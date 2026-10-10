@@ -154,7 +154,7 @@ npm run dev
 <br>
 
 1. 打开 Cloudflare 后台 **Workers & Pages → 创建 → 导入 Git 仓库**，选择你的仓库，项目名填 `navy`（或者你想要的名字），按默认设置部署。
-2. 部署完成后进入这个 Worker 的 **Settings（设置）→ Variables and Secrets（变量和机密）**，点 **Add（添加）**：
+2. 部署完成后进入这个 Worker 的 **Settings（设置）**，找到 **Runtime → Variables and Secrets（运行时变量和机密）**，点 **Add（添加）**。注意不是 **Build → Variables and secrets（构建变量）**，加在构建变量里网站运行时读不到：
 
    | 字段 | 填写 |
    |---|---|
@@ -167,7 +167,7 @@ npm run dev
 </details>
 
 > [!IMPORTANT]
-> “导入 Git 仓库”**不会**提示你填写管理员密码。漏掉第 2 步的话，网站的接口会一直返回 500，看板无法登录和保存。
+> “导入 Git 仓库”**不会**提示你填写管理员密码。漏掉第 2 步，或者把密码加到了构建变量里，网站的接口都会一直返回 500，登录时提示“服务端密码配置无效”。
 
 ### 方式二：命令行部署
 
