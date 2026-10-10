@@ -146,6 +146,9 @@ npm run dev
 3. 提示你填写 `ADMIN_PASSWORD` 和 `SESSION_SECRET`（示例值会被拒绝，必须换成自己的）
 4. 构建并部署，之后你往自己的仓库推送代码会自动重新部署
 
+> [!TIP]
+> 按钮会在你的 GitHub 里新建一个副本仓库。如果你想直接用已有的仓库（比如自己 fork 的或者原作者本人），可以在 Cloudflare 后台 **Workers & Pages → 创建 → 导入 Git 仓库** 里选择它，再在 Worker 设置中添加 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 两个密钥，效果相同。
+
 ### 方式二：命令行部署
 
 ```bash
@@ -170,7 +173,12 @@ Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。
 
 ### 方式三：推送代码自动部署（GitHub Actions）
 
-仓库自带的 CI 在 `master` 分支测试通过后会自动部署。在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中添加：
+仓库自带的 CI 在 `master` 分支测试通过后会自动部署。
+
+> [!WARNING]
+> 方式一的一键部署和“导入 Git 仓库”都已经开启了 Cloudflare 自动构建，推送代码会自动部署。用了其中任意一种，就**不要**再给 GitHub Actions 配 `CLOUDFLARE_API_TOKEN`，否则每次推送会部署两遍。方式三只适合用命令行部署、又想推送后自动上线的情况。
+
+在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中添加：
 
 | Secret | 说明 |
 |---|---|

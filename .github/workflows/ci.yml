@@ -22,6 +22,7 @@ jobs:
   # 需要在仓库 Settings → Secrets and variables → Actions 中添加 CLOUDFLARE_API_TOKEN
   # （多账号时再添加 CLOUDFLARE_ACCOUNT_ID）。
   # 没有配置 token 时这个任务会跳过部署步骤，fork 不受影响。
+  # 已经用 Cloudflare 一键部署 / 导入 Git 仓库（Cloudflare 自动构建）的，不要再配置 token，否则每次推送会部署两遍。
   deploy:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
