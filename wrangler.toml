@@ -16,10 +16,10 @@ binding = "ASSETS"
 [triggers]
 crons = ["17 * * * *"]
 
-# KV namespace for board state. id 在首次部署前用 `npx wrangler kv namespace create BOARD_KV` 创建后填入
+# 会话、登录限流、云备份配置和看板只读镜像。
+# 不需要填 id：首次部署时 Wrangler 会自动创建，之后的部署沿用已绑定的命名空间。
 [[kv_namespaces]]
 binding = "BOARD_KV"
-id = "REPLACE_WITH_KV_ID"
 
 # 看板状态的权威存储（强一致）。KV 中的 state 作为只读镜像供匿名访客快速读取。
 [[durable_objects.bindings]]

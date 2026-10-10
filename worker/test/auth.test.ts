@@ -8,6 +8,13 @@ test("worker rejects weak production configuration", async () => {
   assert.equal(res.status, 500);
 });
 
+test("worker rejects the placeholder secrets from .dev.vars.example", async () => {
+  const password = createEnv({}, { ADMIN_PASSWORD: "replace-with-your-admin-password" });
+  assert.equal((await call(password, "/api/auth")).status, 500);
+  const secret = createEnv({}, { SESSION_SECRET: "replace-with-at-least-32-random-characters" });
+  assert.equal((await call(secret, "/api/auth")).status, 500);
+});
+
 test("login sets a hardened session cookie", async () => {
   const env = createEnv();
   const res = await call(env, "/api/login", { method: "POST", json: { password: env.ADMIN_PASSWORD } });

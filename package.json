@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "build": "node scripts/build.mjs",
-    "deploy": "bash ./scripts/cloudflare.sh",
-    "deploy:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/cloudflare.ps1",
+    "deploy": "node scripts/deploy.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/build.mjs && vitest run"
   },
@@ -18,5 +17,21 @@
     "typescript": "^5.4.5",
     "vitest": "4.1.0",
     "wrangler": "4.141.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "ADMIN_PASSWORD": {
+        "description": "管理员密码，至少 12 位，建议 16 位以上随机字符串。不要使用示例值。"
+      },
+      "SESSION_SECRET": {
+        "description": "会话签名密钥，至少 32 位随机字符，例如 `openssl rand -hex 32` 的输出。"
+      },
+      "BOARD_KV": {
+        "description": "会话、登录限流、云备份配置和看板只读镜像。"
+      },
+      "BOARD_STATE": {
+        "description": "看板数据的权威存储（Durable Object）。"
+      }
+    }
   }
 }

@@ -1,10 +1,12 @@
-ADMIN_PASSWORD=replace-with-a-local-dev-password
+# 必填。复制为 .dev.vars 用于本地开发；“一键部署”也会按这个文件提示填写生产环境密钥。
+# 示例值会被后端拒绝，务必替换成你自己的值。
+# 管理员密码：至少 12 位，生产环境建议 16 位以上随机字符串。
+ADMIN_PASSWORD=replace-with-your-admin-password
+# 会话签名密钥：至少 32 位随机字符，例如 `openssl rand -hex 32` 的输出。
 SESSION_SECRET=replace-with-at-least-32-random-characters
 
-# Optional: Google Drive OAuth client for in-app backup authorization.
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-
-# Optional: Dropbox OAuth client for in-app backup authorization.
-DROPBOX_CLIENT_ID=
-DROPBOX_CLIENT_SECRET=
+# 可选：云端备份。需要时取消注释并填写，详见 README 的“备份与恢复”。
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
+# DROPBOX_CLIENT_ID=
+# DROPBOX_CLIENT_SECRET=

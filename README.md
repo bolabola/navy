@@ -14,6 +14,8 @@
 ![Vanilla JS](https://img.shields.io/badge/前端-Vanilla%20JS-ff4f1a)
 ![No CDN](https://img.shields.io/badge/无追踪-无%20CDN%20依赖-12805c)
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bolabola/navy)
+
 [功能](#-功能) · [快速开始](#-快速开始) · [部署](#-部署到-cloudflare) · [备份](#-备份与恢复) · [API](#-api) · [故障排查](#-故障排查)
 
 <br>
@@ -127,69 +129,66 @@ npm run dev
 打开 <http://127.0.0.1:8787>。`wrangler dev` 会自动构建前端（`scripts/build.mjs`），修改 `frontend/` 后自动重新构建。
 
 > [!IMPORTANT]
-> 先把 `.dev.vars` 里的 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 改成你自己的本地值。后端会拒绝空密码、`change-me-now`、少于 12 位的 `ADMIN_PASSWORD`，以及少于 32 位的 `SESSION_SECRET`。`.dev.vars` 不会被提交到 Git。
+> 先把 `.dev.vars` 里的 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 改成你自己的本地值。后端会拒绝空值、示例里的占位值、少于 12 位的 `ADMIN_PASSWORD`，以及少于 32 位的 `SESSION_SECRET`。`.dev.vars` 不会被提交到 Git。
 
 <br>
 
 ## 🚢 部署到 Cloudflare
 
-一条命令完成部署：
+### 方式一：一键部署（推荐）
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/bolabola/navy)
+
+点上面的按钮，用 Cloudflare 账号登录后会自动：
+
+1. 把仓库复制到你的 GitHub 账号
+2. 创建 Worker、KV 命名空间和 Durable Object
+3. 提示你填写 `ADMIN_PASSWORD` 和 `SESSION_SECRET`（示例值会被拒绝，必须换成自己的）
+4. 构建并部署，之后你往自己的仓库推送代码会自动重新部署
+
+### 方式二：命令行部署
 
 ```bash
-npm run deploy          # macOS / Linux，依赖 bash、curl、jq
-npm run deploy:win      # Windows PowerShell
+npm install
+npm run deploy
 ```
 
-部署脚本会依次：
+macOS、Linux、Windows 都用同一条命令，只需要 Node.js。部署脚本会：
 
-1. 检查或保存 Cloudflare 部署 token
-2. 创建或复用 KV 命名空间 `BOARD_KV`
-3. 生成本地 `.wrangler.deploy.toml`，写入真实的 KV namespace id
-4. 按需设置生产环境的 `ADMIN_PASSWORD` 和 `SESSION_SECRET`
-5. 用 Wrangler 部署 Worker 和静态资源，并输出访问地址
+1. 没有登录时打开浏览器，用 `wrangler login` 授权（也可以提前设置 `CLOUDFLARE_API_TOKEN`）
+2. 部署 Worker 和前端；首次部署时自动创建 KV 命名空间和 Durable Object，之后沿用
+3. 首次部署时提示设置管理员密码，并自动生成 `SESSION_SECRET`
+
+```text
+npm run deploy -- --set-password     重新设置管理员密码
+npm run deploy -- --rotate-session   重新生成 SESSION_SECRET（所有设备需要重新登录）
+npm run deploy -- --name my-navy     部署成另一个 Worker 名
+npm run deploy -- --skip-secrets     只部署，不检查密钥
+```
+
+### 方式三：推送代码自动部署（GitHub Actions）
+
+仓库自带的 CI 在 `master` 分支测试通过后会自动部署。在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中添加：
+
+| Secret | 说明 |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | 部署 token，至少需要 **Workers Scripts 编辑**、**Workers KV Storage 编辑**、**Account Settings 读取** 权限 |
+| `CLOUDFLARE_ACCOUNT_ID` | 可选，token 能访问多个账号时填写 |
+
+没有配置 `CLOUDFLARE_API_TOKEN` 时会自动跳过部署，fork 的仓库不受影响。
 
 <details>
 <summary><b>如何创建部署 token</b></summary>
 
 <br>
 
-推荐让脚本自动创建一个权限最小的部署 token：
-
 1. 打开 Cloudflare **My Profile → [API Tokens](https://dash.cloudflare.com/profile/api-tokens)**，点 **Create Token**。
-2. 选择 **Create Additional Tokens** 模板，过期时间建议设得很短。
-3. 复制生成的 token，然后运行：
-
-   ```bash
-   bash scripts/cloudflare.sh --create-deploy-token --save-token-to-user-environment
-   ```
-
-4. 粘贴刚才的 token。脚本会创建一个只有 Workers Scripts 编辑、Workers KV 编辑、账户设置只读权限的部署 token，保存到 `~/.config/board-trello/cloudflare.env`。
-5. 之后直接 `npm run deploy` 即可。用完的引导 token 建议删除。
+2. 选择 **Edit Cloudflare Workers** 模板，或者自定义并只勾选上表中的三项权限。
+3. **Account Resources** 选你要部署的账号，创建后复制 token（只显示一次）。
 
 </details>
 
-<details>
-<summary><b>部署脚本的全部选项</b></summary>
-
-<br>
-
-```text
---wizard                         交互式向导（不带参数时的默认行为）
---create-deploy-token            用引导 token 创建权限最小的部署 token
---set-token                      粘贴并保存已有的部署 token
---prepare-kv                     创建或复用 BOARD_KV，并写入 .wrangler.deploy.toml
---set-secrets                    设置生产环境 ADMIN_PASSWORD 和 SESSION_SECRET
---deploy                         用 Wrangler 部署
---all                            依次执行 prepare-kv、set-secrets、deploy
---account-id <id>                指定 Cloudflare 账号
---worker-name <name>             Worker 名称（默认 board-trello）
---save-token-to-user-environment 把 token 保存到 ~/.config/board-trello/cloudflare.env
---save-token-to-local-file       把 token 保存到 .cloudflare-token.local
-```
-
-</details>
-
-`wrangler.toml` 中的 KV id 保留为占位符 `REPLACE_WITH_KV_ID`，真实 id 只写入已被忽略的 `.wrangler.deploy.toml`。绑定自定义域名可以在 Cloudflare Dashboard 的 **Workers & Pages** 设置中完成。
+绑定自定义域名可以在 Cloudflare Dashboard 的 **Workers & Pages** 设置中完成。
 
 ### 环境变量与 Secrets
 
@@ -200,11 +199,11 @@ npm run deploy:win      # Windows PowerShell
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |  | 开启 Google Drive 云备份 |
 | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |  | 开启 Dropbox 云备份 |
 
-本地开发写在 `.dev.vars`，生产环境用 Wrangler secrets：
+本地开发写在 `.dev.vars`。生产环境的密钥由部署脚本设置，也可以手动设置：
 
 ```bash
 npx wrangler secret put ADMIN_PASSWORD
-npx wrangler secret put SESSION_SECRET
+npx wrangler secret put GOOGLE_CLIENT_ID
 ```
 
 <br>
@@ -337,8 +336,7 @@ npx wrangler secret put SESSION_SECRET
 | `npm run build` | 构建前端到 `dist/` |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm test` | 构建前端并在 workerd 中运行测试 |
-| `npm run deploy` | 部署到 Cloudflare（macOS / Linux） |
-| `npm run deploy:win` | 部署到 Cloudflare（Windows） |
+| `npm run deploy` | 部署到 Cloudflare（所有平台） |
 
 <br>
 
@@ -378,7 +376,7 @@ npx wrangler secret put SESSION_SECRET
 
 - `ADMIN_PASSWORD` 使用至少 16 位随机字符串，`SESSION_SECRET` 使用至少 32 字节随机值。
 - 生产环境只走 HTTPS。自定义域名建议开启 Bot Fight Mode、`/api/login` 边缘速率限制、Always Use HTTPS 和 HSTS。
-- 不要提交 `.dev.vars`、`.wrangler.deploy.toml`、`.cloudflare-token.local` 等本地密钥文件（均已在 `.gitignore` 中）。
+- 不要提交 `.dev.vars`、`.cloudflare-token.local` 等本地密钥文件（均已在 `.gitignore` 中）。
 - 前端带严格的 CSP：只允许同源脚本，网站图标也经由自己的 Worker 代理，不直接请求第三方。
 
 <br>
@@ -390,7 +388,7 @@ npx wrangler secret put SESSION_SECRET
 
 <br>
 
-检查 KV namespace id、`ADMIN_PASSWORD`、`SESSION_SECRET` 是否配置正确，以及 Durable Object 迁移（`wrangler.toml` 中的 `[[migrations]]`）是否已随部署生效。
+最常见的原因是 `ADMIN_PASSWORD` 或 `SESSION_SECRET` 没有设置、太短，或者还是示例里的占位值。运行 `npm run deploy -- --set-password` 重新设置即可。
 
 </details>
 
