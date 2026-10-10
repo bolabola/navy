@@ -135,8 +135,48 @@ export async function getAuthenticatedSession(request: Request, secret: string, 
   }
 }
 
-export function getSession(request: Request, env: Env): Promise<SessionPayload | null> {
-  return getAuthenticatedSession(request, env.SESSION_SECRET, env.ADMIN_PASSWORD, env.BOARD_KV);
+export async function getSession(request: Request, env: Env): Promise<SessionPayload | null> {
+  return getAuthenticatedSession(request, await resolveSessionSecret(env), env.ADMIN_PASSWORD, env.BOARD_KV);
+}
+
+export const GENERATED_SESSION_SECRET_KEY = "meta:session_secret";
+
+// isolate 级缓存，按存储绑定区分（测试里同一个 isolate 会创建多个 env）。
+const generatedSecretCache = new WeakMap<object, Promise<string>>();
+
+/**
+ * 会话签名密钥。优先使用手动设置的 SESSION_SECRET；没有设置时自动生成一个随机值，
+ * 保存在 Durable Object 里（强一致，只会生成一次），之后一直沿用。
+ * 没有绑定 Durable Object 时退回保存在 KV。
+ */
+export function resolveSessionSecret(env: Env): Promise<string> {
+  if (typeof env.SESSION_SECRET === "string" && env.SESSION_SECRET.trim().length > 0) {
+    return Promise.resolve(env.SESSION_SECRET);
+  }
+  const owner = (env.BOARD_STATE ?? env.BOARD_KV) as object;
+  let secret = generatedSecretCache.get(owner);
+  if (!secret) {
+    secret = loadGeneratedSecret(env);
+    secret.catch(() => generatedSecretCache.delete(owner));
+    generatedSecretCache.set(owner, secret);
+  }
+  return secret;
+}
+
+export function newRandomSecret(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function loadGeneratedSecret(env: Env): Promise<string> {
+  if (env.BOARD_STATE) {
+    const stub = env.BOARD_STATE.get(env.BOARD_STATE.idFromName("board"));
+    return stub.getSessionSecret();
+  }
+  const existing = await env.BOARD_KV.get(GENERATED_SESSION_SECRET_KEY);
+  if (existing) return existing;
+  const created = newRandomSecret();
+  await env.BOARD_KV.put(GENERATED_SESSION_SECRET_KEY, created);
+  return created;
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   type KvLike,
   type StoredState
 } from "./boardStore";
+import { GENERATED_SESSION_SECRET_KEY, newRandomSecret } from "./auth";
 import { HttpError, type Env } from "./shared";
 
 export type SaveOutcome =
@@ -134,6 +135,15 @@ export class BoardStateObject extends DurableObject<Env> {
     }
     await this.ctx.storage.put(MIGRATED_KEY, new Date().toISOString());
     await Promise.all(backupKeys.map((key) => kv.delete(key)));
+  }
+
+  /** 自动生成的会话签名密钥：DO 内串行执行，并发请求也只会生成一次。 */
+  async getSessionSecret(): Promise<string> {
+    const existing = await this.ctx.storage.get<string>(GENERATED_SESSION_SECRET_KEY);
+    if (typeof existing === "string" && existing.length >= 32) return existing;
+    const created = newRandomSecret();
+    await this.ctx.storage.put(GENERATED_SESSION_SECRET_KEY, created);
+    return created;
   }
 
   read() { return rpc(() => this.core.read()); }

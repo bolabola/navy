@@ -8,6 +8,19 @@ test("worker rejects weak production configuration", async () => {
   assert.equal(res.status, 500);
 });
 
+test("session secret is generated once and reused when SESSION_SECRET is not set", async () => {
+  const env = createEnv({}, { SESSION_SECRET: undefined });
+  assert.equal((await call(env, "/api/auth")).status, 200);
+  const auth = await login(env);
+  const generated = env.BOARD_KV.dump().get("meta:session_secret");
+  assert.ok(generated && /^[0-9a-f]{64}$/.test(generated));
+
+  const check = await call(env, "/api/auth", { headers: { Cookie: auth.cookie } });
+  assert.equal((await check.json() as { isAdmin: boolean }).isAdmin, true);
+  await login(env);
+  assert.equal(env.BOARD_KV.dump().get("meta:session_secret"), generated);
+});
+
 test("worker rejects the placeholder secrets from .dev.vars.example", async () => {
   const password = createEnv({}, { ADMIN_PASSWORD: "replace-with-your-admin-password" });
   assert.equal((await call(password, "/api/auth")).status, 500);

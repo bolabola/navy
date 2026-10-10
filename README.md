@@ -129,7 +129,7 @@ npm run dev
 打开 <http://127.0.0.1:8787>。`wrangler dev` 会自动构建前端（`scripts/build.mjs`），修改 `frontend/` 后自动重新构建。
 
 > [!IMPORTANT]
-> 先把 `.dev.vars` 里的 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 改成你自己的本地值。后端会拒绝空值、示例里的占位值、少于 12 位的 `ADMIN_PASSWORD`，以及少于 32 位的 `SESSION_SECRET`。`.dev.vars` 不会被提交到 Git。
+> 先把 `.dev.vars` 里的 `ADMIN_PASSWORD` 改成你自己的本地值。后端会拒绝空值、示例里的占位值和少于 12 位的密码。`.dev.vars` 不会被提交到 Git。
 
 <br>
 
@@ -143,11 +143,11 @@ npm run dev
 
 1. 把仓库复制到你的 GitHub 账号
 2. 创建 Worker、KV 命名空间和 Durable Object（默认名 `navy`，可以在表单里改）
-3. 提示你填写 `ADMIN_PASSWORD` 和 `SESSION_SECRET`（示例值会被拒绝，必须换成自己的）
+3. 提示你填写管理员密码 `ADMIN_PASSWORD`（示例值会被拒绝，必须换成自己的）
 4. 构建并部署，之后你往自己的仓库推送代码会自动重新部署
 
 > [!TIP]
-> 按钮会在你的 GitHub 里新建一个副本仓库。如果你想直接用已有的仓库（比如自己 fork 的或者原作者本人），可以在 Cloudflare 后台 **Workers & Pages → 创建 → 导入 Git 仓库** 里选择它，再在 Worker 设置中添加 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 两个密钥，效果相同。
+> 按钮会在你的 GitHub 里新建一个副本仓库。如果你想直接用已有的仓库（比如自己 fork 的或者原作者本人），可以在 Cloudflare 后台 **Workers & Pages → 创建 → 导入 Git 仓库** 里选择它，再在 Worker 设置中添加 `ADMIN_PASSWORD` 密钥，效果相同。
 
 ### 方式二：命令行部署
 
@@ -160,11 +160,11 @@ macOS、Linux、Windows 都用同一条命令，只需要 Node.js。部署脚本
 
 1. 没有登录时打开浏览器，用 `wrangler login` 授权（也可以提前设置 `CLOUDFLARE_API_TOKEN`）
 2. 部署 Worker 和前端；首次部署时自动创建 KV 命名空间和 Durable Object，之后沿用
-3. 首次部署时提示设置管理员密码，并自动生成 `SESSION_SECRET`
+3. 首次部署时提示设置管理员密码
 
 ```text
 npm run deploy -- --set-password     重新设置管理员密码
-npm run deploy -- --rotate-session   重新生成 SESSION_SECRET（所有设备需要重新登录）
+npm run deploy -- --rotate-session   让所有设备重新登录（写入新的 SESSION_SECRET）
 npm run deploy -- --name my-navy     部署成另一个 Worker 名
 npm run deploy -- --skip-secrets     只部署，不检查密钥
 ```
@@ -205,7 +205,7 @@ Worker 默认叫 `navy`，KV 命名空间会跟着叫 `navy-board-kv`。
 | 名称 | 必需 | 说明 |
 |---|:---:|---|
 | `ADMIN_PASSWORD` | ✅ | 管理员密码，建议 16 位以上随机字符串。修改后无需重新部署 |
-| `SESSION_SECRET` | ✅ | 会话签名密钥，至少 32 字节，例如 `openssl rand -hex 32`。修改会让所有登录失效 |
+| `SESSION_SECRET` |  | 登录凭证的签名密钥。不设置时网站自动生成并保存，一般不需要填；手动设置时至少 32 位随机字符。修改会让所有登录失效 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |  | 开启 Google Drive 云备份 |
 | `DROPBOX_CLIENT_ID` / `DROPBOX_CLIENT_SECRET` |  | 开启 Dropbox 云备份 |
 
@@ -384,7 +384,7 @@ npx wrangler secret put GOOGLE_CLIENT_ID
 
 ## 🔐 安全建议
 
-- `ADMIN_PASSWORD` 使用至少 16 位随机字符串，`SESSION_SECRET` 使用至少 32 字节随机值。
+- `ADMIN_PASSWORD` 使用至少 16 位随机字符串。
 - 生产环境只走 HTTPS。自定义域名建议开启 Bot Fight Mode、`/api/login` 边缘速率限制、Always Use HTTPS 和 HSTS。
 - 不要提交 `.dev.vars`、`.cloudflare-token.local` 等本地密钥文件（均已在 `.gitignore` 中）。
 - 前端带严格的 CSP：只允许同源脚本，网站图标也经由自己的 Worker 代理，不直接请求第三方。
@@ -398,7 +398,7 @@ npx wrangler secret put GOOGLE_CLIENT_ID
 
 <br>
 
-最常见的原因是 `ADMIN_PASSWORD` 或 `SESSION_SECRET` 没有设置、太短，或者还是示例里的占位值。运行 `npm run deploy -- --set-password` 重新设置即可。
+最常见的原因是 `ADMIN_PASSWORD` 没有设置、太短，或者还是示例里的占位值。运行 `npm run deploy -- --set-password` 重新设置即可。
 
 </details>
 
@@ -461,7 +461,7 @@ npx wrangler kv key delete --binding BOARD_KV state --remote   # 生产
 
 - [ ] `GET /api/auth` 未登录时返回 `{"isAdmin":false}`
 - [ ] 错误密码连续登录达到限制后返回 `429`
-- [ ] 弱 `ADMIN_PASSWORD` 或 `SESSION_SECRET` 配置会返回 `500`
+- [ ] 弱 `ADMIN_PASSWORD`（或手动设置了过短的 `SESSION_SECRET`）会返回 `500`
 - [ ] 未登录时可以浏览、打开链接、切换显示模式、折叠看板，刷新后恢复云端状态
 - [ ] 主题按钮可以切换浅色 / 暗色，刷新后保留选择
 - [ ] ⌘K 能搜到其他页面的链接，回车在新标签页打开

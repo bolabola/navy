@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 部署到 Cloudflare Workers。跨平台（macOS / Linux / Windows），只依赖 Node。
 //
-//   npm run deploy                         部署；首次部署时引导设置管理员密码
+//   npm run deploy                         部署；首次部署时引导设置管理员密码（SESSION_SECRET 由网站自动生成）
 //   npm run deploy -- --set-password       部署后重新设置管理员密码
 //   npm run deploy -- --rotate-session     部署后重新生成 SESSION_SECRET（所有设备需重新登录）
 //   npm run deploy -- --name my-navy       使用另一个 Worker 名
@@ -108,7 +108,6 @@ async function ensureSecrets() {
 
   const updates = {};
   const missingPassword = !existing.includes("ADMIN_PASSWORD");
-  const missingSession = !existing.includes("SESSION_SECRET");
 
   if (missingPassword || options.setPassword) {
     if (!interactive) {
@@ -118,9 +117,10 @@ async function ensureSecrets() {
       updates.ADMIN_PASSWORD = await askPassword();
     }
   }
-  if (missingSession || options.rotateSession) {
+  // SESSION_SECRET 不需要设置：网站会自动生成。只有要求“所有设备重新登录”时才写入一个新值。
+  if (options.rotateSession) {
     updates.SESSION_SECRET = randomBytes(32).toString("hex");
-    if (!missingSession) console.log("将重新生成 SESSION_SECRET，所有设备需要重新登录。");
+    console.log("将写入新的 SESSION_SECRET，所有设备需要重新登录。");
   }
 
   const names = Object.keys(updates);
@@ -218,5 +218,6 @@ function printHelp() {
   -h, --help          显示帮助
 
 首次部署会自动创建 KV 命名空间和 Durable Object，并引导设置管理员密码。
+SESSION_SECRET 由网站自动生成，不需要设置。
 CI 中请设置 CLOUDFLARE_API_TOKEN（多账号时再设置 CLOUDFLARE_ACCOUNT_ID）。`);
 }
