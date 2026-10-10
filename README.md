@@ -146,8 +146,28 @@ npm run dev
 3. 提示你填写管理员密码 `ADMIN_PASSWORD`（示例值会被拒绝，必须换成自己的）
 4. 构建并部署，之后你往自己的仓库推送代码会自动重新部署
 
-> [!TIP]
-> 按钮会在你的 GitHub 里新建一个副本仓库。如果你想直接用已有的仓库（比如自己 fork 的或者原作者本人），可以在 Cloudflare 后台 **Workers & Pages → 创建 → 导入 Git 仓库** 里选择它，再在 Worker 设置中添加 `ADMIN_PASSWORD` 密钥，效果相同。
+按钮会在你的 GitHub 里新建一个副本仓库。如果你想直接用已有的仓库（比如自己 fork 的），可以改用下面的“导入 Git 仓库”。
+
+<details>
+<summary><b>导入已有的 Git 仓库（需要手动添加管理员密码）</b></summary>
+
+<br>
+
+1. 打开 Cloudflare 后台 **Workers & Pages → 创建 → 导入 Git 仓库**，选择你的仓库，项目名填 `navy`（或者你想要的名字），按默认设置部署。
+2. 部署完成后进入这个 Worker 的 **Settings（设置）→ Variables and Secrets（变量和机密）**，点 **Add（添加）**：
+
+   | 字段 | 填写 |
+   |---|---|
+   | Type（类型） | **Secret（机密）**，不要选纯文本，否则密码会明文显示在后台 |
+   | Variable name（变量名） | `ADMIN_PASSWORD` |
+   | Value（值） | 你的管理员密码，至少 12 位，建议 16 位以上 |
+
+3. 点 **Deploy（部署）** 保存，立即生效，不需要重新构建。
+
+</details>
+
+> [!IMPORTANT]
+> “导入 Git 仓库”**不会**提示你填写管理员密码。漏掉第 2 步的话，网站的接口会一直返回 500，看板无法登录和保存。
 
 ### 方式二：命令行部署
 
