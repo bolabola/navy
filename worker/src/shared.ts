@@ -16,7 +16,7 @@ export interface Env {
 
 // 与 frontend/_headers 中的静态资源安全头保持一致。
 export const SECURITY_HEADERS: Record<string, string> = {
-  "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://www.google.com",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "same-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
