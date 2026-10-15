@@ -95,9 +95,41 @@ function normalizeContent(content: BoardContent): BoardContent {
 }
 
 /** 给客户端的视图：补齐当前页的 boards，兼容旧前端。 */
-export function toClientState(state: StoredState): Omit<StoredState, "lastBackupAt"> {
+export type ClientState = Omit<StoredState, "lastBackupAt" | "version"> & {
+  version: number | null;
+  /** true 表示这是未登录访客看到的公开视图（已去掉不公开的页面）。 */
+  publicView?: true;
+};
+
+/**
+ * 返回给浏览器的状态。
+ * publicOnly（未登录访客）时去掉不公开的页面——私密页面的内容根本不会下发到浏览器。
+ * 公开视图不带真实版本号：万一前端基于公开视图发起保存，会因版本不符被拒绝（409），
+ * 不会用缺页的数据覆盖掉私密页面。
+ */
+export function toClientState(state: StoredState, options: { publicOnly?: boolean } = {}): ClientState {
   const { lastBackupAt: _ignored, ...rest } = state;
-  return { ...rest, boards: activeBoards(state) };
+  if (!options.publicOnly || !state.pages || !state.pages.length) {
+    const view: ClientState = { ...rest, boards: activeBoards(state) };
+    if (options.publicOnly) {
+      view.version = null;
+      view.publicView = true;
+    }
+    return view;
+  }
+
+  const pages = state.pages.filter((page) => page.isPublic !== false);
+  const activePageId = pages.some((page) => page.id === state.activePageId)
+    ? state.activePageId
+    : pages.length ? pages[0].id : null;
+  return {
+    ...rest,
+    version: null,
+    publicView: true,
+    pages,
+    activePageId,
+    boards: pages.length ? activeBoards({ boards: [], pages, activePageId }) : []
+  };
 }
 
 export function activeBoards(content: BoardContent): CleanBoard[] {

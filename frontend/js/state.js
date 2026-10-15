@@ -64,5 +64,9 @@ export const syncState = {
 
 export const serverState = {
   version: null,
-  updatedAt: ""
+  updatedAt: "",
+  // 当前内存里的数据是未登录时拿到的公开视图（不含不公开的页面），不能用来保存
+  publicView: false,
+  // 公开视图里一个公开页面都没有
+  noPublicPages: false
 };

@@ -11,8 +11,10 @@ import {
   loadBoardsFromLocal,
   normalizeActivePageId,
   normalizePages,
+  publicPagesOnly,
   pushToBackend,
-  readBoardEnvelope
+  readBoardEnvelope,
+  syncActivePageBoards
 } from "./sync.js";
 
 export function bootstrap() {
@@ -54,6 +56,15 @@ export function bootstrap() {
       state.activePageId = normalizeActivePageId(local.activePageId, state.pages);
       loadActivePageBoards();
       state.layoutSettings = normalizeLayoutSettings(local.layout);
+    }
+    // 未登录时只保留公开页面。服务器本身就只返回公开页面；这里再兜底一次，
+    // 覆盖从本机缓存加载（服务器暂时不可用）等情况，并顺手清掉缓存里残留的不公开页面。
+    if (!auth.isAdmin && state.pages.some(function (page) { return page.isPublic === false; })) {
+      syncActivePageBoards();
+      state.pages = publicPagesOnly(state.pages);
+      state.activePageId = normalizeActivePageId(state.activePageId, state.pages);
+      loadActivePageBoards();
+      cacheBoardsLocally();
     }
     // 每次打开都从第一个页面开始，而不是上次保存时所在的页面。
     if (state.pages.length && state.activePageId !== state.pages[0].id) {

@@ -79,6 +79,37 @@ export function renameActivePage() {
   });
 }
 
+/**
+ * 切换当前页面是否公开。不公开的页面只有登录后才能看到，服务器不会把它下发给访客。
+ * 把最后一个公开页面设为不公开时先确认，因为访客将看不到任何内容。
+ */
+export function toggleActivePageVisibility() {
+  if (!auth.isAdmin) return;
+  const current = state.pages.find(function (page) { return page.id === state.activePageId; });
+  if (!current) return;
+  const makePrivate = current.isPublic !== false;
+  const otherPublic = state.pages.some(function (page) { return page.id !== current.id && page.isPublic !== false; });
+  const apply = function () {
+    syncActivePageBoards();
+    state.pages = state.pages.map(function (page) {
+      return page.id === current.id ? Object.assign({}, page, { isPublic: !makePrivate }) : page;
+    });
+    saveBoards();
+    render();
+  };
+  if (makePrivate && !otherPublic) {
+    confirmDialog({
+      title: "将“" + current.name + "”设为不公开？",
+      message: "这是最后一个公开页面。设为不公开后，未登录的访客将看不到任何内容。",
+      confirmText: "设为不公开"
+    }).then(function (ok) {
+      if (ok) apply();
+    });
+    return;
+  }
+  apply();
+}
+
 export function deleteActivePage() {
   if (!auth.isAdmin || state.pages.length <= 1) return;
   const current = state.pages.find(function (page) { return page.id === state.activePageId; });

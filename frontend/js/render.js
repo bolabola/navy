@@ -25,7 +25,7 @@ import { buildMasonryLayout, renderBoardLayer } from "./layout.js";
 import { getBoardIconTileSize, saveBoards } from "./model.js";
 import { renderCreateBoardModal, renderLoginModal, renderMoveBoardModal, renderNavbar } from "./navbar.js";
 import { animateBoardFlip, bindIconPickers, captureBoardRects, renderBoard } from "./renderBoard.js";
-import { app, auth, state, uiState } from "./state.js";
+import { app, auth, serverState, state, uiState } from "./state.js";
 import { rememberBoardView } from "./viewPrefs.js";
 import { applyBoardWallLayoutStyles, syncBoardWallLayout } from "./wall.js";
 
@@ -150,11 +150,14 @@ function renderEmptyPage() {
   empty.appendChild(mark);
   const title = document.createElement("h2");
   title.className = "board-wall-empty__title";
-  title.textContent = TEXT.emptyPageTitle;
+  const noPublicPages = !auth.isAdmin && serverState.noPublicPages;
+  title.textContent = noPublicPages ? TEXT.noPublicPagesTitle : TEXT.emptyPageTitle;
   empty.appendChild(title);
   const hint = document.createElement("p");
   hint.className = "board-wall-empty__hint";
-  hint.textContent = auth.isAdmin ? TEXT.emptyPageHintAdmin : TEXT.emptyPageHintGuest;
+  hint.textContent = auth.isAdmin
+    ? TEXT.emptyPageHintAdmin
+    : noPublicPages ? TEXT.noPublicPagesHint : TEXT.emptyPageHintGuest;
   empty.appendChild(hint);
   if (auth.isAdmin) {
     empty.appendChild(actionButton("board-save-button board-wall-empty__action", "toggle-create-board", null, "", [

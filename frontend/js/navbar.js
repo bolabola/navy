@@ -106,6 +106,13 @@ export function renderPageBar() {
     ]);
     tab.dataset.pageId = page.id;
     tab.setAttribute("aria-label", page.name);
+    // 不公开的页面只有管理员能看到，标签上加锁提示
+    if (page.isPublic === false) {
+      tab.classList.add("is-private");
+      tab.title = page.name + "（" + TEXT.pagePrivateBadge + "）";
+      tab.setAttribute("aria-label", page.name + "，" + TEXT.pagePrivateBadge);
+      tab.appendChild(staticIconNode("icon-lock page-tab__lock"));
+    }
     list.appendChild(tab);
   });
   bar.appendChild(list);
@@ -119,6 +126,18 @@ export function renderPageBar() {
     actions.appendChild(actionButton("page-bar__button", "rename-page", null, TEXT.renamePage, [
       staticIconNode("icon-pencil")
     ]));
+    const activePage = state.pages.find(function (page) { return page.id === state.activePageId; });
+    const isPrivate = Boolean(activePage && activePage.isPublic === false);
+    const visibility = actionButton(
+      "page-bar__button page-bar__button--visibility" + (isPrivate ? " is-private" : ""),
+      "toggle-page-visibility",
+      null,
+      isPrivate ? TEXT.pagePrivate : TEXT.pagePublic,
+      [staticIconNode(isPrivate ? "icon-lock" : "icon-globe")]
+    );
+    visibility.setAttribute("aria-label", isPrivate ? TEXT.pagePrivate : TEXT.pagePublic);
+    visibility.setAttribute("aria-pressed", isPrivate ? "true" : "false");
+    actions.appendChild(visibility);
     const del = actionButton("page-bar__button page-bar__button--danger", "delete-page", null, TEXT.deletePage, [
       staticIconNode("icon-trash-2")
     ]);

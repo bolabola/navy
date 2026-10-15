@@ -71,7 +71,7 @@ Follows your system by default, can be toggled and remembered, and never flashes
 <td valign="top">
 
 **Read-only for visitors, editable for the admin**<br>
-Anyone can browse and open links; their collapsed boards and view choices stay in their own browser. Only the admin can change and save the dashboard.
+Anyone can browse and open links; their collapsed boards and view choices stay in their own browser. Only the admin can change and save the dashboard, and can mark any page as private so it is only visible after signing in.
 
 </td>
 <td valign="top">
@@ -339,7 +339,7 @@ All write endpoints require same-origin requests and, once signed in, the CSRF t
 
 | Path | Method | Auth | Description |
 |---|---|:---:|---|
-| `/api/board` | GET |  | Returns `{version, updatedAt, pages, activePageId, layout, boards}` (`boards` is the current page); `null` before the first save |
+| `/api/board` | GET |  | Returns `{version, updatedAt, pages, activePageId, layout, boards}` (`boards` is the current page); `null` before the first save. Anonymous requests only get public pages (`publicView: true`, `version: null`); private pages are never sent |
 | `/api/board` | PUT | 🔒 | Replaces the dashboard when the version matches; send only `pages`; returns `lastBackupAt` |
 | `/api/backups` | GET | 🔒 | Lists recent history backups |
 | `/api/backups/restore` | POST | 🔒 | Restores a history backup |

@@ -10,7 +10,7 @@ export async function handleGetBoard(request: Request, env: Env): Promise<Respon
   const isAdmin = request.headers.has("Cookie") && (await getSession(request, env)) !== null;
   const repo = isAdmin ? getBoardRepo(env) : getPublicBoardRepo(env);
   const state = await repo.read();
-  return json(state ? toClientState(state) : null);
+  return json(state ? toClientState(state, { publicOnly: !isAdmin }) : null);
 }
 
 export async function handlePutBoard(request: Request, env: Env): Promise<Response> {

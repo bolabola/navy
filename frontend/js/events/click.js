@@ -27,7 +27,14 @@ import {
   restoreAllCollapseSnapshot
 } from "../mutations.js";
 import { rerenderNavbarInPlace } from "../navbar.js";
-import { addPage, deleteActivePage, moveBoardToPage, renameActivePage, switchPage } from "../pages.js";
+import {
+  addPage,
+  deleteActivePage,
+  moveBoardToPage,
+  renameActivePage,
+  switchPage,
+  toggleActivePageVisibility
+} from "../pages.js";
 import {
   expandBoardToFit,
   focusField,
@@ -38,9 +45,9 @@ import {
 } from "../render.js";
 import { closeAllIconPickers } from "../renderBoard.js";
 import { app, auth, serverState, state, uiState } from "../state.js";
-import { applyViewPrefs } from "../viewPrefs.js";
 import {
   apiSend,
+  enterPublicView,
   handleAuthExpired,
   loadServerBoardState,
   noteBackupFromCommit,
@@ -117,9 +124,11 @@ export function installClickHandlers() {
           uiState.openAddBoardId = null;
           uiState.editBoardId = null;
           uiState.createBoardOpen = false;
-          // 切回访客视图：叠加本机记住的显示模式等偏好
-          state.boards = applyViewPrefs(state.boards, true);
-          render();
+          uiState.dataMenuOpen = false;
+          uiState.backupMenuOpen = false;
+          uiState.layoutMenuOpen = false;
+          // 切回访客视图：去掉不公开的页面（内存和本机缓存都清掉），再拉取公开视图
+          enterPublicView();
         });
       } else {
         uiState.loginOpen = !uiState.loginOpen;
@@ -169,6 +178,11 @@ export function installClickHandlers() {
 
     if (action === "rename-page") {
       renameActivePage();
+      return;
+    }
+
+    if (action === "toggle-page-visibility") {
+      toggleActivePageVisibility();
       return;
     }
 

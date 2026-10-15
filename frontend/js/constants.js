@@ -214,6 +214,14 @@ export const TEXT = {
   addPage: "新建页面",
   renamePage: "重命名页面",
   deletePage: "删除页面",
+  pagePublic: "当前页公开：未登录的访客也能看到。点击设为不公开",
+  pagePrivate: "当前页不公开：只有登录后才能看到。点击设为公开",
+  pagePrivateBadge: "不公开",
+  pageMadePrivate: "已设为不公开，未登录的访客将看不到“{name}”",
+  pageMadePublic: "已设为公开，未登录的访客可以看到“{name}”",
+  noPublicPagesTitle: "暂无公开内容",
+  noPublicPagesHint: "这里的页面都未公开，登录后可以查看。",
+  partialDataNotice: "当前只加载了公开页面，请刷新后再编辑",
   deletePageConfirm: "页面里的所有 Board 和网址会一起删除。"
 };
 

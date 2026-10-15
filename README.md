@@ -68,7 +68,7 @@
 <td valign="top">
 
 **访客只读 · 管理员编辑**<br>
-任何人都能浏览和打开链接，折叠、显示方式只存在访客自己的浏览器里。管理员登录后才能修改并保存。
+任何人都能浏览和打开链接，折叠、显示方式只存在访客自己的浏览器里。管理员登录后才能修改并保存，还可以把某个页面设为“不公开”，只有登录后才能看到。
 
 </td>
 <td valign="top">
@@ -336,7 +336,7 @@ Client Secret 和云盘的刷新令牌写入 KV 前会先加密（AES-256-GCM）
 
 | 路径 | 方法 | 鉴权 | 说明 |
 |---|---|:---:|---|
-| `/api/board` | GET |  | 返回 `{version, updatedAt, pages, activePageId, layout, boards}`（`boards` 为当前页）；首次访问返回 `null` |
+| `/api/board` | GET |  | 返回 `{version, updatedAt, pages, activePageId, layout, boards}`（`boards` 为当前页）；首次访问返回 `null`。未登录时只返回公开页面（`publicView: true`，`version` 为 `null`），不公开页面的内容不会下发 |
 | `/api/board` | PUT | 🔒 | 版本一致时整体替换看板数据；只需发送 `pages`，返回 `lastBackupAt` |
 | `/api/backups` | GET | 🔒 | 列出最近的历史备份 |
 | `/api/backups/restore` | POST | 🔒 | 从历史备份恢复 |
@@ -440,6 +440,7 @@ npx wrangler kv key delete --binding BOARD_KV state --remote   # 生产
 - [ ] 错误密码连续登录达到限制后返回 `429`
 - [ ] 弱 `ADMIN_PASSWORD` 会返回 `500`
 - [ ] 未登录时可以浏览、打开链接、切换显示模式、折叠看板，刷新后恢复云端状态
+- [ ] 设为“不公开”的页面，退出登录后立即消失，未登录访问 `/api/board` 也拿不到它的内容
 - [ ] 主题按钮可以切换浅色 / 暗色，刷新后保留选择
 - [ ] ⌘K 能搜到其他页面的链接，回车在新标签页打开
 - [ ] 管理员可以新增、编辑、删除、拖拽排序、保存和恢复备份

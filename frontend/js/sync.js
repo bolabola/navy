@@ -73,6 +73,7 @@ export function pageStoragePayload() {
     return {
       id: page.id,
       name: page.name,
+      isPublic: page.isPublic !== false,
       boards: boardStoragePayload(page.boards)
     };
   });
@@ -140,8 +141,35 @@ export function handleAuthExpired() {
   uiState.editBoardId = null;
   uiState.editItemId = null;
   uiState.createBoardOpen = false;
-  state.boards = applyViewPrefs(state.boards, true);
+  enterPublicView();
+}
+
+/**
+ * 退出登录或登录失效后切到访客视图：
+ * 先立刻从内存和本机缓存里去掉不公开的页面（不留在屏幕上、也不留在 localStorage），
+ * 再向服务器重新拉取公开视图。
+ */
+export function enterPublicView() {
+  syncActivePageBoards();
+  state.pages = publicPagesOnly(state.pages);
+  state.activePageId = normalizeActivePageId(state.activePageId, state.pages);
+  serverState.publicView = true;
+  serverState.version = null;
+  loadActivePageBoards();
+  cacheBoardsLocally();
   render();
+  loadServerBoardState().then(function () {
+    render();
+  }).catch(function () {});
+}
+
+/** 只保留公开页面；一个都没有时返回一个空的默认页。 */
+export function publicPagesOnly(pages) {
+  const visible = (Array.isArray(pages) ? pages : []).filter(function (page) {
+    return page && page.isPublic !== false;
+  });
+  if (!visible.length) serverState.noPublicPages = true;
+  return visible.length ? visible : normalizePages([], []);
 }
 
 export function loadServerBoardState() {
@@ -157,6 +185,8 @@ export function loadServerBoardState() {
     if (value === null) {
       serverState.version = null;
       serverState.updatedAt = "";
+      serverState.publicView = false;
+      serverState.noPublicPages = false;
       return false;
     }
     return false;
@@ -174,7 +204,8 @@ export function readBoardEnvelope(value) {
       activePageId: typeof value.activePageId === "string" ? value.activePageId : null,
       layout: value.layout,
       version: Number.isInteger(value.version) ? value.version : null,
-      updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : ""
+      updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+      publicView: value.publicView === true
     };
   }
   return null;
@@ -194,6 +225,8 @@ export function normalizePages(sourcePages, fallbackBoards) {
     return {
       id: typeof page.id === "string" && page.id.trim() ? page.id : uid("page"),
       name: normalizePageName(page.name, index === 0 ? TEXT.pageDefault : "页面 " + (index + 1)),
+      // 缺省为公开，兼容旧数据
+      isPublic: !(page && page.isPublic === false),
       boards: normalizeBoards(rawBoards)
     };
   }).filter(function (page) {
@@ -234,6 +267,8 @@ export function loadActivePageBoards() {
 }
 
 export function applyBoardEnvelope(boardData) {
+  serverState.publicView = Boolean(boardData.publicView);
+  serverState.noPublicPages = serverState.publicView && Array.isArray(boardData.pages) && boardData.pages.length === 0;
   const nextPages = normalizePages(boardData.pages, boardData.boards);
   state.pages = nextPages;
   state.activePageId = normalizeActivePageId(boardData.activePageId, nextPages);
@@ -258,6 +293,14 @@ export function pushToBackend() {
 
 export function flushPendingSave() {
   if (!auth.isAdmin || state.saveInFlight || !state.savePending) {
+    return;
+  }
+
+  // 内存里只有公开视图（例如登录后完整数据加载失败）：此时保存会丢掉不公开的页面，绝不提交。
+  if (serverState.publicView) {
+    state.savePending = false;
+    setSyncState("failed", TEXT.partialDataNotice);
+    loadServerBoardState().then(function () { render(); }).catch(function () {});
     return;
   }
 
@@ -299,7 +342,7 @@ export function flushPendingSave() {
         uiState.layoutMenuOpen = false;
         uiState.createBoardOpen = false;
         setSyncState("failed", TEXT.syncLoginExpired);
-        render();
+        enterPublicView();
         return;
       }
       if (error && error.status === 409) {

@@ -63,6 +63,8 @@ export interface CleanBoard {
 export interface CleanPage {
   id: string;
   name: string;
+  /** 只在页面不公开时存为 false；缺省表示公开（兼容旧数据）。 */
+  isPublic?: false;
   boards: CleanBoard[];
 }
 
@@ -129,9 +131,12 @@ export function cleanPages(value: unknown): Result<CleanPage[] | undefined> {
     pageIds.add(entry.id);
     if (!isNonEmptyString(entry.name, PAGE_NAME_MAX_LENGTH)) return fail("Invalid page name");
     if (!Array.isArray(entry.boards)) return fail("Invalid page boards");
+    if (entry.isPublic !== undefined && typeof entry.isPublic !== "boolean") return fail("Invalid page visibility");
     const boards = cleanBoards(entry.boards);
     if (!boards.ok) return boards;
-    pages.push({ id: entry.id, name: entry.name, boards: boards.value });
+    const page: CleanPage = { id: entry.id, name: entry.name, boards: boards.value };
+    if (entry.isPublic === false) page.isPublic = false;
+    pages.push(page);
   }
   return ok(pages);
 }

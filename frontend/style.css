@@ -553,6 +553,18 @@ i[class^="icon-"] {
   transform: none;
 }
 
+/* 不公开的页面：标签上的小锁、可见性按钮的激活态 */
+.page-tab__lock {
+  margin-left: 5px;
+  font-size: 11px !important;
+  color: var(--warning);
+  flex: 0 0 auto;
+}
+
+.page-bar__button--visibility.is-private {
+  color: var(--warning);
+}
+
 .page-bar__button--danger:not(:disabled):hover {
   color: var(--danger);
   background: var(--danger-soft);
