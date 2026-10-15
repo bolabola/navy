@@ -27,6 +27,17 @@ test("validateBoardState accepts a valid board payload", () => {
   assert.equal(validateBoardState([{ ...validBoard, tabs: undefined, activeTabId: undefined, items: validBoard.items.map(({ tabId: _t, ...item }) => item) }]), null);
 });
 
+test("cleanBoards keeps a known widget type and rejects unknown ones", () => {
+  const result = cleanBoards([{ ...validBoard, items: [], widget: "search" }]);
+  assert.ok(result.ok);
+  assert.equal(result.value[0].widget, "search");
+  assert.equal(validateBoardState([{ ...validBoard, widget: "clock" }]), "Invalid board widget");
+  const note = cleanBoards([{ ...validBoard, items: [], widget: "note", note: "买牛奶\n回邮件" }]);
+  assert.ok(note.ok);
+  assert.equal(note.value[0].note, "买牛奶\n回邮件");
+  assert.equal(validateBoardState([{ ...validBoard, widget: "note", note: "x".repeat(5001) }]), "Invalid board note");
+});
+
 test("cleanBoards keeps known fields, drops unknown ones and clamps height", () => {
   const result = cleanBoards([{ ...validBoard, height: 99999, junk: true, items: [{ ...validBoard.items[0], junk: 1 }], tabs: [{ id: "default", name: "默认", junk: 1 }] }]);
   assert.ok(result.ok);

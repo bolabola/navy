@@ -9,6 +9,7 @@ import { app, auth, state, uiState } from "./state.js";
 import { createModalHeader, renderThemeToggleButton } from "./theme.js";
 import { isMacPlatform } from "./search.js";
 import { githubIconNode } from "./urls.js";
+import { WIDGET_CATALOG } from "./widgets.js";
 
 export function renderNavbar() {
   const nav = document.createElement("nav");
@@ -222,8 +223,31 @@ export function renderCreateBoardModal() {
   actions.appendChild(actionButton("board-cancel-button", "cancel-create-board", null, "", [TEXT.cancel]));
   form.appendChild(actions);
   panel.appendChild(form);
+  panel.appendChild(renderWidgetPicker());
   backdrop.appendChild(panel);
   return backdrop;
+}
+
+function renderWidgetPicker() {
+  const section = document.createElement("div");
+  section.className = "widget-picker";
+  const heading = document.createElement("p");
+  heading.className = "widget-picker__heading";
+  heading.textContent = TEXT.addWidget;
+  section.appendChild(heading);
+  const list = document.createElement("div");
+  list.className = "widget-picker__list";
+  WIDGET_CATALOG.forEach(function (widget) {
+    const button = actionButton("widget-picker__option", "add-widget", null, widget.description, [
+      staticIconNode("icon-" + widget.icon),
+      document.createElement("span")
+    ]);
+    button.lastChild.textContent = widget.title;
+    button.dataset.widgetType = widget.type;
+    list.appendChild(button);
+  });
+  section.appendChild(list);
+  return section;
 }
 
 export function renderMoveBoardModal() {

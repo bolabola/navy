@@ -1,5 +1,5 @@
 // 数据规范化
-import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, BOARD_TAB_NAME_MAX_LENGTH, MAX_LAYOUT_COLUMN_WIDTH, MAX_LAYOUT_GAP, MAX_MANUAL_COLUMNS, MIN_LAYOUT_COLUMN_WIDTH, MIN_LAYOUT_GAP } from "../../shared/limits";
+import { BOARD_ITEM_DESCRIPTION_MAX_LENGTH, BOARD_NOTE_MAX_LENGTH, BOARD_TAB_NAME_MAX_LENGTH, BOARD_WIDGET_TYPES, MAX_LAYOUT_COLUMN_WIDTH, MAX_LAYOUT_GAP, MAX_MANUAL_COLUMNS, MIN_LAYOUT_COLUMN_WIDTH, MIN_LAYOUT_GAP } from "../../shared/limits";
 import {
   BOARD_ACCENTS,
   DEFAULT_BOARD_ICONS,
@@ -59,7 +59,7 @@ export function discoverLucideIcons() {
 export function normalizeBoards(sourceBoards) {
   return sourceBoards.map(function (board) {
     const tabs = normalizeBoardTabs(board.tabs);
-    return {
+    const normalized = {
       id: board.id,
       title: board.title,
       accent: board.accent || BOARD_ACCENTS[0],
@@ -73,6 +73,9 @@ export function normalizeBoards(sourceBoards) {
       activeTabId: normalizeActiveTabId(board.activeTabId, tabs),
       items: normalizeBoardItems(board.items, tabs)
     };
+    if (BOARD_WIDGET_TYPES.includes(board.widget)) normalized.widget = board.widget;
+    if (normalized.widget === "note") normalized.note = typeof board.note === "string" ? board.note.slice(0, BOARD_NOTE_MAX_LENGTH) : "";
+    return normalized;
   });
 }
 

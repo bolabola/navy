@@ -57,6 +57,8 @@ import {
 import { applyTheme, saveThemePreference, syncThemeToggleButton } from "../theme.js";
 import { normalizeUrl, resetItemFormIconToFavicon } from "../urls.js";
 import { resetLayoutSettings } from "../wall.js";
+import { getNextBoardColumn } from "../layout.js";
+import { createWidgetBoard } from "../widgets.js";
 
 export function installClickHandlers() {
   app.addEventListener("click", function (event) {
@@ -422,6 +424,20 @@ export function installClickHandlers() {
           alertDialog("断开云备份失败，请稍后再试。");
         });
       });
+      return;
+    }
+
+    if (action === "add-widget") {
+      if (!auth.isAdmin) return;
+      const widgetBoard = createWidgetBoard(
+        button.getAttribute("data-widget-type"),
+        getNextBoardColumn(state.masonryLayout.maxColumns || state.masonryLayout.columns)
+      );
+      if (!widgetBoard) return;
+      state.boards = state.boards.concat(widgetBoard);
+      uiState.createBoardOpen = false;
+      saveBoards();
+      render();
       return;
     }
 

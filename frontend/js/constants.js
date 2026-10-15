@@ -136,6 +136,8 @@ export const TEXT = {
   createBoardPlaceholder: "例如：开发工具",
   editBoard: "编辑 Board",
   deleteBoard: "删除 Board",
+  deleteWidget: "删除小组件",
+  addWidget: "添加小组件",
   deleteBoardConfirm: "里面的 {count} 条网址会一起删除。",
   save: "保存",
   cancel: "取消",

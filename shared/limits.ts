@@ -27,6 +27,9 @@ export const MAX_MANUAL_COLUMNS = 6;
 
 export const BOARD_DISPLAY_MODES = ["list", "icons", "urls"] as const;
 export const BOARD_ICON_SIZES = ["small", "medium", "large"] as const;
+/** 小组件类型。普通 board 没有 widget 字段。 */
+export const BOARD_WIDGET_TYPES = ["search", "note"] as const;
+export const BOARD_NOTE_MAX_LENGTH = 5000;
 
 export const ICON_NAME_PATTERN = "^[a-z0-9-]+$";
 export const HEX_COLOR_PATTERN = "^#[0-9a-fA-F]{6}$";

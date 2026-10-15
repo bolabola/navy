@@ -13,6 +13,7 @@ import { app, auth, state, uiState } from "../state.js";
 import { apiSend, loadServerBoardState } from "../sync.js";
 import { displayName, normalizeUrl } from "../urls.js";
 import { applyLayoutSettingsFromForm } from "../wall.js";
+import { updateNoteFromInput } from "../widgets.js";
 
 function syncLayoutMenuControls(form) {
   form.querySelectorAll(".layout-menu__segment").forEach(function (label) {
@@ -36,6 +37,11 @@ export function installFormsHandlers() {
   });
 
   app.addEventListener("input", function (event) {
+    const note = event.target.closest('[data-role="widget-note-input"]');
+    if (note) {
+      updateNoteFromInput(note);
+      return;
+    }
     const range = event.target.closest(".layout-menu__range");
     if (!range) return;
     const field = range.closest(".layout-menu__field");

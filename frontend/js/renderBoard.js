@@ -30,6 +30,7 @@ import {
   resetItemFormIconToFavicon,
   toExternalUrl
 } from "./urls.js";
+import { isWidgetBoard, renderWidgetBody } from "./widgets.js";
 
 export function captureBoardRects() {
   const rects = new Map();
@@ -463,14 +464,17 @@ export function renderBoardActionsMenu(board) {
     return button;
   }
 
-  menu.appendChild(menuItem("toggle-add", "icon-plus", TEXT.addItem));
-  menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
-  menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
-  menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
+  const widget = isWidgetBoard(board);
+  if (!widget) {
+    menu.appendChild(menuItem("toggle-add", "icon-plus", TEXT.addItem));
+    menu.appendChild(menuItem("toggle-edit-board", "icon-pencil", TEXT.editBoard));
+    menu.appendChild(menuItem("import-board", "icon-download", "导入网址"));
+    menu.appendChild(menuItem("export-board", "icon-upload", "导出 CSV"));
+  }
   if (state.pages.length > 1) {
     menu.appendChild(menuItem("move-board", "icon-move", TEXT.moveBoardToPage));
   }
-  menu.appendChild(menuItem("delete-board", "icon-trash-2", TEXT.deleteBoard, true));
+  menu.appendChild(menuItem("delete-board", "icon-trash-2", widget ? TEXT.deleteWidget : TEXT.deleteBoard, true));
   return menu;
 }
 
@@ -574,6 +578,7 @@ export function renderBoardTabs(board) {
 }
 
 export function renderBoard(board, extraClass) {
+  if (isWidgetBoard(board)) return renderWidgetCard(board, extraClass);
   const addOpen = uiState.openAddBoardId === board.id;
   const editOpen = uiState.editBoardId === board.id;
   const menuOpen = uiState.openBoardMenuId === board.id;
@@ -693,5 +698,60 @@ export function renderBoard(board, extraClass) {
     card.appendChild(resize);
   }
 
+  return card;
+}
+
+function renderWidgetCard(board, extraClass) {
+  const menuOpen = uiState.openBoardMenuId === board.id;
+  const card = document.createElement("article");
+  card.className = "board-card board-card--widget" + (board.collapsed ? " is-collapsed" : "") + (menuOpen ? " has-open-menu" : "") + (extraClass ? " " + extraClass : "");
+  card.dataset.boardId = board.id;
+  card.dataset.widget = board.widget;
+  card.style.setProperty("--board-accent", board.accent);
+
+  const header = document.createElement("header");
+  header.className = "board-card__header";
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "board-card__title-wrap";
+  titleWrap.dataset.boardId = board.id;
+  if (auth.isAdmin) {
+    titleWrap.dataset.role = "board-drag-handle";
+    titleWrap.title = TEXT.moveBoard;
+  }
+  if (state.layoutSettings.showBoardIcon === false) {
+    titleWrap.classList.add("board-card__title-wrap--no-board-icon");
+  } else {
+    const glyph = document.createElement("span");
+    glyph.className = "board-card__glyph";
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.appendChild(iconNode(board.icon));
+    titleWrap.appendChild(glyph);
+  }
+  const title = document.createElement("h2");
+  title.className = "board-card__title";
+  title.textContent = board.title;
+  titleWrap.appendChild(title);
+  header.appendChild(titleWrap);
+
+  const actions = document.createElement("div");
+  actions.className = "board-card__actions";
+  actions.appendChild(actionButton("board-icon-button", "toggle-collapse", board.id, board.collapsed ? TEXT.expand : TEXT.collapse, [
+    staticIconNode(board.collapsed ? "icon-chevron-down" : "icon-chevron-up")
+  ]));
+  if (auth.isAdmin) {
+    actions.appendChild(actionButton("board-icon-button", "toggle-board-menu", board.id, "More", [
+      staticIconNode("icon-ellipsis")
+    ]));
+    if (menuOpen) actions.appendChild(renderBoardActionsMenu(board));
+  }
+  header.appendChild(actions);
+  card.appendChild(header);
+
+  if (!board.collapsed) {
+    const body = document.createElement("div");
+    body.className = "board-card__body board-card__body--widget";
+    body.appendChild(renderWidgetBody(board));
+    card.appendChild(body);
+  }
   return card;
 }

@@ -9,9 +9,11 @@ import {
   BOARD_MAX_ITEMS,
   BOARD_MAX_ITEMS_PER_TAB,
   BOARD_MAX_TABS,
+  BOARD_NOTE_MAX_LENGTH,
   BOARD_TAB_NAME_MAX_LENGTH,
   BOARD_TITLE_MAX_LENGTH,
   BOARD_URL_MAX_LENGTH,
+  BOARD_WIDGET_TYPES,
   HEX_COLOR_PATTERN,
   ICON_NAME_PATTERN,
   MAX_BOARD_HEIGHT,
@@ -55,6 +57,9 @@ export interface CleanBoard {
   column?: number | null;
   displayMode?: string;
   iconSize?: string;
+  widget?: string;
+  /** 便签小组件的正文。 */
+  note?: string;
   tabs?: CleanBoardTab[];
   activeTabId?: string;
   items?: CleanBoardItem[];
@@ -219,6 +224,14 @@ function cleanBoard(value: unknown): Result<CleanBoard> {
   if (b.iconSize !== undefined) {
     if (!(BOARD_ICON_SIZES as readonly unknown[]).includes(b.iconSize)) return fail("Invalid board icon size");
     board.iconSize = b.iconSize as string;
+  }
+  if (b.widget !== undefined) {
+    if (!(BOARD_WIDGET_TYPES as readonly unknown[]).includes(b.widget)) return fail("Invalid board widget");
+    board.widget = b.widget as string;
+  }
+  if (b.note !== undefined) {
+    if (typeof b.note !== "string" || b.note.length > BOARD_NOTE_MAX_LENGTH) return fail("Invalid board note");
+    board.note = b.note;
   }
   if (b.tabs !== undefined && !Array.isArray(b.tabs)) return fail("Invalid board tabs");
   if (b.activeTabId !== undefined && (typeof b.activeTabId !== "string" || b.activeTabId.length > BOARD_ID_MAX_LENGTH)) return fail("Invalid board active tab");

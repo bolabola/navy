@@ -412,6 +412,10 @@ export function estimateBoardHeight(board) {
     return BOARD_COLLAPSED_HEIGHT;
   }
 
+  if (board.widget) {
+    return BOARD_HEADER_HEIGHT + BOARD_CHROME_HEIGHT + BOARD_ROW_HEIGHT + 16;
+  }
+
   const activeItems = getBoardItemsForActiveTab(board);
   const detailMode = board.displayMode === "urls";
   const rowHeight = detailMode ? BOARD_DETAIL_ROW_HEIGHT : BOARD_ROW_HEIGHT;
